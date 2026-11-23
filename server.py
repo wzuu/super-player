@@ -2,6 +2,7 @@
 
 import argparse
 from contextlib import closing
+from http.cookies import CookieError, SimpleCookie
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -34,6 +35,9 @@ CREATE TABLE IF NOT EXISTS battle_loot (
 );
 CREATE INDEX IF NOT EXISTS battles_history ON battles(ended_at DESC, sequence DESC);
 CREATE INDEX IF NOT EXISTS battles_progress ON battles(won, level);
+CREATE TABLE IF NOT EXISTS quartermaster (
+    slot INTEGER PRIMARY KEY CHECK(slot=1), revision INTEGER NOT NULL, state TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS weapon_loadout (
     slot INTEGER PRIMARY KEY CHECK(slot = 1),
     skin TEXT NOT NULL
@@ -87,6 +91,11 @@ def progress(db):
     db.execute("BEGIN")
     return {
         "levels": unlocked_levels(db),
+        "best": {row["level"]: dict(row) for row in db.execute("""
+            SELECT level, MAX(kills) AS kills, MIN(CASE WHEN won THEN duration_ms END) AS time,
+                   MAX((SELECT COUNT(*) FROM battle_loot WHERE battle_id=battles.id)) AS loot
+            FROM battles GROUP BY level
+        """)},
         **weapon_loadout(db),
         "lootPerLevel": LOOT_PER_LEVEL,
         "battleCount": db.execute("SELECT COUNT(*) FROM battles").fetchone()[0],
@@ -100,6 +109,26 @@ def progress(db):
         )],
         **history(db, 2**63 - 1),
     }
+
+
+def gear_snapshot(db):
+    row = db.execute("SELECT revision, state FROM quartermaster WHERE slot=1").fetchone()
+    return {"revision": row["revision"] if row else 0, "state": json.loads(row["state"]) if row else {},
+            "earned": db.execute("SELECT COALESCE(SUM(value),0) FROM battle_loot").fetchone()[0],
+            "cleared": [level["id"] for level in unlocked_levels(db) if level["cleared"]]}
+
+
+def write_gear(db, data):
+    if not isinstance(data, dict) or not whole_number(data.get("revision")) or not isinstance(data.get("state"), dict):
+        raise ValueError("军需存档格式无效")
+    with db:
+        db.execute("BEGIN IMMEDIATE")
+        snapshot = gear_snapshot(db)
+        if snapshot["revision"] != data["revision"]:
+            return {"saved": False}
+        db.execute("INSERT OR REPLACE INTO quartermaster VALUES(1,?,?)",
+                   (snapshot["revision"] + 1, json.dumps(data["state"], separators=(",", ":"))))
+    return {"saved": True}
 
 
 def weapon_loadout(db):
@@ -160,11 +189,16 @@ def validate_battle(data):
                 or name in loot or not whole_number(item.get("value"), maximum=1_000_000)):
             raise ValueError("战利品记录无效")
         loot[name] = item["value"]
-    return battle_id, level, won, ended_at, duration_ms, kills, loot
+    remaining = data.get("remaining", {})
+    allowed = {"medkit", "grenade", "ammo", "mine"} | {"cache-" + level_id for level_id in LEVEL_IDS}
+    if (not isinstance(remaining, dict) or len(remaining) > 2 or any(
+            key not in allowed or not whole_number(n, 0, 3) for key, n in remaining.items())):
+        raise ValueError("携带数量无效")
+    return battle_id, level, won, ended_at, duration_ms, kills, loot, remaining
 
 
 def save_battle(db, battle):
-    battle_id, level, won, ended_at, duration_ms, kills, loot = battle
+    battle_id, level, won, ended_at, duration_ms, kills, loot, remaining = battle
     position = LEVEL_IDS.index(level)
     # 并行请求也在同一事务中检查前置关卡、写入对战与战利品。
     with db:
@@ -184,12 +218,35 @@ def save_battle(db, battle):
                 "INSERT INTO battle_loot (battle_id, name, value) VALUES (?, ?, ?)",
                 ((battle_id, name, value) for name, value in loot.items()),
             )
+            if won and remaining:
+                snapshot = gear_snapshot(db)
+                stock = snapshot["state"].setdefault("stock", {})
+                for key, n in remaining.items():
+                    stock[key] = stock.get(key, 0) + n
+                db.execute("INSERT OR REPLACE INTO quartermaster VALUES(1,?,?)",
+                           (snapshot["revision"] + 1, json.dumps(snapshot["state"])))
     next_level = LEVELS[position + 1] if won and position + 1 < len(LEVELS) else None
     return {"nextLevel": next_level, "campaignCleared": bool(won and next_level is None)}
 
 
 class Handler(SimpleHTTPRequestHandler):
     extensions_map = {**SimpleHTTPRequestHandler.extensions_map, ".mjs": "text/javascript", ".js": "text/javascript"}
+
+    def profile_db(self):
+        database = self.server.database
+        cookies = SimpleCookie()
+        try:
+            cookies.load(self.headers.get("Cookie", ""))
+            slot = cookies.get("super_player_profile")
+            selected = self.headers.get("X-Campaign-Profile", slot.value if slot else "")
+            profile = str(UUID(selected)) if selected else None
+        except (CookieError, ValueError):
+            profile = None
+        if not profile:
+            return connect(database)
+        db = connect(database.with_name(database.name + "." + profile))
+        db.executescript(SCHEMA)
+        return db
 
     def local_host(self):
         host = self.headers.get("Host")
@@ -208,11 +265,13 @@ class Handler(SimpleHTTPRequestHandler):
             return
         parts = urlsplit(self.path)
         path = parts.path
-        if path in {"/api/progress", "/api/battles", "/api/loadout"}:
+        if path in {"/api/progress", "/api/battles", "/api/loadout", "/api/gear"}:
             try:
-                with closing(connect(self.server.database)) as db:
+                with closing(self.profile_db()) as db:
                     if path == "/api/progress":
                         result = progress(db)
+                    elif path == "/api/gear":
+                        result = gear_snapshot(db)
                     elif path == "/api/loadout":
                         result = weapon_loadout(db)
                     else:
@@ -235,7 +294,7 @@ class Handler(SimpleHTTPRequestHandler):
             file = ROOT / "index.html"
         elif level in LEVEL_IDS and path in {f"/{level}", f"/{level}/", f"/{level}/index.html"}:
             try:
-                with closing(connect(self.server.database)) as db:
+                with closing(self.profile_db()) as db:
                     unlocked = unlocked_levels(db)[LEVEL_IDS.index(level)]["unlocked"]
             except sqlite3.Error as error:
                 self.log_error("%s", error)
@@ -248,7 +307,7 @@ class Handler(SimpleHTTPRequestHandler):
                 self.redirect(f"/{level}/")
                 return
             file = ROOT / level / "index.html"
-        elif path in {"/campaign/home.css", "/campaign/home.mjs", "/campaign/save.mjs", "/campaign/weapon-preview.mjs",
+        elif path in {"/campaign/profiles.mjs", "/campaign/home.css", "/campaign/home.mjs", "/campaign/save.mjs", "/campaign/weapon-preview.mjs",
                       "/campaign/levels.json", "/campaign/store.mjs", "/campaign/browser-store.mjs",
                       "/level-kit/preview.html", "/level-kit/vendor/three-r160.js",
                       "/level-kit/starter/scene.mjs"}:
@@ -286,7 +345,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path not in {"/api/battles", "/api/loadout"}:
+        if self.path not in {"/api/battles", "/api/loadout", "/api/gear"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         host = self.local_host()
@@ -297,11 +356,16 @@ class Handler(SimpleHTTPRequestHandler):
             if self.headers.get_content_type() != "application/json":
                 raise ValueError("请提交 JSON 数据")
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= 16_384:
+            if not 0 < size <= (262_144 if self.path == "/api/gear" else 16_384):
                 raise ValueError("请求大小无效")
             data = json.loads(self.rfile.read(size).decode("utf-8"))
-            with closing(connect(self.server.database)) as db:
-                result = save_battle(db, validate_battle(data)) if self.path == "/api/battles" else save_loadout(db, data)
+            with closing(self.profile_db()) as db:
+                if self.path == "/api/gear":
+                    result = write_gear(db, data)
+                elif self.path == "/api/battles":
+                    result = save_battle(db, validate_battle(data))
+                else:
+                    result = save_loadout(db, data)
             self.json_response(HTTPStatus.OK, result)
         except (ValueError, TypeError, AttributeError) as error:
             self.json_response(HTTPStatus.BAD_REQUEST, {"error": str(error)})
@@ -322,6 +386,11 @@ class Handler(SimpleHTTPRequestHandler):
             self.wfile.write(body)
 
 
+class CampaignServer(ThreadingHTTPServer):
+    # 首页缩略图与存档 API 可能同时请求，给本机浏览器保留连接队列。
+    request_queue_size = 64
+
+
 def main():
     parser = argparse.ArgumentParser(description="启动超级玩家本机服务")
     parser.add_argument("--port", type=int, default=8000)
@@ -329,7 +398,7 @@ def main():
     options = parser.parse_args()
     if any(not (ROOT / level / "index.html").is_file() for level in LEVEL_IDS):
         parser.exit(1, "请先在项目根目录运行 npm ci 和 npm run build 生成关卡。\n")
-    with ThreadingHTTPServer(("127.0.0.1", options.port), Handler) as server:
+    with CampaignServer(("127.0.0.1", options.port), Handler) as server:
         server.database = options.db.resolve()
         server.database.parent.mkdir(parents=True, exist_ok=True)
         with closing(connect(server.database)) as db:

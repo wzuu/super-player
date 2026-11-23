@@ -75,6 +75,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       ctx.restore();
     }
     text(name, value) {
+      if (typeof value==='string' && CONFIG.interactLabel) value=value.replace('按 F','按 '+CONFIG.interactLabel);
       if (this.nodes[name].textContent !== value) this.nodes[name].textContent = value;
     }
     notify(text, duration) {
@@ -133,12 +134,14 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 && w.reserve === 0 ? '弹药耗尽' : '');
       this.nodes.cross.style.setProperty('--gap', (7 + w.heat * 12 + (p.sprinting ? 5 : 0)).toFixed(1) + 'px');
       this.text('loot', game.loot.length + ' / ' + (definition.loot?.length ?? 0));
-      this.text('kills', game.kills + ' / ' + CONFIG.beasts.killsToWin);
+      this.text('kills', game.objective.mode && game.objective.mode !== 'classic' ? String(game.kills) : game.kills + ' / ' + CONFIG.beasts.killsToWin);
       const remaining = Math.max(0, CONFIG.beasts.killsToWin - game.kills);
       const objective = blast ? TEXT.detonating : game.ready() ? TEXT.exitObjective :
         game.core ? `已取得${TEXT.keyItem}，还需击杀 ${remaining} 只${TEXT.enemy}` :
           game.bossDead ? '靠近掉落物，拾取' + TEXT.keyItem : TEXT.objective;
-      this.text('objective', objective);
+      const variant = game.objective.label(game);
+      const showVariant = !blast && (!game.ready() || game.objective.mode === 'timed');
+      this.text('objective', showVariant && variant ? variant : objective);
       const boss = game.beasts.boss;
       this.nodes.boss.hidden = !boss || Math.hypot(boss.x - p.x, boss.z - p.z) > 28;
       if (!this.nodes.boss.hidden) {
@@ -146,9 +149,10 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         this.nodes['boss-health'].value = Math.max(boss.hp, 0);
       }
       let note = !blast && this.noticeTime > 0 ? this.notice : '';
-      if (game.nearGate()) {
-        if (game.ready() && !game.blast) note = '按 E 引爆' + TEXT.portal;
-        else if (!note && !game.blast) note = ['屏障封印', remaining ? '还需击杀 ' + remaining + ' 只' : '', game.core ? '' : '需要' + TEXT.keyItem].filter(Boolean).join(' / ');
+      if (game.pickups.nearKey(p)) note = '按 F 拾取' + TEXT.keyItem;
+      else if (game.nearGate()) {
+        if (game.ready() && !game.blast) note = '按 F 引爆' + TEXT.portal;
+        else if (!note && !game.blast) note = game.objective.label(game) || ['屏障封印', remaining ? '还需击杀 ' + remaining + ' 只' : '', game.core ? '' : '需要' + TEXT.keyItem].filter(Boolean).join(' / ');
       } else if (!note && !blast) {
         note = game.encounter?.interactionHint?.(game) ??
           (p.protected(game) ? TEXT.safe + ' / ' + Math.max(0, Math.ceil(CONFIG.player.safeTime - game.time)) + ' 秒' : '');

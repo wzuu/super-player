@@ -1261,7 +1261,7 @@ export default {
     keyItem: '太阳石盘',
     portal: '塔顶传送门',
     safe: '河岸石阶安全区',
-    exitObjective: '从东西台阶登塔，在塔顶传送门前按 E 引爆',
+    exitObjective: '从东西台阶登塔，在塔顶传送门前按 F 引爆',
     detonating: '石盘破裂，缠门藤蔓正在崩解',
     rage: '羽蛇神像石壳碎裂，猎豹群正在聚集',
   },

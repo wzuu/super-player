@@ -1,3 +1,4 @@
+import { catalog, defaultGear, isUnlocked, packKit, requisition, updateGear, modifications } from '../level-kit/src/gear.mjs';
 import { campaignStore } from './store.mjs';
 
 async function sendBattle(battle, store) {
@@ -39,8 +40,13 @@ export async function connectCampaign(level) {
   const retry = document.getElementById('retry-save');
   const status = document.getElementById('menu-status');
   const store = await campaignStore();
-  if (store.canEnter && !await store.canEnter(level)) {
-    location.replace('../?locked=' + encodeURIComponent(level) + '#missions');
+  if (store.canEnter && !(await store.canEnter(level))) {
+    location.replace(
+      (location.protocol === 'file:' ? '../index.html' : '../') +
+        '?locked=' +
+        encodeURIComponent(level) +
+        '#missions',
+    );
     return null;
   }
   let pending;
@@ -51,6 +57,7 @@ export async function connectCampaign(level) {
     // 本机存档暂不可读时仍可用关卡默认外观进入。
   }
 
+  if (location.protocol === 'file:') home.href = '../index.html';
   home.hidden = false;
   retry.addEventListener('click', () => {
     if (pending) save(pending);
@@ -63,8 +70,10 @@ export async function connectCampaign(level) {
       const result = await sendBattle(battle, store);
       if (pending !== battle) return;
       pending = null;
+      renderGear().catch(() => {});
       if (result.nextLevel) {
-        next.href = '../' + result.nextLevel.id + '/';
+        next.href =
+          '../' + result.nextLevel.id + (location.protocol === 'file:' ? '/index.html?campaign' : '/');
         next.textContent = '进入下一关 ' + result.nextLevel.title;
         next.hidden = false;
         status.textContent = '对战已保存，下一关已解锁。本关武器外观可在个人收藏佩戴。';
@@ -80,18 +89,130 @@ export async function connectCampaign(level) {
     }
   }
 
+  const items = catalog(store.levels);
+  const gearPanel = document.getElementById('preparation');
+  const selectBox = document.getElementById('kit-slots');
+  let draft = null;
+  let refreshVersion = 0;
+  let reservation = crypto.randomUUID();
+  const selectors = [];
+  async function renderGear() {
+    const version = ++refreshVersion;
+    const snapshot = await store.gear();
+    if (version !== refreshVersion) return;
+    const state = defaultGear(snapshot.state);
+    selectBox.replaceChildren();
+    selectors.length = 0;
+    for (const [group, names] of [
+      ['skills', ['技能一', '技能二']],
+      ['items', ['道具一', '道具二']],
+    ]) {
+      names.forEach((name, index) => {
+        const label = document.createElement('label'),
+          select = document.createElement('select');
+        label.append(name + ' ', select);
+        select.add(new Option('空槽', ''));
+        for (const [id, item] of Object.entries(items)) {
+          if (!!item.skill !== (group === 'skills')) continue;
+          const locked = !isUnlocked(item, store.levels, snapshot.cleared);
+          const option = new Option(item.name + (locked ? ' · 通关第 ' + item.stage + ' 关解锁' : ''), id);
+          option.disabled = locked;
+          option.title = item.detail;
+          select.add(option);
+        }
+        const saved = draft ? draft[(group === 'skills' ? 0 : 2) + index] : state[group][index];
+        select.value = saved ?? '';
+        select.onchange = () => {
+          draft = choice();
+        };
+        selectors.push(select);
+        selectBox.append(label);
+      });
+    }
+    const shop = document.getElementById('shop-item');
+    shop.replaceChildren();
+    for (const [id, item] of Object.entries({ ...items, ...modifications })) {
+      if (!item.price) continue;
+      const unlocked = modifications[id] || isUnlocked(item, store.levels, snapshot.cleared);
+      const label =
+        item.name +
+        ' · ' +
+        item.price +
+        ' 点 · ' +
+        (modifications[id] ? (state.mods[id] ? '已安装' : item.detail) : '库存 ' + (state.stock[id] ?? 0));
+      const option = new Option(label, id);
+      option.disabled = !unlocked || !!state.mods[id];
+      shop.add(option);
+    }
+    document.getElementById('credits').textContent = '军需点 ' + (snapshot.earned - state.spent);
+  }
+  const choice = () => selectors.map((s) => s.value || null);
+  const applyChoice = (state, values, snapshot) => {
+    for (const [group, ids] of [
+      ['skills', values.slice(0, 2)],
+      ['items', values.slice(2)],
+    ]) {
+      if (ids[0] && ids[0] === ids[1]) throw Error('同一种装备只能占一个槽位');
+      if (ids.some((id) => id && !isUnlocked(items[id], store.levels, snapshot.cleared)))
+        throw Error('尚未解锁');
+      state[group] = ids;
+    }
+  };
+  document.getElementById('shop-buy').onclick = async (event) => {
+    const button = event.currentTarget,
+      id = document.getElementById('shop-item').value;
+    const selected = draft;
+    button.disabled = true;
+    try {
+      await updateGear(store, (state, snapshot) => {
+        if (selected) applyChoice(state, selected, snapshot);
+        if (items[id] && !isUnlocked(items[id], store.levels, snapshot.cleared)) throw Error('尚未解锁');
+        requisition(state, id, snapshot.earned, items);
+      });
+      if (draft === selected) draft = null;
+      await renderGear();
+      status.textContent = '兑换成功';
+    } catch (error) {
+      status.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+  await renderGear();
+  gearPanel.hidden = false;
   return {
     equippedSkin,
+    async prepare() {
+      const values = draft;
+      const kit = await updateGear(store, (state, snapshot) => {
+        // 网络超时后重试同一次出发，直接取回已装好的装备，避免再次扣库存。
+        const receipts = (state.departures ??= {});
+        if (receipts[reservation]) return structuredClone(receipts[reservation]);
+        if (values) applyChoice(state, values, snapshot);
+        const packed = packKit(state, items);
+        receipts[reservation] = structuredClone(packed);
+        const keys = Object.keys(receipts);
+        if (keys.length > 32) delete receipts[keys[0]];
+        return packed;
+      });
+      if (draft === values) draft = null;
+      reservation = crypto.randomUUID();
+      return kit;
+    },
     reset() {
       pending = null;
       next.hidden = true;
       next.removeAttribute('href');
       retry.hidden = true;
     },
-    finish({ won, kills, durationMs, loot }) {
+    finish({ won, kills, durationMs, loot, remaining }) {
       pending = {
         id: crypto.randomUUID(),
-        level, won, kills, durationMs,
+        level,
+        won,
+        kills,
+        durationMs,
+        remaining: won ? remaining : {},
         endedAt: Date.now(),
         loot: loot.map(({ name, value }) => ({ name, value })),
       };

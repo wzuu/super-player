@@ -762,7 +762,7 @@ export default {
     portal: '塔顶光柱',
     safe: '半埋石门安全区',
     objective: '清除凶兽，击败巨型守墓者并夺取太阳圣核',
-    exitObjective: '登上金字塔，在塔顶光柱前按 E 引爆',
+    exitObjective: '登上金字塔，在塔顶光柱前按 F 引爆',
     detonating: '封印崩解，沙浪扩散中',
     rage: '守墓者狂暴，沙蝎群从阶下涌出',
   },

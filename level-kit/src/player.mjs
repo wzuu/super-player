@@ -34,8 +34,8 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       return !this.escaped && this.level.inSafeZone(this.x, this.z) && game.time < CONFIG.player.safeTime;
     }
     hurt(amount, game, cooldown = CONFIG.player.hurtCooldown) {
-      if (game.phase !== 'play' || this.hurtDelay > 0 || this.protected(game)) return false;
-      this.hp = Math.max(0, this.hp - amount); this.hurtDelay = cooldown; this.lastHurt = game.time;
+      if (game.phase !== 'play' || this.hurtDelay > 0 || this.protected(game) || game.kit?.protected(game.time)) return false;
+      this.hp = Math.max(0, this.hp - amount * CONFIG.player.incoming); this.hurtDelay = cooldown; this.lastHurt = game.time;
       this.damageVignette = Math.min(1, this.damageVignette * 0.5 + 0.25 + amount / 37);
       this.shake = Math.max(this.shake, Math.min(0.73, 0.20 + amount / 34));
       game.sound.tone(95, 37, 0.19, 0.28, 'triangle');
@@ -50,15 +50,15 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
     update(dt, input, game) {
       if (dt <= 0) return;
       const p = CONFIG.player;
-      const forward = Number(input.down.has('KeyW')) - Number(input.down.has('KeyS'));
-      const strafe = Number(input.down.has('KeyD')) - Number(input.down.has('KeyA'));
+      const forward = Number(input.held('KeyW')) - Number(input.held('KeyS'));
+      const strafe = Number(input.held('KeyD')) - Number(input.held('KeyA'));
       if (p.crouch) {
-        this.crouched = input.down.has('KeyC') ||
+        this.crouched = input.held('KeyC') ||
           (this.crouched && this.level.blocked(this.x, this.z, this.y, this.radius, p.height));
         this.height = this.crouched ? p.crouch.height : p.height;
       }
       const impairment = game.time < this.slowUntil ? this.slowScale : 1;
-      const shift = input.down.has('ShiftLeft') || input.down.has('ShiftRight');
+      const shift = input.held('ShiftLeft') || input.held('ShiftRight');
       if (this.tired && this.energy >= p.sprintResume) this.tired = false;
       this.sprinting = impairment > 0 && !this.crouched && shift && (forward > 0 || forward === 0 && strafe !== 0) && !this.tired;
       if (this.sprinting) {
@@ -120,6 +120,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.visual.set(this.recoil + randomRange(-0.028, 0.028) * this.shake,
         randomRange(-0.021, 0.021) * this.shake,
         this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * this.shake, 'YXZ');
+      if (p.steady) this.visual.set(0,0,0,'YXZ');
       this.rot.setFromEuler(this.visual);
       camera.quaternion.copy(this.look.quaternion).multiply(this.rot);
       camera.updateMatrixWorld(true);

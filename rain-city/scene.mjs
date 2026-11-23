@@ -633,7 +633,7 @@ export default {
     loot: '物资',
     safe: '地铁出口安全区',
     objective: '清除变异体，夺取钟楼守卫的能量核心',
-    exitObjective: '前往钟楼北侧裂隙，按 E 引爆',
+    exitObjective: '前往钟楼北侧裂隙，按 F 引爆',
     rage: '巨型变异体狂暴，犬群正在聚集',
   },
 };

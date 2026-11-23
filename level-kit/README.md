@@ -62,7 +62,7 @@ esbuild level-kit/vendor/three-entry.mjs --bundle --format=iife --minify --legal
 | `beastDropHeight(beast, level)` | 可选。返回弹药、生命补给与关键物品的掉落高度，飞行敌人可将掉落留在下方地面 |
 | `onProjectileHit(game)` | 可选。敌方弹丸实际伤及玩家且玩家存活时调用，可触发视野遮挡等主题效果 |
 
-关卡机制可以从 `context.mapData` 读取 `buildMap()` 返回的场景对象。玩家在传送门交互范围外按 E 时会调用 `encounter.interact(game)`。`encounter.interactionHint(game)` 可在准星下方显示当前机关提示，返回 `null` 时使用共享提示。
+关卡机制可以从 `context.mapData` 读取 `buildMap()` 返回的场景对象。玩家在传送门交互范围外按 F 时会调用 `encounter.interact(game)`。`encounter.interactionHint(game)` 可在准星下方显示当前机关提示，返回 `null` 时使用共享提示。
 
 默认传送门可以通过 `palette.rift` 调色。使用线性 RGB 数组配置 `sealed` 和 `ready`，用十六进制颜色配置 `rings` 的两种颜色，以及 `particles` 和 `wave`。
 

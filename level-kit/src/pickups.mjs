@@ -14,7 +14,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
       this.where = new V3(); this.age = 0;
     }
     reset() {
-      this.age = 0;
+      this.age = 0; this.keyItem=null;
       for (const p of this.objects) p.active = false;
       for (const [x, z, name, value, height] of (definition.loot ?? [])) {
         this.add('rare', x, z, this.level.surface(x, z, height === 'top' ? Infinity : this.level.base(x, z) + 0.16), name, value, true);
@@ -29,15 +29,29 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
         }
       }
       if (!object) return;
+      if (kind === 'core') this.keyItem=object;
       Object.assign(object, { active: true, kind, x, z, y, name, value, permanent, born: this.age });
+    }
+    nearKey(player) {
+      const item=this.keyItem;
+      return item?.active && Math.abs(player.y-item.y)<=1.25 && Math.hypot(player.x-item.x,player.z-item.z)<=CONFIG.pickups.grab;
+    }
+    takeKey(player,game) {
+      if (!this.nearKey(player)) return false;
+      this.keyItem.active=false;
+      this.keyItem=null;
+      game.core=true;
+      game.sound.pickup(true);
+      game.ui.notify(TEXT.coreCollected,2);
+      return true;
     }
     update(dt, player, game) {
       this.age += dt;
       for (const item of this.objects) {
         if (!item.active) continue;
         if (Math.abs(player.y - item.y) > 1.25 || Math.hypot(player.x - item.x, player.z - item.z) > CONFIG.pickups.grab) continue;
-        if (item.kind === 'core') { game.core = true; game.ui.notify(TEXT.coreCollected, 2.0); }
-        else if (item.kind === 'rare') {
+        if (item.kind === 'core') continue;
+        if (item.kind === 'rare') {
           game.loot.push({ name: item.name, value: item.value }); game.value += item.value;
           game.ui.notify('已拾取 ' + item.name + ' / 价值 ' + item.value, 1.7);
         } else if (item.kind === 'sample') {
@@ -53,6 +67,10 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
           if (added <= 0) continue;
           game.weapon.reserve += added;
           game.ui.notify('备用弹药增加 ' + added, 1.05);
+        }
+        if (item.kind === 'rare') {
+          const supply = game.kit?.supply();
+          if (supply) game.ui.notify('已拾取 '+item.name+' · 补给 '+supply,1.7);
         }
         item.active = false;
         game.sound.pickup(item.kind !== 'ammo');

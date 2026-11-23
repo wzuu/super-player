@@ -112,6 +112,19 @@ def verify(browser, root, site):
     second.reload()
     second.wait_for_function("n => document.querySelector('#battle-count').textContent.includes(n + ' 局')", arg=total + 1)
     second.close()
+    # 重放胜利结算，只返还一次库存。两次读取之间的并行改装写入需要检查版本号。
+    page.evaluate("""async first => {
+        const store = await (await import('./campaign/store.mjs')).campaignStore();
+        const baseline = await store.gear();
+        const row={id:crypto.randomUUID(),level:first,won:true,kills:1,durationMs:10,
+            endedAt:Date.now(),loot:[{name:'军需测试',value:333}],remaining:{grenade:1}};
+        await Promise.all([store.save(row),store.save(row)]);
+        const result=await store.gear();
+        if (result.earned!==baseline.earned+333 || result.state.stock.grenade!==(baseline.state.stock.grenade??0)+1)
+            throw Error('重复结算');
+        const updates=await Promise.all([store.writeGear(result),store.writeGear(result)]);
+        if(updates.filter(value=>value.saved).length!==1) throw Error('存档版本冲突未检出');
+    }""", LEVELS[0]["id"])
     assert not api_requests, api_requests
     assert not errors, errors
     # 两种打包依赖组合均从磁盘启动，无存档服务时仍可练习。

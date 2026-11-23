@@ -71,22 +71,48 @@ export async function openBrowserStore(levels, path) {
   }
 
   return {
+    levels,
     pendingPrefix: 'super-player-static:' + path + ':pending:',
     canEnter: id => transaction('battles', 'readonly', tx => unlocked(tx.objectStore('battles'), id)),
     async save(battle) {
       const record = battleRecord(battle);
-      return transaction('battles', 'readwrite', async tx => {
+      return transaction(['battles','settings'], 'readwrite', async tx => {
         const records = tx.objectStore('battles');
         let row = await result(records.index('id').get(record.id));
         if (!row) {
           if (!await unlocked(records, record.level)) throw new Error('请先通关上一关');
           row = record;
           await result(records.add(row));
+          if (row.won && battle.remaining) {
+            if (typeof battle.remaining !== 'object' || Array.isArray(battle.remaining) || Object.keys(battle.remaining).length>2) throw Error('携带数量无效');
+            const settings=tx.objectStore('settings');
+            const gear=(await result(settings.get('gear'))) ?? {revision:0,state:{}};
+            const stock=gear.state.stock ??= {};
+            for (const [id,n] of Object.entries(battle.remaining)) {
+              if (!/^(medkit|grenade|ammo|mine|cache-[a-z-]+)$/.test(id) || !Number.isSafeInteger(n) || n<0 || n>3) throw Error('携带数量无效');
+              stock[id]=(stock[id]??0)+n;
+            }
+            gear.revision++;
+            await result(settings.put(gear,'gear'));
+          }
         }
         const nextLevel = row.won ? levels[position(row.level) + 1] ?? null : null;
         return { nextLevel, campaignCleared: Boolean(row.won && !nextLevel) };
       });
     },
+    gear: () => transaction(['settings','battles'],'readonly', async tx => {
+      const rows = await result(tx.objectStore('battles').getAll());
+      const saved = await result(tx.objectStore('settings').get('gear'));
+      return {...(saved ?? {revision:0,state:{}}),
+        earned: rows.reduce((sum,row)=>sum+row.loot.reduce((value,item)=>value+item.value,0),0),
+        cleared:[...new Set(rows.filter(row=>row.won).map(row=>row.level))]};
+    }),
+    writeGear: ({revision,state}) => transaction('settings','readwrite',async tx => {
+      const settings = tx.objectStore('settings');
+      if (((await result(settings.get('gear')))?.revision ?? 0) !== revision) return {saved:false};
+      await result(settings.put({revision:revision+1,state},'gear'));
+      return {saved:true};
+    }),
     loadout: () => transaction('settings', 'readonly', async tx => ({
       equippedSkin: (await result(tx.objectStore('settings').get('skin'))) ?? null,
     })),
@@ -101,8 +127,13 @@ export async function openBrowserStore(levels, path) {
       const rows = await result(tx.objectStore('battles').getAll());
       const skin = await result(tx.objectStore('settings').get('skin'));
       const wins = new Set(rows.filter(row => row.won).map(row => row.level));
+      const best = {};
       const loot = new Map();
       for (const row of rows) {
+        const b = best[row.level] ??= {kills:0,time:null,loot:0};
+        b.kills = Math.max(b.kills,row.kills);
+        b.loot = Math.max(b.loot,row.loot.length);
+        if (row.won) b.time = Math.min(b.time ?? Infinity,row.durationMs);
         for (const item of row.loot) {
           const key = JSON.stringify([row.level, item.name]);
           const entry = loot.get(key) ?? { ...item, level: row.level, firstAt: row.endedAt, count: 0 };
@@ -116,7 +147,7 @@ export async function openBrowserStore(levels, path) {
         levels: levels.map((level, i) => ({
           ...level, cleared: wins.has(level.id), unlocked: !i || wins.has(levels[i - 1].id),
         })),
-        equippedSkin: skin ?? null, lootPerLevel: 10, battleCount: rows.length,
+        best, equippedSkin: skin ?? null, lootPerLevel: 10, battleCount: rows.length,
         loot: [...loot.values()].sort((a, b) => a.firstAt - b.firstAt || a.name.localeCompare(b.name)),
         ...historyPage(rows),
       };

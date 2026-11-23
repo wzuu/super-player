@@ -837,7 +837,7 @@ export default {
     portal:'数据裂隙',
     safe:'地下车站出口安全区',
     objective:'清除失控机械，击败巨型机甲并取得主控密钥',
-    exitObjective:'回到全息广告广场，在数据裂隙前按 E 引爆',
+    exitObjective:'回到全息广告广场，在数据裂隙前按 F 引爆',
     detonating:'数据裂隙解封，电磁脉冲扩散中',
     rage:'机甲进入过载，失控机械犬正在增援',
   },

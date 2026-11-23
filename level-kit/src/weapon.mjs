@@ -133,7 +133,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
     }
     update(dt, input, game) {
       this.cooldown = Math.max(-dt, this.cooldown - dt);
-      this.heat = Math.max(0, this.heat - dt * CONFIG.weapon.heatRecovery * (input.fire && this.ammo > 0 && this.reloadLeft <= 0 ? 0.26 : 1));
+      this.heat = Math.max(0, this.heat - dt * CONFIG.weapon.heatRecovery * ((input.fire || input.padFire) && this.ammo > 0 && this.reloadLeft <= 0 ? 0.26 : 1));
       if (input.reload) { input.reload = false; this.reload(game); }
       if (this.reloadLeft > 0) {
         this.reloadLeft = Math.max(0, this.reloadLeft - dt);
@@ -144,8 +144,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
           this.cooldown = Math.max(0.08, this.cooldown);
         }
       }
-      if (!input.fire) this.cooldown = Math.max(0, this.cooldown);
-      if (input.fire && this.reloadLeft <= 0 && this.cooldown <= 0) {
+      if (!input.fire && !input.padFire) this.cooldown = Math.max(0, this.cooldown);
+      if ((input.fire || input.padFire) && this.reloadLeft <= 0 && this.cooldown <= 0) {
         if (this.ammo > 0) {
           this.cooldown += 1 / (CONFIG.weapon.fireRate * this.combat.fireRate);
           this.shoot(game);

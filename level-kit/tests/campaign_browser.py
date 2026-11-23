@@ -39,11 +39,20 @@ def check_reload(page):
     page.evaluate("""() => {
         const g = run.game, w = g.weapon;
         w.ammo = 1; w.reserve = 4; w.cooldown = 0;
+        // 在实际输入前订阅 HUD，低帧率机器上两次 Playwright 调用之间可能已经完成换弹。
+        const node=document.querySelector('#weapon-state');
+        window.autoReloadShown=false;
+        const observer=new MutationObserver(records=>{
+            if (records.some(record=>[...record.addedNodes].some(n=>n.textContent.includes('换弹中')))) {
+                window.autoReloadShown=true;
+                observer.disconnect();
+            }
+        });
+        observer.observe(node,{childList:true,subtree:true});
     }""")
     page.mouse.down()
     try:
-        page.wait_for_function("run.game.weapon.reloadLeft > 0 && run.game.weapon.ammo === 0")
-        page.wait_for_function("document.querySelector('#weapon-state').textContent.includes('换弹中')")
+        page.wait_for_function("window.autoReloadShown")
         page.wait_for_function("run.game.weapon.reserve === 0 && run.game.weapon.ammo === 0")
         page.wait_for_function("document.querySelector('#weapon-state').textContent === '弹药耗尽'")
         assert page.evaluate("run.game.weapon.reloadLeft") == 0
@@ -72,12 +81,31 @@ def finish_at_gate(page):
             Object.assign(g.player, {x:item.x, y:item.y, z:item.z});
             g.pickups.update(.05, g.player, g);
         }
-        g.kills = run.config.beasts.killsToWin;
-        const gate = g.level.gate;
-        Object.assign(g.player, {x:gate.x, y:gate.y, z:gate.z});
         return treasure.name;
     }""")
-    page.keyboard.press("e")
+    page.keyboard.press("f")
+    page.wait_for_function("run.game.core")
+    page.evaluate("""() => {
+        const g=run.game;
+        g.kills = run.config.beasts.killsToWin;
+        const gate = g.level.gate;
+        if (g.objective.mode === 'escort') {
+            const spawn = g.level.spawn;
+            for (let i=0; i<=200; i++) {
+                const t=i/200;
+                Object.assign(g.player,{x:spawn.x+(gate.x-spawn.x)*t,
+                    y:spawn.y+(gate.y-spawn.y)*t,z:spawn.z+(gate.z-spawn.z)*t});
+                g.objective.step(.2,g);
+            }
+        }
+        Object.assign(g.player, {x:gate.x, y:gate.y, z:gate.z});
+        if (g.objective.mode === 'hold') {
+            if (g.ready()) throw Error('坚守计时尚未开始');
+            for (let i=0;i<451;i++) g.objective.step(.1,g);
+        }
+        if (!g.ready()) throw Error('撤离条件尚未满足 '+g.objective.label(g));
+    }""")
+    page.keyboard.press("f")
     page.wait_for_function("run.game.phase === 'win'")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
     return name

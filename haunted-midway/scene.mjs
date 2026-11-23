@@ -890,7 +890,7 @@ export default {
     loot: '游园藏品',
     safe: '南门售票亭安全区',
     rage: '顶幕落下，团长撕裂戏服并召唤扭曲玩偶',
-    exitObjective: '到摩天轮底部按 E 引爆锁链彩门',
+    exitObjective: '到摩天轮底部按 F 引爆锁链彩门',
   },
   buildBeastModel: carnivalModel,
   buildRageModel: (helpers) => carnivalModel(3, helpers, true),
