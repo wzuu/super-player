@@ -265,7 +265,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
           if (this.nearGate()) {
             if (!this.ready()) ui.notify(objective.label(this) || TEXT.locked, 1.55);
             this.trigger();
-          } else {
+          } else if (encounter?.interactionHint?.(this) || !pickups.takeAimed(player,this)) {
             encounter?.interact?.(this);
           }
         }

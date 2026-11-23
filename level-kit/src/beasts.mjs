@@ -1,8 +1,9 @@
+import { distantBody, detailedBody, hideTexture } from '@level-kit/beast-visuals.mjs';
 import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 
-export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
+export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
   const tactic=stageTactic(definition?.weaponSkin);
   const { projectileTint, ichor, spark, coreTint } = colors;
 
@@ -365,8 +366,17 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.pool = Array.from({ length: CONFIG.beasts.capacity }, (_, id) => ({ id, active: false, mark: 0, aim: new V3() }));
       this.air = new V3(); this.line = new V3();
       const modelContext = { THREE, shapes, mergeGeometries, CONFIG };
-      const createBatch = ([body, eye], capacity) => {
-        const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+      const appearance=CONFIG.beasts.appearance, textures=new Map();
+      const surfaces=appearance.surfaces[definition.weaponSkin] ?? [];
+      this.corpses=Array.from({length:appearance.corpses},()=>({until:0}));
+      this.nextCorpse=0;
+      const createBatch = ([body, eye], capacity, surface) => {
+        if (surface && !textures.has(surface)) textures.set(surface,hideTexture(canvasTexture,surface));
+        const texture=textures.get(surface);
+        const material=surface ? new THREE.MeshPhongMaterial({
+          vertexColors:true,map:texture,specularMap:texture,
+          specular:surface==='metal'?0x565e69:0x241f1d,shininess:surface==='metal'?32:8,
+        }) : new THREE.MeshLambertMaterial({vertexColors:true});
         // 把受击强度作为实例属性，保留原本的顶点色和各部位区分。
         const flash = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage);
         body.setAttribute('beastFlash', flash);
@@ -376,12 +386,26 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
           shader.fragmentShader = 'varying float vBeastFlash;\n' + shader.fragmentShader
             .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(1.25) * vBeastFlash;');
         };
-        const eyes = new THREE.MeshBasicMaterial({ vertexColors: true });
+        const eyes = new THREE.MeshBasicMaterial({ vertexColors: true, fog:false });
         return [dynamicMesh(body, material, capacity), dynamicMesh(eye, eyes, capacity)];
       };
-      this.modelBatches = CONFIG.beasts.types.map((_, type) =>
-        createBatch(definition.buildBeastModel?.(type, modelContext) ?? beastModel(type), type === 3 ? 1 : CONFIG.beasts.capacity));
-      if (definition.buildRageModel) this.modelBatches.push(createBatch(definition.buildRageModel(modelContext), 1));
+      this.modelBatches=[];
+      const far=[];
+      CONFIG.beasts.types.forEach((_,type)=>{
+        const [body,eye]=definition.buildBeastModel?.(type,modelContext) ?? beastModel(type);
+        const capacity=(type===3 ? 1 : this.pool.length)+appearance.corpses;
+        this.modelBatches.push(createBatch([detailedBody(modelContext,body,type,appearance),eye],capacity,surfaces[type] ?? 'hide'));
+        if(type!==3) far.push(createBatch([distantBody(THREE,body,appearance.gridCells),eye],capacity,false));
+        if(type===3){
+          const [rageBody,rageEye]=definition.buildRageModel?.(modelContext) ?? [body,eye];
+          this.rageBatch=this.modelBatches.length;
+          this.modelBatches.push(createBatch([detailedBody(modelContext,rageBody,type,appearance,true),rageEye],capacity,surfaces[type] ?? 'hide'));
+          if(rageBody!==body) rageBody.dispose();
+        }
+        body.dispose();
+      });
+      this.farStart=this.modelBatches.length;
+      this.modelBatches.push(...far);
       this.healthBG = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({ color: 0x101523, side: THREE.DoubleSide }), this.pool.length);
       this.healthFG = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), this.pool.length);
       this.ai = new BeastAI(level, nav, this);
@@ -396,6 +420,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     reset(player) {
       this.live = 0; this.boss = null; this.frame = 0; this.spawnTime = 0; this.navTime = 0;
       for (const b of this.pool) b.active = false;
+      for (const corpse of this.corpses) corpse.until=0;
       this.nav.rebuild(player.x, player.z); this.hash.clear();
       const spawn = this.level.bossSpawn;
       this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
@@ -414,7 +439,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       if (!b) return null;
       const stats = CONFIG.beasts.types[type];
       Object.assign(b, {
-        active: true, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
+        active: true, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         fx: Math.sin(angle), fz: Math.cos(angle), dx: Math.sin(angle) * 0.11, dz: Math.cos(angle) * 0.11,
         lane: Math.random() > 0.5 ? 1 : -1, yaw: angle, blink: randomRange(0, TAU), stride: 0, alert: 0,
         mode: 'move', phaseTime: 0, cooldown: randomRange(0.5, 1.3), stun: 0, flash: 0, patrol: randomRange(0.5, 2),
@@ -490,6 +515,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       b.hp -= applied;
       if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
+      const corpse=this.corpses[this.nextCorpse];
+      this.nextCorpse=(this.nextCorpse+1)%this.corpses.length;
+      Object.assign(corpse,{x:b.x,y:b.y,z:b.z,yaw:b.yaw,roll:b.surfaceRoll,type:b.type,rage:b.rage,
+        farLOD:b.farLOD,until:game.time+CONFIG.beasts.appearance.fallTime});
       this.retire(b, game);
       const dropY = this.dropHeight(b);
       if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
@@ -507,6 +536,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       if (bonusAmmo > 0 || type === 3 || game.weapon.reserve < 46 || game.kills % 2 === 0) {
         const amount = (CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1);
         game.pickups.add('ammo', b.x + 0.17, b.z, dropY, '机关枪弹药', amount);
+      }
+      if (type !== 3 && game.kills % CONFIG.pickups.grenadeEvery === 0) {
+        game.pickups.add('grenade', b.x-.20, b.z, dropY, '手雷', 1);
       }
       const bonusHealth = game.encounter?.bonusHealth ?? 0;
       if (bonusHealth > 0) {
@@ -594,22 +626,26 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       for (const b of this.pool) {
         if (!b.active) continue;
         const type = b.type;
-        const batch = b.rage && type === 3 && this.modelBatches.length > CONFIG.beasts.types.length ? CONFIG.beasts.types.length : type;
+        const appearance=CONFIG.beasts.appearance;
+        const range2=(camera.position.x-b.x)**2+(camera.position.z-b.z)**2+(camera.position.y-b.y)**2;
+        const threshold=appearance.far+(b.farLOD?-appearance.hysteresis:appearance.hysteresis);
+        b.farLOD=type!==3 && range2>threshold**2;
+        const batch=b.farLOD ? this.farStart+type : b.rage && type===3 ? this.rageBatch : type;
         const i = this.counts[batch]++;
         const [body, luminous] = this.modelBatches[batch];
         const angle = Math.atan2(b.fx, b.fz);
         const delta = Math.atan2(Math.sin(angle - b.yaw), Math.cos(angle - b.yaw));
         b.yaw += delta * Math.min(1, dt * 16);
-        const walk = t * (type === 0 ? 17 : 10) + b.blink;
-        const action = disabled ? 0 : b.mode === 'windup' ? -0.13 : b.mode === 'charge' ? 0.23 : 0;
+        const walk = t * appearance.walkHz[type] + b.blink;
+        const action = disabled ? 0 : b.mode === 'windup' ? appearance.windupTilt[type] : b.mode === 'charge' ? 0.23 : 0;
         const bob = (disabled ? 0 : Math.sin(walk * 2)) * 0.075 * clamp(b.stride / 3, 0.15, 1);
         body.geometry.attributes.beastFlash.setX(i, Math.min(1, b.flash * 12));
         const roll = b.surfaceRoll + (disabled ? 0 : Math.cos(walk) * 0.062);
         const visualY = b.y + bob + (b.surfaceRoll ? b.height * 0.5 * (1 - Math.cos(b.surfaceRoll)) : 0);
-        setInstance(body, i, b.x, visualY, b.z, 1, 1, 1, null, b.yaw, action, roll);
+        const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
+        setInstance(body, i, b.x, visualY, b.z, 1, breath, 1, null, b.yaw, action, roll);
         workColor.setScalar(disabled ? 0.31 : b.rage ? 3.2 : b.mode === 'windup' ? 2.85 : 1.90);
-        setInstance(luminous, i, b.x, visualY, b.z, 1, 1, 1, workColor, b.yaw, action, roll);
-        const range2 = (camera.position.x - b.x) ** 2 + (camera.position.z - b.z) ** 2;
+        setInstance(luminous, i, b.x, visualY, b.z, 1, breath, 1, workColor, b.yaw, action, roll);
         if (range2 > 68 ** 2) continue;
         const w = type === 3 ? 1.83 : 0.93, h = type === 3 ? 0.099 : 0.059;
         const ratio = clamp(b.hp / CONFIG.beasts.types[type].hp, 0, 1);
@@ -623,8 +659,19 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         workColor.setHex(type === 3 || b.rage ? 0xff536a : b.mode === 'windup' ? 0xffae62 : 0xee755f);
         this.healthFG.setColorAt(bars++, workColor);
       }
+      for(const c of this.corpses){
+        if(c.until<=t) continue;
+        const fall=1-(c.until-t)/CONFIG.beasts.appearance.fallTime;
+        const batch=c.farLOD ? this.farStart+c.type : c.rage && c.type===3 ? this.rageBatch : c.type;
+        const [body,eye]=this.modelBatches[batch], i=this.counts[batch]++;
+        const y=c.y-.18*fall, roll=c.roll+fall*1.48;
+        setInstance(body,i,c.x,y,c.z,1,1,1,null,c.yaw,0,roll);
+        workColor.setScalar(1-fall);setInstance(eye,i,c.x,y,c.z,1,1,1,workColor,c.yaw,0,roll);
+        body.geometry.attributes.beastFlash.setX(i,Math.max(0,1-5*fall));
+      }
       for (let i = 0; i < this.counts.length; i++) {
         const [body, luminous] = this.modelBatches[i];
+        body.visible=luminous.visible=this.counts[i]>0;
         body.geometry.attributes.beastFlash.needsUpdate = true;
         updateMesh(body, this.counts[i]); updateMesh(luminous, this.counts[i]);
       }
