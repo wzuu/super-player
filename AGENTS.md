@@ -9,12 +9,13 @@
 
 - 战役时钟以实际前台游玩时间推进，暂停前尚未模拟的前台时间在恢复时继续结算。首页先显示现有进度，首次通关补写成功后刷新解锁状态。对战历史按结算时间倒序，同一时刻按入库序号倒序。持续伤害在命中刷新前结清已到期的伤害。
 
+- 源码仓库保留各关的 `scene.mjs`。先运行 `npm ci`、`npm run build` 生成入口。PR 跑自动验收，main 验收后发布 Pages；静态站点使用浏览器 IndexedDB，本机服务使用 SQLite。
 - 首页和关卡介绍使用通用文案，避免写死战场总数、刷怪数量或击杀目标数字。通关进度和局内击杀进度由实际数据生成。
 - 根目录 `index.html` 是战役首页。各关按登记顺序解锁，本机 SQLite 保存已结算对战和成功撤离带回的战利品。所有关卡和模块预览共用本地 Three.js 0.160.0。
 - 战役凶兽难度按登记顺序自动计算。第一关使用各类凶兽原移速的 50%，每关加第一关基准的 5%，最高为原移速。常规同场目标从 56 只开始，每关加 2 只。第十二至十四关分别为 78、80、82 只，基础移速为原速的 77.5%、80%、82.5%。后续关卡沿用这条曲线，详情见开发圣经。
 - 各关均有默认步枪外观。成功撤离解锁本关外观，已有通关记录自动计入。首页个人收藏可旋转预览、佩戴或恢复关卡默认。佩戴保存在本机 SQLite。造型和程序纹理维护在 `level-kit/src/rifle-*.mjs`。 空仓有备弹时自动换弹，R 可提前换弹。战斗特性随佩戴生效，维护在 `level-kit/src/weapon-perks.mjs`。
 - 项目处于开发阶段。后续射击关卡使用 `LEVEL_BIBLE.md` 和 `level-kit/`，第三关雨夜废城的独立入口为 `rain-city/index.html`。
-- 2026-11-23 已初始化为 Git 仓库并推送到 GitHub 公开项目 `https://github.com/wzuu/super-player`（分支 `main`）。新增面向外部玩家的 `README.md`。GitHub Pages 未开启，详情见第 14 节。
+- 2026-11-23 已初始化为 Git 仓库并推送到 GitHub 公开项目 `https://github.com/wzuu/super-player`（分支 `main`）。新增面向外部玩家的 `README.md`。Pages 发布流程见第 14 节。
 - 第一关《地下实验室》由 `underground-lab/scene.mjs` 和共享组件生成 `underground-lab/index.html`。本版替换原探索关卡，采用 80 米乘 80 米实验设施、四类失控实验体、隐藏捷径和红色警报，已通过 Chromium 单文件验收。
 - 第二关《上古秘境》由 `shanhai-secret-realm/scene.mjs` 和共享组件生成 `shanhai-secret-realm/index.html`，玩法与验收记录见第二关规格和 `PROGRESS.md`。
 - 第三关以 `rain-city/scene.mjs` 为场景源文件，公共逻辑位于 `level-kit/src/`。生成后的 `rain-city/index.html` 使用 Chromium 验收，测试结果见 `PROGRESS.md`。
@@ -140,7 +141,7 @@
 
 - 使用中文沟通，禁止输出表情符号。删除数据、变更部署或生产环境、操作服务器、更换技术栈、大范围重构和安装全局依赖须先确认。
 - Git 仓库为 `wzuu/super-player`，分支 `main`，**公开可见**。远端用 `origin` 指向 `https://github.com/wzuu/super-player`，推送走 `gh` CLI 已保存的凭据，仓库内不保存令牌。
-- GitHub Pages 未开启。纯静态托管只能单关离线游玩，战役存档依赖 `server.py` 的 `/api/progress`、`/api/battles`、`/api/loadout`，Pages 上不可用。如需开启需再次确认。
+- Pages 使用 GitHub Actions 发布。PR 构建并验证静态站点，main 发布同次验收的白名单产物。项目采用 MIT 许可证并保留 Three.js 原许可。
 - 公开仓库禁止提交本机存档与个人信息：`.data/`、`AGENTS.local.md`、`.env*`、`.DS_Store` 均在 `.gitignore` 中。推送前确认 `git status --porcelain --ignored` 里 `.data/` 未被跟踪。
 - 敏感信息只放入被 Git 忽略的 `AGENTS.local.md`，本文件与 `README.md`、`PROGRESS.md` 等入库文档只记录非敏感信息和凭据位置。`README.md` 面向外部玩家，不写内部难度曲线与验收细节，内部规则留在本文件与 `LEVEL_BIBLE.md`。
 

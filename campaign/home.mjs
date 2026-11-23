@@ -1,3 +1,4 @@
+import { campaignStore } from './store.mjs';
 import { flushPendingBattles } from './save.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 
@@ -46,12 +47,6 @@ function feedback(message, retry = false) {
   $('status').textContent = message;
   $('retry').hidden = !retry;
   $('feedback').hidden = !message;
-}
-
-async function read(url) {
-  const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(8000) });
-  if (!response.ok) throw new Error('读取存档失败');
-  return response.json();
 }
 
 function missionCard(level, index, active) {
@@ -231,12 +226,7 @@ async function equipRifle(skin) {
   status.textContent = '';
   renderRifles();
   try {
-    const response = await fetch('/api/loadout', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skin }), signal: AbortSignal.timeout(8000),
-    });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error);
+    const result = await (await campaignStore()).equip(skin);
     const restoreFocus = skin === null && document.activeElement === $('rifle-default');
     progress.equippedSkin = result.equippedSkin;
     loadoutRevision++;
@@ -252,7 +242,7 @@ async function equipRifle(skin) {
 
 async function refreshProgress() {
   const revision = loadoutRevision;
-  const updated = await read('/api/progress');
+  const updated = await (await campaignStore()).progress();
   // 补存读取和佩戴写入可并行。保留读取期间已保存的最新选择。
   if (revision !== loadoutRevision) updated.equippedSkin = progress.equippedSkin;
   progress = updated;
@@ -293,7 +283,7 @@ async function loadProgress() {
     if (!complete) feedback('还有对战记录等待写入，请重新读取。', true);
     else feedback(denied ? denied.title + '尚未解锁，请先通关上一关。' : '');
   } catch {
-    feedback('无法读取存档。请确认本机游戏服务已启动，再试一次。', true);
+    feedback('无法读取战役存档。请确认页面可访问、浏览器允许存储，再试一次。', true);
   } finally {
     loading = false;
   }
@@ -304,7 +294,7 @@ more.addEventListener('click', async () => {
   const snapshot = progress;
   more.disabled = true;
   try {
-    const page = await read('/api/battles?before=' + before);
+    const page = await (await campaignStore()).history(before);
     if (snapshot !== progress) return;
     appendBattles(page);
     $('history-error').hidden = true;

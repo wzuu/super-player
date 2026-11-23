@@ -249,7 +249,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             file = ROOT / level / "index.html"
         elif path in {"/campaign/home.css", "/campaign/home.mjs", "/campaign/save.mjs", "/campaign/weapon-preview.mjs",
-                      "/campaign/levels.json",
+                      "/campaign/levels.json", "/campaign/store.mjs", "/campaign/browser-store.mjs",
                       "/level-kit/preview.html", "/level-kit/vendor/three-r160.js",
                       "/level-kit/starter/scene.mjs"}:
             file = ROOT.joinpath(*segment)
@@ -270,6 +270,11 @@ class Handler(SimpleHTTPRequestHandler):
             return
         self.static_file = file
         super().do_HEAD() if head else super().do_GET()
+
+    def end_headers(self):
+        if urlsplit(self.path).path == "/campaign/levels.json":
+            self.send_header("X-Super-Player-Store", "sqlite")
+        super().end_headers()
 
     def translate_path(self, path):
         return str(self.static_file)
@@ -322,6 +327,8 @@ def main():
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--db", type=Path, default=ROOT / ".data" / "super-player.sqlite3")
     options = parser.parse_args()
+    if any(not (ROOT / level / "index.html").is_file() for level in LEVEL_IDS):
+        parser.exit(1, "请先在项目根目录运行 npm ci 和 npm run build 生成关卡。\n")
     with ThreadingHTTPServer(("127.0.0.1", options.port), Handler) as server:
         server.database = options.db.resolve()
         server.database.parent.mkdir(parents=True, exist_ok=True)

@@ -234,7 +234,7 @@
       <div class="actions">
         <a id="next-level" class="action-link" hidden>进入下一关</a>
         <button id="start" type="button" disabled autofocus>进入关卡</button>
-        <a id="campaign-home" class="action-link" href="/" hidden>返回首页</a>
+        <a id="campaign-home" class="action-link" href="../" hidden>返回首页</a>
         <button id="retry-save" type="button" hidden>重试保存</button>
         <button id="sound" type="button" aria-pressed="true">音效开启</button>
       </div>
@@ -278,11 +278,11 @@
       import('@level-kit/runtime.mjs'), import(sceneModule),
     ]);
     const campaignId = document.body.dataset.campaignLevel;
-    const campaignPath = `/${campaignId}/`;
-    const campaign = campaignId && location.protocol === 'http:' &&
-      [campaignPath, campaignPath + 'index.html'].includes(location.pathname)
-      ? await import('/campaign/save.mjs').then(module => module.connectCampaign(campaignId))
-      : null;
+    let campaign = null;
+    if (campaignId && ['http:', 'https:'].includes(location.protocol)) {
+      campaign = await import('../campaign/save.mjs').then(module => module.connectCampaign(campaignId));
+      if (!campaign) return;
+    }
     startLevel(definition, campaign, campaignStage);
   }
 
