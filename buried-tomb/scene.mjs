@@ -5,6 +5,7 @@ const CONFIG = {
   player: { crouch: { height: 1.10, eye: 1.01, speed: 0.51 } },
   audio: { ambient: { filter: 'lowpass', frequency: 750, activeGain: 0.13, pauseGain: 0.08 } },
   beasts: {
+    appearance: { scale: [[1.28,1.32], [1.42,1.27], [1.20,1.27], [1.34,1.34]] },
     types: [
       { hp: 59, height: 0.99, radius: 0.43 },
       { hp: 162, height: 1.83, radius: 0.66 },
@@ -47,7 +48,7 @@ const MAP_GRID = [
   '#########################',
 ];
 
-const TOMB = { halfWidth: 17.0, back: -33.1, front: -24.0, approach: -17.8, depth: 3.10, rampX: 12.4, rampWidth: 4.1 };
+const TOMB = { halfWidth: 17.0, back: -33.1, front: -24.0, landing: -21.65, approach: -17.8, depth: 3.10, rampX: 12.4, rampWidth: 4.1 };
 const TOWER = { height: 5.10, start: 15.15, tread: 0.87, step: 0.34, steps: 15, width: 3.3 };
 const LANDMARKS = {
   loot: [
@@ -68,7 +69,8 @@ function passage(x) {
 function terrainHeight(x, z) {
   if (Math.abs(x) < TOMB.halfWidth && z > TOMB.back && z < TOMB.front) return -TOMB.depth;
   if (z >= TOMB.front && z < TOMB.approach && passage(x)) {
-    return -TOMB.depth * (TOMB.approach - z) / (TOMB.approach - TOMB.front);
+    // 坡脚在门楣前留一段水平地面，大体型的前后脚都落平后再通过拱门。
+    return -TOMB.depth * Math.min(1, (TOMB.approach - z) / (TOMB.approach - TOMB.landing));
   }
   return 0;
 }
@@ -155,7 +157,7 @@ function buildMap({ THREE, scene, GRID, StaticBatches, shapes, canvasTexture, se
   function pyramid(x, z) {
     level.gate.set(x, TOWER.height, z);
     level.bossAnchor.set(x, 0, z + 9.5);
-    level.bossSpawn.set(x + 5.3, 0, z + 12.0);
+    level.bossSpawn.set(x + 5.3, 0, z + 12.6);
     for (let tier = 0; tier < 6; tier++) {
       const width = [21.8, 18.4, 15.2, 11.8, 8.8, 5.70][tier];
       const top = (tier + 1) * .85;
@@ -331,7 +333,7 @@ function buildMap({ THREE, scene, GRID, StaticBatches, shapes, canvasTexture, se
   const xCuts = new Set([-GRID.halfX, GRID.halfX, -TOMB.halfWidth, TOMB.halfWidth]);
   for (let i = -40; i <= 40; i += 4) xCuts.add(i);
   for (const side of [-1, 1]) for (const edge of [-1, 1]) xCuts.add(side * TOMB.rampX + edge * TOMB.rampWidth / 2);
-  const zCuts = new Set([-GRID.halfZ, GRID.halfZ, TOMB.back, TOMB.front, TOMB.approach]);
+  const zCuts = new Set([-GRID.halfZ, GRID.halfZ, TOMB.back, TOMB.front, TOMB.landing, TOMB.approach]);
   for (let i = -40; i <= 40; i += 4) zCuts.add(i);
   const xs = [...xCuts].sort((a, b) => a - b), zs = [...zCuts].sort((a, b) => a - b);
   const buffers = [{ position: [], uv: [] }, { position: [], uv: [] }];

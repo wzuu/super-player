@@ -398,6 +398,7 @@ function settings() {
     ['sensitivity', '鼠标灵敏度', 0.25, 3, 0.05],
     ['fov', '视野角度', 55, 105, 1],
     ['volume', '主音量', 0, 100, 1],
+    ['hitShake', '受击震动强度', 0, 1, 0.1],
   ]) {
     const input = element('input');
     Object.assign(input, { type: 'range', min, max, step, value: prefs[id] });
@@ -444,6 +445,7 @@ function settings() {
   }
   for (const [id, label] of [
     ['steady', '减弱镜头震动'],
+    ['directionIndicators', '显示受击方向'],
     ['metrics', '显示性能面板'],
     ['gamepad', '标准手柄输入'],
   ]) {

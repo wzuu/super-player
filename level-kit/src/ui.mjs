@@ -8,6 +8,17 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.ctx = this.nodes.map.getContext('2d');
       this.size = this.nodes.map.width;
       this.facing = new V3();
+      this.directions = $('directions');
+      const markers = (length, className) => Array.from({ length }, () => {
+        const node = document.createElement('i');
+        node.className = className; node.hidden = true;
+        this.directions.append(node);
+        return node;
+      });
+      this.damageArcs = markers(8, 'damage-arc');
+      this.nearWarnings = markers(CONFIG.feedback.warningCount, 'near-warning');
+      this.nearest = [];
+      this.warningOrigin = new V3(); this.warningRay = new V3();
       this.tick = 0; this.hitTime = 0; this.noticeTime = 0;
       this.base = document.createElement('canvas');
       this.base.width = this.base.height = this.size;
@@ -90,6 +101,48 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.cross.dataset.hit = kind;
       this.hitTime = kind === 'kill' ? 0.20 : 0.12;
     }
+    placeMarker(node, angle, width, height) {
+      // 把世界方位投到矩形边界上，宽屏时左右斜角仍指向正确方向。
+      const x = Math.sin(angle), y = -Math.cos(angle);
+      const distance = Math.min(width / Math.max(.0001, Math.abs(x)), height / Math.max(.0001, Math.abs(y)));
+      node.style.transform = `translate(${(x * distance).toFixed(1)}px,${(y * distance).toFixed(1)}px) rotate(${angle}rad)`;
+      node.dataset.angle = String(angle);
+      node.hidden = false;
+    }
+    updateDirections(game) {
+      const cfg = CONFIG.feedback, p = game.player;
+      this.directions.hidden = game.encounter?.hudOffline === true;
+      if (this.directions.hidden) return;
+      const width = innerWidth * .5, height = innerHeight * .5, yaw = p.look.rotation.y;
+      this.damageArcs.forEach((node, i) => {
+        const age = game.time - p.hitDirections[i];
+        if (!cfg.directionIndicators || age >= cfg.arcDuration) { node.hidden = true; return; }
+        this.placeMarker(node, yaw + i * TAU / this.damageArcs.length, width - 34, height - 18);
+        node.style.opacity = String(1 - age / cfg.arcDuration);
+      });
+      const nearest = this.nearest;
+      nearest.length = 0;
+      this.warningOrigin.set(p.x, p.y + p.eye, p.z);
+      for (const b of game.beasts.pool) {
+        if (!b.active) continue;
+        const dx = b.x - p.x, dz = b.z - p.z, dy = b.y - p.y;
+        const range2 = dx * dx + dy * dy + dz * dz;
+        if (range2 > cfg.warningRange ** 2) continue;
+        let i = nearest.length;
+        while (i && nearest[i - 1].range2 > range2) i--;
+        if (i >= this.nearWarnings.length) continue;
+        const distance = this.warningRay.set(dx, b.y + b.height * .55 - this.warningOrigin.y, dz).length();
+        if (distance && !this.level.visible(this.warningOrigin, this.warningRay.divideScalar(distance), distance)) continue;
+        nearest.splice(i, 0, { dx, dz, range2 });
+        if (nearest.length > this.nearWarnings.length) nearest.pop();
+      }
+      this.nearWarnings.forEach((node, i) => {
+        const target = nearest[i];
+        if (!target) { node.hidden = true; return; }
+        this.placeMarker(node, yaw + Math.atan2(target.dx, -target.dz), width - 48, height - 34);
+        node.style.borderBottomColor = `hsl(${Math.round(48 * Math.min(1, Math.sqrt(target.range2) / cfg.warningRange))} 100% 65%)`;
+      });
+    }
     reset() {
       this.tick = 0; this.hitTime = 0; this.noticeTime = 0;
       this.nodes.cross.dataset.hit = '';
@@ -97,6 +150,8 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.message.hidden = true; this.nodes.boss.hidden = true;
       this.nodes.condition.hidden = true; this.nodes.posture.hidden = true;
       this.nodes.hud.removeAttribute('data-offline');
+      this.nodes.hud.removeAttribute('data-critical');
+      for (const node of [...this.damageArcs, ...this.nearWarnings]) node.hidden = true;
       this.text('hud-announcement', '');
     }
     update(dt, game) {
@@ -107,12 +162,17 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.noticeTime -= dt;
       if (this.noticeTime <= 0) this.text('hud-announcement', '');
       const { player: p, weapon: w } = game;
-      this.nodes.injury.style.opacity = (p.damageVignette * 0.81).toFixed(3);
+      const criticalAt = CONFIG.player.health * CONFIG.feedback.criticalHealth;
+      const critical = p.hp > 0 && p.hp < criticalAt;
+      this.nodes.hud.toggleAttribute('data-critical', critical);
+      const pulse = critical ? .19 + .18 * (1 - p.hp / criticalAt) + .1 * Math.sin(game.time * Math.PI * 1.4) : 0;
+      this.nodes.injury.style.opacity = Math.min(1, p.damageVignette * .81 + pulse).toFixed(3);
       const blast = game.blast;
       this.nodes.blast.style.opacity = blast > 0 && blast < 1 ? String(Math.sin(blast ** 0.47 * Math.PI) * 0.86) : '0';
       this.tick -= dt;
       if (this.tick > 0) return;
       this.tick = 0.062;
+      this.updateDirections(game);
       const status = w.combat.status(game);
       const condition = game.encounter?.status ?? (status ? { title: '武器特性', detail: '' } : null);
       this.nodes.condition.hidden = !condition;

@@ -29,6 +29,8 @@ def dashboard(browser, url):
     assert page.locator("#game-title").inner_text() == LEVELS[1]["title"]
     page.locator("#settings-open").click()
     page.get_by_label("减弱镜头震动").check()
+    page.get_by_label("受击震动强度").fill("0.4")
+    page.get_by_label("显示受击方向").uncheck()
     page.get_by_label("画质").select_option("low")
     page.get_by_label("显示性能面板").check()
     page.get_by_label("视野角度").fill("85")
@@ -77,6 +79,7 @@ def field(page, url):
     assert page.evaluate("run.game.weapon.ammo") == 66
     assert page.evaluate("Math.abs(run.config.weapon.reloadTime - 1.8*.92) < .0001 && Math.abs(run.config.weapon.heatRecovery - 1.1*1.1) < .0001")
     assert page.evaluate("run.config.graphics.particleScale") == .3
+    assert page.evaluate("[run.config.feedback.hitShake, run.config.feedback.directionIndicators]") == [.4, False]
     result = page.evaluate("""() => {
       const g=run.game, r=g.player.look.rotation;
       r.x=-Math.PI/2+.04; const x=r.x, y=r.y;

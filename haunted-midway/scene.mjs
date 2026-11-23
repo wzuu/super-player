@@ -457,7 +457,7 @@ function createEncounter({ CONFIG: config, level, THREE, brighter, sound }) {
     dx *= scale;
     dz *= scale;
     if (player) {
-      if (!body.hurt(rules.playerDamage, game)) return;
+      if (!body.hurt(rules.playerDamage, game, undefined, { x: body.x - dx, z: body.z - dz })) return;
       body.vy = 5.7;
       body.grounded = false;
       game.encounter.pushX = dx * 9;
@@ -524,7 +524,7 @@ function createEncounter({ CONFIG: config, level, THREE, brighter, sound }) {
         sound.tone(310, 52, 0.22, 0.16, 'triangle');
       }
       const p = game.player;
-      if (!isCrash && clearLine(explosion, p.x, p.y + 0.72, p.z, 3.4)) p.hurt(10, game);
+      if (!isCrash && clearLine(explosion, p.x, p.y + 0.72, p.z, 3.4)) p.hurt(10, game, undefined, explosion, 2);
       if (isCrash)
         for (const b of game.beasts.pool) {
           if (b.active && clearLine(explosion, b.x, b.y + 0.63, b.z, 3.9))

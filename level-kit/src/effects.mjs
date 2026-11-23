@@ -139,7 +139,7 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
   class Projectiles {
     constructor(level, effects) {
       this.level = level; this.effects = effects;
-      this.shots = Array.from({ length: CONFIG.effects.projectiles }, () => ({ pos: new V3(), vel: new V3(), life: 0 }));
+      this.shots = Array.from({ length: CONFIG.effects.projectiles }, () => ({ pos: new V3(), vel: new V3(), origin: new V3(), life: 0 }));
       this.puddles = Array.from({ length: CONFIG.effects.pools }, () => ({ pos: new V3(), life: 0, max: 1 }));
       this.sparks = dynamicMesh(definition.projectileGeometry?.(THREE) ?? new THREE.IcosahedronGeometry(1, 1),
         new THREE.MeshBasicMaterial({ color: projectileTint }), this.shots.length);
@@ -161,6 +161,8 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         projectileGravity = this.gravity } = CONFIG.beasts.types[beast.type];
       const shot = this.shots[this.shotCursor++ % this.shots.length];
       shot.pos.set(beast.x, beast.y + beast.height * 0.72, beast.z);
+      shot.origin.copy(shot.pos);
+      shot.type = beast.type;
       const dx = player.x - beast.x, dz = player.z - beast.z;
       const range = Math.max(1, Math.hypot(dx, dz));
       const t = range / projectileSpeed;
@@ -198,7 +200,7 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         if (target <= distance && target < coverDistance) {
           p.pos.copy(this.old).addScaledVector(this.dir, target);
           const damage = p.damage * (game.encounter?.beastDamageScale ?? 1);
-          if (player.hurt(damage, game) && player.hp > 0) {
+          if (player.hurt(damage, game, undefined, p.origin, p.type) && player.hp > 0) {
             if (p.slowDuration > 0) player.slow(p.slowScale, p.slowDuration, game.time);
             definition.onProjectileHit?.(game);
           }
@@ -222,7 +224,7 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         const age = p.life / p.max;
         const r = 1.24 + (1 - age) * 0.36;
         if (Math.abs(player.y - p.pos.y) < 0.60 && Math.hypot(player.x - p.pos.x, player.z - p.pos.z) < r - 0.1 && player.hurtDelay < 0.03) {
-          player.hurt(3.3, game, 0.48);
+          player.hurt(3.3, game, 0.48, p.pos, 2);
         }
         workColor.copy(projectileTint).multiplyScalar(age * 0.40 + 0.10);
         setInstance(this.fields, m++, p.pos.x, p.pos.y, p.pos.z, r, r * 0.86, 1, workColor, 0, -Math.PI / 2);

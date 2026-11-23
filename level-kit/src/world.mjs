@@ -190,8 +190,8 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     area(x, z, y = 0) { return definition.area?.(x, z, this, y) ?? '探索区域'; }
   }
 
-  class Navigation {
-    constructor(level) {
+  class RouteField {
+    constructor(level, body, collectSites) {
       this.level = level;
       this.cell = CONFIG.map.navCell;
       this.width = Math.ceil(GRID.halfX * 2 / this.cell);
@@ -203,8 +203,8 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       for (let i = 0; i < count; i++) {
         const x = this.x(i), z = this.z(i);
         const y = level.surface(x, z, level.base(x, z) + 0.50);
-        this.walkable[i] = !level.blocked(x, z, y, 0.52, 1.64);
-        if (this.walkable[i] && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
+        this.walkable[i] = !level.blocked(x, z, y, body.radius, body.height);
+        if (collectSites && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
       }
       this.target = -1;
       this.terrainRevision = -1;
@@ -265,6 +265,19 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         if (d >= 0 && d < cost) { best = candidate; cost = d; }
       }
       return best;
+    }
+  }
+
+  // 每种体型共享自己的目标距离场。同一格内移动不会重复计算路径。
+  class Navigation extends RouteField {
+    constructor(level) {
+      const types = CONFIG.beasts.types;
+      super(level, types[0], true);
+      this.fields = [this, ...types.slice(1).map(body => new RouteField(level, body, false))];
+    }
+    rebuild(x, z) {
+      super.rebuild(x, z);
+      for (let type = 1; type < this.fields.length; type++) this.fields[type].rebuild(x, z);
     }
   }
 

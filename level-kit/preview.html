@@ -32,6 +32,14 @@
   #world { width: 100%; height: 100%; display: block; }
   #hud { pointer-events: none; container-type: size; }
   #injury { background: radial-gradient(ellipse, transparent 35%, #a62239 120%); opacity: 0; }
+  #directions { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+  #directions i { position: absolute; left: 50%; top: 50%; }
+  .damage-arc { width: 58px; height: 17px; margin: -8px -29px; border-top: 5px solid #ff555f;
+    border-radius: 50%; filter: drop-shadow(0 1px 2px #47101b); }
+  .near-warning { width: 0; height: 0; margin: -5px -6px; border: 6px solid transparent;
+    border-top: 0; border-bottom-width: 11px; filter: drop-shadow(0 1px 2px #171219); }
+  #hud[data-critical] #hp { color: #ff626d; font-weight: 800; }
+  #hud[data-critical] #health { --fill: #ff626d; accent-color: #ff626d; }
   #blast { background: radial-gradient(ellipse at center, #ffd5be80, #ff6ebb33 50%, transparent 85%); opacity: 0; }
   .hud-top {
     position: absolute; inset: 24px 28px auto; display: grid;
@@ -186,6 +194,7 @@
 <div id="hud" hidden>
   <div id="hud-announcement" class="visually-hidden" role="status"></div>
   <div id="injury"></div>
+  <div id="directions" aria-hidden="true"></div>
   <div id="blast"></div>
   <div class="hud-top">
   <section class="top-left instrument" aria-label="当前区域与撤离任务">

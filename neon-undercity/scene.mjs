@@ -391,7 +391,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound}){
     game.effects.spray(point,smoke,18,5,.109,'mist');
     sound.hiss(.27,2100,170,.32);
     const p=game.player;
-    if(unobstructed(p.x,p.y+.48,p.z,drone.crashRadius))p.hurt(drone.playerDamage,game);
+    if(unobstructed(p.x,p.y+.48,p.z,drone.crashRadius))p.hurt(drone.playerDamage,game,undefined,wreck,2);
     if(game.phase!=='play')return;
     for(const b of game.beasts.pool){
       if(!b.active||!unobstructed(b.x,b.y+.24,b.z,drone.crashRadius))continue;

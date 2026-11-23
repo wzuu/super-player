@@ -25,6 +25,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   CONFIG.player.mouseSpeed *= prefs.sensitivity;
   CONFIG.player.incoming = { assist: 0.7, standard: 1, hard: 1.35 }[prefs.difficulty];
   CONFIG.player.steady = prefs.steady;
+  CONFIG.feedback.hitShake = prefs.hitShake;
+  CONFIG.feedback.directionIndicators = prefs.directionIndicators;
   CONFIG.audio.volume = prefs.volume / 100;
   CONFIG.audio.muted = prefs.muted;
   const GRID = createGrid(definition.grid, CONFIG.map.cell);
@@ -165,8 +167,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     footstep: { at: -Infinity, x: 0, y: 0, z: 0, radius: 0 },
     blast: 0,
     blastClock: 0,
-    threat: Infinity,
-    threatDelay: 0,
     reset() {
       campaign?.reset();
       this.time = 0;
@@ -181,8 +181,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.hitStop = 0;
       this.blast = 0;
       this.blastClock = 0;
-      this.threat = Infinity;
-      this.threatDelay = 0;
       if (gateShield) gateShield.active = true;
       kit.reset(packed);
       packed = null;
@@ -253,7 +251,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       }
       encounter?.update(this, dt);
       if (this.phase !== 'play') return;
-      this.threatDelay -= dt;
       const frozen = Math.min(dt, this.hitStop);
       this.hitStop -= frozen;
       if (!this.blast) {
@@ -277,10 +274,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
           projectiles.update(dt - frozen, player, this);
           if (this.phase !== 'play') return;
           pickups.update(dt, player, this);
-          if (this.threat < 8.1 && this.threatDelay <= 0 && !player.protected(this)) {
-            sound.tone(65, 47, 0.35, clamp((9 - this.threat) * 0.022, 0.035, 0.18), 'sine');
-            this.threatDelay = clamp(0.52 + this.threat * 0.1, 0.56, 1.4);
-          }
         }
       } else {
         this.blastClock += dt;
@@ -290,6 +283,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       }
       effects.update(dt);
       player.positionCamera(dt);
+      if (this.phase === 'play') sound.updateThreats(this);
       weapon.render(dt, player, this);
       ui.update(dt, this);
     },
