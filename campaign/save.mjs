@@ -92,11 +92,14 @@ export async function connectCampaign(level) {
   const items = catalog(store.levels);
   const gearPanel = document.getElementById('preparation');
   const selectBox = document.getElementById('kit-slots');
-  let dirty = false;
+  let draft = null;
+  let refreshVersion = 0;
   let reservation = crypto.randomUUID();
   const selectors = [];
   async function renderGear() {
+    const version = ++refreshVersion;
     const snapshot = await store.gear();
+    if (version !== refreshVersion) return;
     const state = defaultGear(snapshot.state);
     selectBox.replaceChildren();
     selectors.length = 0;
@@ -117,9 +120,10 @@ export async function connectCampaign(level) {
           option.title = item.detail;
           select.add(option);
         }
-        select.value = state[group][index] ?? '';
+        const saved = draft ? draft[(group === 'skills' ? 0 : 2) + index] : state[group][index];
+        select.value = saved ?? '';
         select.onchange = () => {
-          dirty = true;
+          draft = choice();
         };
         selectors.push(select);
         selectBox.append(label);
@@ -141,7 +145,6 @@ export async function connectCampaign(level) {
       shop.add(option);
     }
     document.getElementById('credits').textContent = '军需点 ' + (snapshot.earned - state.spent);
-    dirty = false;
   }
   const choice = () => selectors.map((s) => s.value || null);
   const applyChoice = (state, values, snapshot) => {
@@ -158,14 +161,15 @@ export async function connectCampaign(level) {
   document.getElementById('shop-buy').onclick = async (event) => {
     const button = event.currentTarget,
       id = document.getElementById('shop-item').value;
-    const selected = choice();
+    const selected = draft;
     button.disabled = true;
     try {
       await updateGear(store, (state, snapshot) => {
-        if (dirty) applyChoice(state, selected, snapshot);
+        if (selected) applyChoice(state, selected, snapshot);
         if (items[id] && !isUnlocked(items[id], store.levels, snapshot.cleared)) throw Error('尚未解锁');
         requisition(state, id, snapshot.earned, items);
       });
+      if (draft === selected) draft = null;
       await renderGear();
       status.textContent = '兑换成功';
     } catch (error) {
@@ -179,19 +183,19 @@ export async function connectCampaign(level) {
   return {
     equippedSkin,
     async prepare() {
-      const values = choice();
+      const values = draft;
       const kit = await updateGear(store, (state, snapshot) => {
         // 网络超时后重试同一次出发，直接取回已装好的装备，避免再次扣库存。
         const receipts = (state.departures ??= {});
         if (receipts[reservation]) return structuredClone(receipts[reservation]);
-        if (dirty) applyChoice(state, values, snapshot);
+        if (values) applyChoice(state, values, snapshot);
         const packed = packKit(state, items);
         receipts[reservation] = structuredClone(packed);
         const keys = Object.keys(receipts);
         if (keys.length > 32) delete receipts[keys[0]];
         return packed;
       });
-      dirty = false;
+      if (draft === values) draft = null;
       reservation = crypto.randomUUID();
       return kit;
     },

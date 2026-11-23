@@ -12,7 +12,8 @@ from campaign_browser import LEVELS, ROOT, expose_game
 
 
 def dashboard(browser, url):
-    page = browser.new_page(viewport={"width": 1280, "height": 720})
+    context = browser.new_context(viewport={"width": 1280, "height": 720})
+    page = context.new_page()
     vendor = []
     page.on("request", lambda req: vendor.append(req.url) if req.url.endswith("three-r160.js") else None)
     page.goto(url)
@@ -33,6 +34,7 @@ def dashboard(browser, url):
     page.get_by_label("视野角度").fill("85")
     page.get_by_label("技能一", exact=True).click()
     page.keyboard.press("z")
+    assert page.get_by_label("技能一", exact=True).evaluate("button => button === document.activeElement")
     page.keyboard.press("Escape")
     page.locator('nav a[href="#history"]').click()
     assert not vendor, vendor
@@ -97,14 +99,29 @@ def field(page, url):
     page.wait_for_function("/冲击波 [0-9]+s/.test(document.querySelector('#equipment-hud').textContent)")
     page.keyboard.press("2")
     assert page.evaluate("run.game.kit.remaining().grenade") == 1
+    assert page.evaluate("""() => {
+        const {pickups, player} = run.game;
+        pickups.add('core', player.x, player.z, player.y, '核心', 1);
+        const slot = pickups.keyItem;
+        if (!pickups.takeKey(player, run.game)) return false;
+        pickups.add('ammo', player.x, player.z, player.y, '弹药', 1);
+        return slot.kind === 'ammo' && !pickups.takeKey(player, run.game) && slot.active;
+    }""")
+    refresh = []
+    page.route("**/api/gear", lambda route: refresh.append(route))
     page.evaluate("run.game.finish(true)")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    page.locator("#kit-slots select").nth(0).select_option("")
+    assert len(refresh) == 1
+    refresh[0].fulfill(response=refresh[0].fetch())
+    page.unroute("**/api/gear")
     account = page.request.get(url+"/api/gear").json()
     assert account["state"]["spent"] == 790 and account["earned"] == 1040, account
     assert account["state"]["stock"]["grenade"] == 1 and account["state"]["stock"]["medkit"] == 1
     page.select_option("#mission-mode","endless")
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
+    assert page.request.get(url+"/api/gear").json()["state"]["skills"] == [None, "pulse"]
     assert page.evaluate("""() => {
       const g=run.game;g.time=46;g.objective.step(.02,g);
       g.player.hp=30;
@@ -118,10 +135,16 @@ def field(page, url):
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
     assert page.request.get(url+"/api/gear").json()["state"]["stock"]["grenade"] == 0
     page.goto(url)
+    previous = page.context.new_page()
+    previous.goto(url)
+    previous.wait_for_function("document.querySelector('#battle-count').textContent.includes('4 局')")
     page.click("#new-campaign")
     page.get_by_role("button", name="创建存档并开始").click()
     page.wait_for_function("!!window.run")
     assert page.request.get(url+"/api/progress").json()["battleCount"] == 0
+    previous.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted:true}))")
+    previous.wait_for_function("document.querySelector('#battle-count').textContent.includes('0 局')")
+    previous.close()
     page.goto(url)
     page.click("#save-open")
     page.get_by_label("切换存档").select_option("")

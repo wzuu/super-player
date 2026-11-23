@@ -22,6 +22,7 @@ let before;
 let loading = false;
 let selectedRifle, previewPromise, savingRifle = false;
 const rifleOptions = new Map();
+const pageProfile = activeProfile();
 
 function element(tag, className, content) {
   const node = document.createElement(tag);
@@ -359,7 +360,18 @@ $('rifle-equip').addEventListener('click', event => {
 $('rifle-default').addEventListener('click', () => equipRifle(null));
 $('retry').addEventListener('click', loadProgress);
 window.addEventListener('hashchange', () => showView(true));
-window.addEventListener('pageshow', event => { if (event.persisted) loadProgress(); });
+function reloadIfProfileChanged() {
+  if (activeProfile() === pageProfile) return false;
+  location.reload();
+  return true;
+}
+window.addEventListener('pageshow', event => {
+  if (!reloadIfProfileChanged() && event.persisted) loadProgress();
+});
+window.addEventListener('focus', reloadIfProfileChanged);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) reloadIfProfileChanged();
+});
 showView();
 loadProgress();
 
@@ -447,6 +459,7 @@ function settings() {
   body.append(element('h3', '', '键位设置'));
   for (const [i, id] of Object.keys(defaultKeys).entries()) {
     const button = element('button', 'secondary-action', keyName(prefs.keys[id]));
+    button.dataset.binding = id;
     button.setAttribute('aria-label', actionLabels[i]);
     button.onclick = () => {
       button.textContent = '按下新键';
@@ -464,7 +477,10 @@ function settings() {
       if (other) prefs.keys[other] = prefs.keys[id];
       prefs.keys[id] = event.code;
       save();
-      settings();
+      delete button.dataset.wait;
+      for (const binding of body.querySelectorAll('[data-binding]')) {
+        binding.textContent = keyName(prefs.keys[binding.dataset.binding]);
+      }
     };
     field(actionLabels[i], button);
   }

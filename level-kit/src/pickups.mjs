@@ -39,6 +39,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
     takeKey(player,game) {
       if (!this.nearKey(player)) return false;
       this.keyItem.active=false;
+      this.keyItem=null;
       game.core=true;
       game.sound.pickup(true);
       game.ui.notify(TEXT.coreCollected,2);
