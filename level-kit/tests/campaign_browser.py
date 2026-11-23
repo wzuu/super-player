@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -20,11 +21,16 @@ LEVELS = json.loads((ROOT / "campaign/levels.json").read_text(encoding="utf-8"))
 NEW_STAGES = ["sakura-night-town", "brass-factory", "haunted-midway"]
 
 
-def expose_game(route):
+def expose_game(route, *, render=True):
     # startLevel 已返回运行状态，只在测试浏览器中保留引用以布置边界局面。
     response = route.fetch()
     entry = "    startLevel(definition, campaign, campaignStage);"
     html = response.text()
+    if not render:
+        # 合成帧在一次 JS 调用中推进，只测时钟。真实战役用例保留每一帧的 WebGL 绘制。
+        draw = "    composer.render(dt);"
+        assert html.count(draw) == 1
+        html = html.replace(draw, "")
     assert html.count(entry) == 1, "关卡入口已变更"
     route.fulfill(response=response, body=html.replace(entry, entry.replace("startLevel(", "window.run = startLevel(")))
 
@@ -55,7 +61,7 @@ def check_reload(page):
     page.wait_for_function("run.game.weapon.ammo === 5 && run.game.weapon.reserve === 0")
 
 
-def check_exit(page, url, level_id):
+def finish_at_gate(page):
     name = page.evaluate("""() => {
         const g = run.game, boss = g.beasts.boss;
         g.beasts.damage(boss, boss.hp + 1, g, 'weapon');
@@ -74,6 +80,11 @@ def check_exit(page, url, level_id):
     page.keyboard.press("e")
     page.wait_for_function("run.game.phase === 'win'")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    return name
+
+
+def check_exit(page, url, level_id):
+    name = finish_at_gate(page)
     progress = page.request.get(url + "/api/progress").json()
     assert any(row["level"] == level_id and row["name"] == name for row in progress["loot"])
     assert next(level for level in progress["levels"] if level["id"] == level_id)["cleared"]
@@ -162,7 +173,7 @@ def check_pending_saves(browser, url):
 def check_frame_timing(browser, url, fps):
     page = browser.new_page(viewport={"width": 480, "height": 320})
     stage = "shanhai-secret-realm"
-    page.route(url + "/" + stage + "/", expose_game)
+    page.route(url + "/" + stage + "/", lambda route: expose_game(route, render=False))
     page.add_init_script("""const nativeFrame = requestAnimationFrame.bind(window);
         window.requestAnimationFrame = fn => {
             if (fn.name !== 'animate') return nativeFrame(fn);
@@ -363,7 +374,7 @@ if __name__ == "__main__":
         try:
             url = re.search(r"http://127\.0\.0\.1:\d+", server.stdout.readline()).group()
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(channel="chrome")
+                browser = playwright.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER", "chrome"))
                 try:
                     verify(browser, url)
                 finally:

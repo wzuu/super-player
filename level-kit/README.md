@@ -4,12 +4,14 @@
 
 各关卡沿用[关卡 UI 布局规范](UI_LAYOUT.md)。[流沙王陵](../buried-tomb/scene.mjs)展示了中央状态位、周期事件、蹲伏和定制光柱的接入。[极夜冰站](../polar-station/scene.mjs)展示了体温量表、冰弹减速和首领变身模型。[沉穹古都](../drowned-city/scene.mjs)展示了动态地形减速和小地图进水标记。
 
+从源码开始时先在仓库根目录运行 `npm ci` 和 `npm run build`（Node.js 24）。
+
 ## 新建关卡
 
 1. 把 `starter/scene.mjs` 复制到新关卡目录，修改 `CONFIG`、`MAP_GRID` 和主题文字。将完整主题填写到开发圣经末尾的模板中，作为本关卡开发输入。
 2. 在项目根目录运行 `python3 server.py`。访问 `http://127.0.0.1:8000/level-kit/preview.html?scene=../新关卡目录/scene.mjs`。省略查询参数可预览灰盒模板。
-3. 在项目根目录运行 `node level-kit/pack.mjs 新关卡目录/scene.mjs`。脚本使用 Node.js 标准库，默认在场景旁生成 `index.html`，也接受第二个参数指定输出路径。关卡 HTML 通过相对路径引用共用的本地 Three.js，保留目录结构即可直接打开，支持离线游玩。
-4. 加入战役时，在 `campaign/levels.json` 登记关卡目录、名称和简介，在 `campaign/images/` 提供同名 WebP 预览图。登记后打包，战役入口以本机服务首页为准。
+3. 在项目根目录运行 `node level-kit/pack.mjs 新关卡目录/scene.mjs`。脚本使用 es-module-lexer 解析模块依赖，默认在场景旁生成 `index.html`，也接受第二个参数指定输出路径。关卡 HTML 通过相对路径引用共用的本地 Three.js，保留目录结构即可直接打开，支持离线游玩。
+4. 加入战役时，在 `campaign/levels.json` 登记关卡目录、名称和简介，在 `campaign/images/` 提供同名 WebP 预览图。登记后打包，可从本机或静态站点首页进入战役。
 5. 分别验证常规凶兽数量和同屏帧率。压力测试至少覆盖 80 只，若常规或事件目标更高，按更高数量测试。记录机器、浏览器、分辨率和场景。验证通行和掩体、鼠标锁定、射击换弹、核心掉落、E 键引爆、结算及死亡后物资清空。
 
 雨夜废城输出可用 `node level-kit/pack.mjs rain-city/scene.mjs` 重建。以后编辑场景或公共模块，通过预览检查，再重新生成交付 HTML。

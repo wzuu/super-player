@@ -3,6 +3,10 @@
 > 先读 `AGENTS.md`，其中记录各关卡规格、运行方式和协作规则。
 > 最后更新于 2026-11-23。
 
+## 2026-11-23 MIT、关卡构建与静态战役
+
+项目使用 MIT 许可证。关卡 HTML 由运行时和场景的传递依赖生成。核对 14 个入口，造景模块只出现在樱落夜町和黄铜机坊。CI 构建发布目录，并验收碰撞、寻路、敌人感知、SQLite 战役，以及从仓库子路径进入的静态战役。静态浏览器验收依次验证全 14 关的解锁、撤离、失败记录、战利品与跨关佩戴，刷新后重新读取。GitHub Pages 已配置为 Actions 发布，合并到 main 后进行线上验收。复核中增加了不完整补存记录的写入校验，并将验收中的对战总数和武器清单改为从关卡登记推导。
+
 ## 2026-11-23 战役时钟、补存与伤害结算回归
 
 | Issue | 修复和验证 |
@@ -18,7 +22,7 @@
 
 项目处于开发阶段。走位射击关卡以 `LEVEL_BIBLE.md` 为固定提示词，使用 `level-kit/` 和以第三关为基准的 `level-kit/UI_LAYOUT.md`。所有关卡使用共享 HUD、菜单、公共运行时和本地 Three.js。
 
-代码已作为 GitHub 公开项目发布在 <https://github.com/wzuu/super-player>（分支 `main`），对外说明见根目录 `README.md`。GitHub Pages 未开启，战役存档仍需本机 `server.py`。
+代码已作为 GitHub 公开项目发布在 <https://github.com/wzuu/super-player>（分支 `main`），对外说明见根目录 `README.md`。Pages 版本通过 IndexedDB 保存战役，本机 `server.py` 版本继续使用 SQLite。
 
 | 游戏 | 已完成 | 下一步 |
 | --- | --- | --- |

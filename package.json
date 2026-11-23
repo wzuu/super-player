@@ -1,0 +1,11 @@
+{
+  "name": "super-player",
+  "private": true,
+  "scripts": {
+    "build": "node level-kit/build.mjs",
+    "test": "node --test level-kit/tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "es-module-lexer": "3.0.5"
+  }
+}

@@ -1,12 +1,18 @@
 # 超级玩家
 
-桌面浏览器上的第一人称走位射击单机战役，收录了多个主题关卡，数量还在持续增加。全部场景由基础几何体搭建、纹理程序化生成，不依赖任何外部模型和贴图，克隆下来即可离线游玩。
+[在线试玩超级玩家](https://wzuu.github.io/super-player/) · 使用桌面浏览器和鼠标键盘。
+
+![雨夜废城实机战斗](campaign/images/gameplay.gif)
+
+桌面浏览器上的第一人称走位射击单机战役，收录了多个主题关卡，数量还在持续增加。全部场景由基础几何体搭建、纹理程序化生成，不依赖任何外部模型和贴图，下载源码并生成关卡后即可离线游玩。
 
 ## 快速开始
 
-无需安装依赖，无需构建。在项目根目录运行：
+本地开发使用 Node.js 24 和 Python 3。首次克隆后，在项目根目录安装构建依赖、生成关卡，再启动服务。
 
 ```sh
+npm ci
+npm run build
 python3 server.py
 ```
 
@@ -15,10 +21,12 @@ python3 server.py
 - 换端口：`python3 server.py --port 8080`
 - 用其他存档文件（便于测试）：`python3 server.py --db /tmp/test.sqlite3`
 
-## 两种玩法
+## 玩法与存档
 
-- **战役模式**：通过上面的本机服务进入首页，已发布的关卡按顺序解锁。成功撤离才会带回本局战利品并计入图鉴，失败保留对战记录但带回计为零。武器外观的佩戴也保存在同一份 SQLite 存档里。
-- **单关离线**：直接双击任意关卡目录下的 `index.html`（例如 `rain-city/index.html`）即可开玩，适合练习。这种方式不写战役存档。两种方式都会相对路径引用 `level-kit/vendor/three-r160.js`，所以请保留仓库的目录结构。
+- **在线战役**：从上方试玩链接进入。通关、战利品、对战记录和佩戴选择保存在当前浏览器的 IndexedDB 中。清除该站点数据会清除在线进度。
+
+- **本机 SQLite 战役**：通过上面的本机服务进入首页，已发布的关卡按顺序解锁。成功撤离才会带回本局战利品并计入图鉴，失败保留对战记录但带回计为零。武器外观的佩戴也保存在同一份 SQLite 存档里。
+- **单关离线**：直接双击任意关卡目录下的 `index.html`（例如 `rain-city/index.html`）即可开玩，适合练习。这种方式不写战役存档。各关卡通过相对路径引用 `level-kit/vendor/three-r160.js`，所以请保留仓库的目录结构。
 
 ## 操作
 
@@ -124,6 +132,16 @@ node level-kit/pack.mjs my-level/scene.mjs
 - [关卡组件说明](level-kit/README.md)：新建关卡流程与 `scene.mjs` 的全部接口
 - [关卡 UI 布局规范](level-kit/UI_LAYOUT.md)：共享 HUD 与状态位约定
 
+## 许可证
+
+项目采用 [MIT 许可证](LICENSE)。
+
+## 构建与发布
+
+`npm test` 运行核心模块测试。`npm run build` 重新生成所有关卡。使用 `npm run build -- dist` 可将纯静态站点写入新建的发布目录（命令会创建该目录），支持部署在仓库名子路径下。
+
+GitHub Actions 在 PR 中验证 SQLite 战役和静态战役。合并到 `main` 后，同一工作流将通过测试的产物发布到 GitHub Pages。
+
 ## 第三方声明
 
 `level-kit/vendor/three-r160.js` 是本地打包的 [Three.js](https://threejs.org/) r160（MIT 许可），许可原文见 [level-kit/vendor/THREE-LICENSE.txt](level-kit/vendor/THREE-LICENSE.txt)。音效由 Web Audio 实时合成，无外部音频素材。
@@ -131,5 +149,5 @@ node level-kit/pack.mjs my-level/scene.mjs
 ## 已知限制
 
 - 面向桌面浏览器与鼠标键盘，未适配移动端和触屏。
-- 战役进度、战利品图鉴和武器佩戴依赖 `server.py` 提供的本机接口，纯静态托管下只能单关离线游玩。
+- 浏览器战役和本机 SQLite 战役各自保存进度。
 - 同屏超过 80 只凶兽时以 60 fps 为验收目标，实际帧率取决于设备。

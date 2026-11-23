@@ -1,12 +1,13 @@
-import { readdir, readFile, writeFile, rename, mkdir, rm } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, rm } from 'node:fs/promises';
 import { dirname, join, parse, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { init, parse as parseImports } from 'es-module-lexer';
 import { randomUUID } from 'node:crypto';
 
 const kit = dirname(fileURLToPath(import.meta.url));
 const root = dirname(kit);
 
-async function pack(sceneArgument, outputArgument) {
+export async function pack(sceneArgument, outputArgument) {
   if (!sceneArgument || parse(sceneArgument).ext !== '.mjs') {
     throw new Error('用法 node level-kit/pack.mjs <场景.mjs> [输出.html]');
   }
@@ -17,19 +18,33 @@ async function pack(sceneArgument, outputArgument) {
     throw new Error('输出路径与预览模板或游戏首页冲突');
   }
 
-  const sourceDirectory = join(kit, 'src');
-  const modules = (await readdir(sourceDirectory)).filter(name => name.endsWith('.mjs')).sort();
-  const [shell, definition, campaign, ...sources] = await Promise.all([
+  const [shell, definition, campaign] = await Promise.all([
     readFile(join(kit, 'preview.html'), 'utf8'),
     readFile(sceneFile, 'utf8'),
     readFile(join(root, 'campaign/levels.json'), 'utf8'),
-    ...modules.map(name => readFile(join(sourceDirectory, name), 'utf8')),
   ]);
-  const moduleEntries = modules.map((name, index) => ['@level-kit/' + name, sources[index]]);
-  moduleEntries.push(['@level/scene.mjs', definition]);
+  await init;
+  const moduleEntries = new Map();
+  async function visit(name, source) {
+    if (moduleEntries.has(name)) return;
+    moduleEntries.set(name, source);
+    for (const specifier of parseImports(source)[0]) {
+      if (specifier.type === 'import-meta') continue; // import.meta
+      const id = specifier.specifier;
+      if (!id) throw new Error(name + ' 需要使用字符串字面量导入模块');
+      if (!id.startsWith('@level-kit/')) {
+        if (id === 'three' || id.startsWith('three/')) continue;
+        throw new Error(name + ' 引用了离线入口无法解析的模块 ' + id);
+      }
+      if (!/^@level-kit\/[\w-]+\.mjs$/.test(id)) throw new Error('无效的公共模块 ' + id);
+      if (!moduleEntries.has(id)) await visit(id, await readFile(join(kit, 'src', id.slice('@level-kit/'.length)), 'utf8'));
+    }
+  }
+  await visit('@level-kit/runtime.mjs', await readFile(join(kit, 'src/runtime.mjs'), 'utf8'));
+  await visit('@level/scene.mjs', definition);
 
   // 内嵌源码正文保持可读。浏览器为各模块创建本页 URL，再一次性注册 importmap。
-  const embedded = moduleEntries.map(([name, content]) => {
+  const embedded = [...moduleEntries].map(([name, content]) => {
     if (/<\/script\b/i.test(content)) {
       throw new Error(name + ' 含 HTML 脚本结束标记，请在源字符串中转义斜杠');
     }
@@ -62,7 +77,9 @@ async function pack(sceneArgument, outputArgument) {
   console.log(output + '  ' + Buffer.byteLength(html) + ' 字节');
 }
 
-pack(process.argv[2], process.argv[3]).catch(error => {
-  console.error(error.message);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  pack(process.argv[2], process.argv[3]).catch(error => {
+    console.error(error.message);
+    process.exitCode = 1;
+  });
+}

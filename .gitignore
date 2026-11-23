@@ -18,3 +18,8 @@ AGENTS.local.md
 .vscode/
 .idea/
 *.log
+
+# 构建依赖与生成的关卡入口
+/node_modules/
+/*/index.html
+/dist/
