@@ -60,11 +60,15 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
           ctx.strokeStyle = '#ffd780'; ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), 4.4, 0, TAU); ctx.stroke();
         }
       }
-      if (game.bossDead && !game.core) {
-        const core = game.pickups.objects.find(item => item.active && item.kind === 'core');
-        if (core) {
-          ctx.strokeStyle = '#ffd89a'; ctx.strokeRect(this.px(core.x) - 3, this.pz(core.z) - 3, 6, 6);
-        }
+      for (const item of game.pickups.objects) {
+        if (!item.active) continue;
+        const x=this.px(item.x), z=this.pz(item.z);
+        ctx.fillStyle=CONFIG.pickups.styles[item.style].color;
+        if (item.kind!=='core') { ctx.fillRect(x-1,z-1,2.5,2.5); continue; }
+        ctx.strokeStyle='#fff';ctx.strokeRect(x-3,z-3,6,6);
+        const px=this.px(game.player.x), pz=this.pz(game.player.z);
+        ctx.save();ctx.translate(px,pz);ctx.rotate(Math.atan2(z-pz,x-px));
+        ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(9,-4);ctx.lineTo(9,4);ctx.fill();ctx.restore();
       }
       this.facing.set(0, 0, -1).applyQuaternion(game.player.look.quaternion);
       ctx.save();

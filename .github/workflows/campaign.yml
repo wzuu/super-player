@@ -31,6 +31,9 @@ jobs:
       - run: python level-kit/tests/upgrades_browser.py
         env:
           GAME_TEST_BROWSER: chromium
+      - run: python level-kit/tests/battlefield_browser.py --audit
+        env:
+          GAME_TEST_BROWSER: chromium
       - run: python level-kit/tests/static_campaign.py dist
         env:
           GAME_TEST_BROWSER: chromium

@@ -17,6 +17,27 @@ const DEFAULT_CONFIG = {
     population: 64, capacity: 96, killsToWin: 150, spawnEvery: 0.50, spawnBurst: 2,
     spawnDistance: 21, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
     memory: 7, separation: 1.35,
+    appearance: {
+      far: 16, hysteresis: 2, gridCells: 8, corpses: 12, fallTime: 0.42,
+      surfaces: {
+        'underground-lab': ['hide','metal','hide','metal'], 'rain-city': ['fur','metal','hide','hide'],
+        'shanhai-secret-realm': ['fur','fur','hide','hide'], 'polar-station': ['fur','fur','hide','fur'],
+        'derelict-station': ['hide','metal','hide','hide'], 'neon-undercity': ['metal','metal','metal','metal'],
+        'brass-factory': ['metal','metal','metal','metal'], 'haunted-midway': ['fur','fur','metal','fur'],
+        'jungle-temple': ['fur','hide','fur','metal'],
+      },
+      walkHz: [17, 9, 10, 7], windupTilt: [-0.17, -0.24, -0.14, -0.20],
+      // 形状、横向偏移、相对高度、纵向位置、宽高深、倾角（相对原模型包围盒）。
+      details: [
+        [['fin',0,.85,.42,.15,.17,.17,0],['fin',0,.83,.27,.12,.12,.14,0]],
+        [['plate',.36,.73,.64,.29,.18,.37,-.32],['plate',.37,.65,.52,.23,.16,.31,-.30]],
+        [['plate',.29,.67,.31,.23,.22,.28,-.25],['fin',.23,.81,.37,.11,.17,.13,-.32]],
+        [['fin',.22,.91,.46,.16,.24,.18,-.35],['fin',.14,.86,.28,.13,.18,.16,-.23],
+         ['plate',.36,.72,.58,.28,.16,.30,-.35],['plate',.32,.67,.61,.22,.14,.25,-.3],
+         ['fin',.16,.69,.86,.06,.10,.08,2.9]],
+      ],
+      accent: [0xc9ac83, 0x909fae, 0xa4c48d, 0xd2b595],
+    },
     types: [
       { hp: 62, speed: 7.29, radius: 0.39, height: 1.11, damage: 8, reach: 1.08, recovery: 0.92 },
       { hp: 150, speed: 3.75, radius: 0.58, height: 2.08, damage: 17, reach: 1.45, recovery: 1.55, windup: 0.70, chargeSpeed: 13.8, chargeTime: 0.73 },
@@ -24,7 +45,20 @@ const DEFAULT_CONFIG = {
       { hp: 760, speed: 3.4, rageSpeed: 5.3, radius: 0.93, height: 3.92, damage: 24, reach: 2.25, recovery: 1.25, windup: 0.65, summonCount: 6 },
     ],
   },
-  pickups: { pool: 220, grab: 1.18, ammoDrop: 14, ammoCache: 65 },
+  pickups: {
+    pool: 220, grab: 1.18, ammoDrop: 14, ammoCache: 65, grenadeEvery: 12,
+    iconRange: 15, nameRange: 5, rareNameRange: 9, labelLimit: 5,
+    mergeRange: 0.85, lifetime: 75, blinkTime: 7, preciousValue: 300,
+    styles: {
+      ammo: { color: '#ffda53', shape: 'case', glyph: 'Ⅲ', beam: 1.05 },
+      health: { color: '#6eff83', shape: 'cross', glyph: '+', beam: 1.15 },
+      grenade: { color: '#ff823b', shape: 'ball', glyph: '●', beam: 1.35 },
+      sample: { color: '#64e5e9', shape: 'vial', glyph: '◊', beam: 1.35 },
+      rare: { color: '#ffbc35', shape: 'gem', glyph: '◆', beam: 2.1 },
+      precious: { color: '#d8a2ff', shape: 'gem', glyph: '✦', beam: 2.7 },
+      core: { color: '#ff6968', shape: 'key', glyph: '✧', beam: 4.5 },
+    },
+  },
   effects: { particles: 680, tracers: 32, projectiles: 40, pools: 32, gateDuration: 2.25 },
 };
 
