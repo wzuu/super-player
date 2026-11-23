@@ -1,6 +1,6 @@
 # 超级玩家
 
-桌面浏览器上的第一人称走位射击单机战役，共十一关。全部场景由基础几何体搭建、纹理程序化生成，不依赖任何外部模型和贴图，克隆下来即可离线游玩。
+桌面浏览器上的第一人称走位射击单机战役，收录了多个主题关卡，数量还在持续增加。全部场景由基础几何体搭建、纹理程序化生成，不依赖任何外部模型和贴图，克隆下来即可离线游玩。
 
 ## 快速开始
 
@@ -17,7 +17,7 @@ python3 server.py
 
 ## 两种玩法
 
-- **战役模式**：通过上面的本机服务进入首页，十一关按顺序解锁。成功撤离才会带回本局战利品并计入图鉴，失败保留对战记录但带回计为零。武器外观的佩戴也保存在同一份 SQLite 存档里。
+- **战役模式**：通过上面的本机服务进入首页，已发布的关卡按顺序解锁。成功撤离才会带回本局战利品并计入图鉴，失败保留对战记录但带回计为零。武器外观的佩戴也保存在同一份 SQLite 存档里。
 - **单关离线**：直接双击任意关卡目录下的 `index.html`（例如 `rain-city/index.html`）即可开玩，适合练习。这种方式不写战役存档。两种方式都会相对路径引用 `level-kit/vendor/three-r160.js`，所以请保留仓库的目录结构。
 
 ## 操作
@@ -52,6 +52,33 @@ python3 server.py
 | 11 | 血月古堡 | 血月提升凶兽移速与伤害、圣露掉落、伯爵化蝠 |
 
 每关目标都是累计击杀 150 只、击败本关首领、拿到关键物后到指定位置按 `E` 引爆撤离。凶兽数量与移速按 `campaign/levels.json` 的登记顺序自动递增，规则见 [level-kit/README.md](level-kit/README.md)。
+
+## 关卡截图
+
+下列画面均由关卡内程序生成，按战役解锁顺序排列（点击可查看大图）：
+
+<table>
+  <tr>
+    <td align="center"><a href="campaign/images/underground-lab.webp"><img src="campaign/images/underground-lab.webp" width="280" alt="地下实验室"></a><br>地下实验室</td>
+    <td align="center"><a href="campaign/images/shanhai-secret-realm.webp"><img src="campaign/images/shanhai-secret-realm.webp" width="280" alt="上古秘境"></a><br>上古秘境</td>
+    <td align="center"><a href="campaign/images/rain-city.webp"><img src="campaign/images/rain-city.webp" width="280" alt="雨夜废城"></a><br>雨夜废城</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="campaign/images/buried-tomb.webp"><img src="campaign/images/buried-tomb.webp" width="280" alt="流沙王陵"></a><br>流沙王陵</td>
+    <td align="center"><a href="campaign/images/polar-station.webp"><img src="campaign/images/polar-station.webp" width="280" alt="极夜冰站"></a><br>极夜冰站</td>
+    <td align="center"><a href="campaign/images/drowned-city.webp"><img src="campaign/images/drowned-city.webp" width="280" alt="沉穹古都"></a><br>沉穹古都</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="campaign/images/ember-fortress.webp"><img src="campaign/images/ember-fortress.webp" width="280" alt="烬火要塞"></a><br>烬火要塞</td>
+    <td align="center"><a href="campaign/images/derelict-station.webp"><img src="campaign/images/derelict-station.webp" width="280" alt="失压环站"></a><br>失压环站</td>
+    <td align="center"><a href="campaign/images/neon-undercity.webp"><img src="campaign/images/neon-undercity.webp" width="280" alt="霓雨下城"></a><br>霓雨下城</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="campaign/images/jungle-temple.webp"><img src="campaign/images/jungle-temple.webp" width="280" alt="雨蚀天阶"></a><br>雨蚀天阶</td>
+    <td align="center"><a href="campaign/images/bloodmoon-castle.webp"><img src="campaign/images/bloodmoon-castle.webp" width="280" alt="血月古堡"></a><br>血月古堡</td>
+    <td align="center"></td>
+  </tr>
+</table>
 
 ## 目录结构
 
