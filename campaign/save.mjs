@@ -35,12 +35,12 @@ export async function* flushPendingBattles() {
   }
 }
 
-export async function connectCampaign(level) {
+export async function connectCampaign(level, onUpgradeBlocked) {
   const home = document.getElementById('campaign-home');
   const next = document.getElementById('next-level');
   const retry = document.getElementById('retry-save');
   const status = document.getElementById('menu-status');
-  const store = await campaignStore();
+  const store = await campaignStore(onUpgradeBlocked);
   if (store.canEnter && !(await store.canEnter(level))) {
     location.replace(
       (location.protocol === 'file:' ? '../index.html' : '../') +

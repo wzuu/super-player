@@ -628,18 +628,21 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           x: b.x, y: b.y, z: b.z, yaw: b.yaw, roll: b.surfaceRoll, type, rage: b.rage,
           farLOD: b.farLOD, until: game.time + CONFIG.beasts.appearance.fallTime,
         });
-        const lift = source === 'equipment' || hit?.pellet;
+        const origin = hit?.blastOrigin;
+        const lift = Boolean(origin || hit?.pellet);
         const impulse = type === 0 && lift ? 1.1 : type === 3 ? .16 : .46;
-        const length = Math.hypot(b.knockX, b.knockZ);
+        const pushX = origin ? b.x - origin.x : b.knockX;
+        const pushZ = origin ? b.z - origin.z : b.knockZ;
+        const length = Math.hypot(pushX, pushZ);
         corpse.slideX = corpse.slideZ = corpse.lift = 0;
         if (length > .01) {
           for (let step = 1; step <= 5; step++) {
-            const dx = b.knockX / length * impulse * step / 5, dz = b.knockZ / length * impulse * step / 5;
+            const dx = pushX / length * impulse * step / 5, dz = pushZ / length * impulse * step / 5;
             if (this.level.blocked(b.x + dx, b.z + dz, b.y, b.radius, b.height)) break;
             corpse.slideX = dx; corpse.slideZ = dz;
           }
-          if (type === 0 && lift) corpse.lift = .25;
         }
+        if (type === 0 && lift && !this.level.blocked(b.x, b.z, b.y + .25, b.radius, b.height)) corpse.lift = .25;
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');

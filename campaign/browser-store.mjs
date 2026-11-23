@@ -37,8 +37,9 @@ function historyPage(rows, before) {
   };
 }
 
-export async function openBrowserStore(levels, path) {
+export async function openBrowserStore(levels, path, onUpgradeBlocked) {
   const open = indexedDB.open('super-player:' + path, 3);
+  open.onblocked = () => onUpgradeBlocked?.('请关闭其他打开旧版游戏的标签页。关闭后将自动升级这份存档。');
   open.onupgradeneeded = event => {
     if (event.oldVersion < 1) {
       const records = open.result.createObjectStore('battles', { keyPath: 'sequence', autoIncrement: true });

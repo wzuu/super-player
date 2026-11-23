@@ -82,9 +82,10 @@ export function createFieldKit(config, keys, visual) {
         yaw = p.look.rotation.y;
       const x = p.x - Math.sin(yaw) * 4,
         z = p.z - Math.cos(yaw) * 4;
+      const impact = { blastOrigin: { x, z } };
       area(g,x,p.y,z,5,b=>{
         g.weapon.combat.element(b,'fire',g);
-        if(b.active) g.beasts.damage(b,config.beasts.types[0].hp*2,g,'equipment');
+        if(b.active) g.beasts.damage(b,config.beasts.types[0].hp*2,g,'equipment',impact);
       });
       burst(g, x, p.y, z);
     },
@@ -172,7 +173,8 @@ export function createFieldKit(config, keys, visual) {
         const { x, y, z } = marker.position;
         if (area(g, x, y, z, 2, () => {})) {
           marker.visible = false;
-          area(g, x, y, z, 5, (b) => g.beasts.damage(b, config.beasts.types[0].hp * 2, g, 'equipment'));
+          const impact = { blastOrigin: { x, z } };
+          area(g, x, y, z, 5, (b) => g.beasts.damage(b, config.beasts.types[0].hp * 2, g, 'equipment',impact));
           burst(g, x, y, z);
         }
       }

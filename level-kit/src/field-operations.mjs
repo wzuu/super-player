@@ -486,7 +486,7 @@ export function createFieldOperations(context, campaign) {
         }
         if (t.lingering > g.time && g.time >= t.tick) {
           t.tick = g.time + 0.5;
-          blastArea(g, t.p, t.data.radius, t.data.damage);
+          blastArea(g, t.p, t.data.radius, t.data.damage, false);
           g.effects.spray(g.beasts.air.set(t.p.x, t.p.y + .5, t.p.z), t.mesh.material.color, 5, 2.5, .08, 'mist');
         }
       }

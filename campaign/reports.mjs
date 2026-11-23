@@ -225,7 +225,7 @@ export function renderReport(body, battle, levels, store) {
   };
 }
 
-function replayViewer({ samples, events }) {
+function replayViewer({ samples, events = [] }) {
   const section = node('section');
   section.className = 'replay-viewer';
   const canvas = node('canvas');
@@ -257,6 +257,10 @@ function replayViewer({ samples, events }) {
     const i = next < 0 ? samples.length - 1 : Math.max(0, next - 1);
     const now = samples[i],
       end = Math.max(1, Number(slider.max));
+    const lastEvent = events.findLast((event) => event.time <= t);
+    const eventLabel = lastEvent
+      ? events.filter((event) => event.time === lastEvent.time).map((event) => event.label).join('、')
+      : '';
     const x = (s) => 20 + (s[1] - left) * scale,
       z = (s) => 20 + (s[3] - top) * scale;
     ctx.fillStyle = '#101c25';
@@ -298,7 +302,8 @@ function replayViewer({ samples, events }) {
     ctx.font = '14px sans-serif';
     ctx.fillText('生命', 20, 240);
     output.textContent =
-      seconds(t) + ' / ' + seconds(end) + ' · 生命 ' + now[5] + ' · 高度 ' + now[2] + ' 米';
+      seconds(t) + ' / ' + seconds(end) + ' · 生命 ' + now[5] + ' · 高度 ' + now[2] + ' 米' +
+      (eventLabel ? ' · 最近节点 ' + eventLabel : '');
   }
   function stop() {
     cancelAnimationFrame(frame);
@@ -321,7 +326,7 @@ function replayViewer({ samples, events }) {
     frame = requestAnimationFrame(tick);
   };
   slider.oninput = render;
-  for (const e of events ?? []) {
+  for (const e of events) {
     const button = node('button', seconds(e.time) + ' ' + e.label);
     button.onclick = () => {
       slider.value = e.time;

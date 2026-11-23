@@ -9,6 +9,33 @@ from tempfile import TemporaryDirectory
 from campaign_browser import ROOT, LEVELS, expose_game, sync_playwright
 
 
+def blocked_legacy_upgrade(browser, url):
+    context = browser.new_context()
+    legacy = context.new_page()
+    legacy.goto(url + "/campaign/home.css")
+    legacy.evaluate("""() => new Promise((resolve,reject) => {
+      const req=indexedDB.open('super-player:/',1);
+      req.onupgradeneeded=()=>{
+        const db=req.result,b=db.createObjectStore('battles',{keyPath:'sequence',autoIncrement:true});
+        b.createIndex('id','id',{unique:true});b.createIndex('outcome',['level','won']);
+        db.createObjectStore('settings');
+        b.add({id:crypto.randomUUID(),level:'underground-lab',won:1,kills:4,durationMs:500,
+               endedAt:1000,loot:[{name:'旧档宝物',value:6}]});
+      };
+      req.onerror=reject;
+      req.onsuccess=()=>{window.oldDatabase=req.result;resolve();};
+    })""")
+    page = context.new_page()
+    page.route("**/campaign/levels.json",lambda route:route.fulfill(json=LEVELS))
+    page.goto(url + "/#history",wait_until="domcontentloaded")
+    page.get_by_text("请关闭其他打开旧版游戏的标签页",exact=False).wait_for(timeout=3500)
+    legacy.close()
+    page.get_by_role("button",name="查看战报").click()
+    page.get_by_text("旧档宝物（6）",exact=False).wait_for()
+    assert not page.get_by_role("button",name="观看回放").count()
+    context.close()
+
+
 def run(browser, url, static):
     context = browser.new_context(viewport={"width": 920, "height": 680})
     page = context.new_page()
@@ -79,8 +106,12 @@ def run(browser, url, static):
     page.get_by_role("button", name="播放", exact=True).click()
     page.get_by_role("button", name="暂停", exact=True).click()
     page.get_by_label("回放进度").fill("2000")
+    assert "击败首领" not in page.locator(".replay-viewer output").inner_text()
     page.get_by_role("button", name=re.compile("击败首领")).click()
     assert int(page.get_by_label("回放进度").input_value()) >= 3000
+    assert "击败首领" in page.locator(".replay-viewer output").inner_text()
+    page.get_by_label("回放进度").fill("0")
+    assert "最近节点 出发" in page.locator(".replay-viewer output").inner_text()
     page.keyboard.press("Escape")
     page.click("#settings-open")
     page.get_by_label("录制战术回放").uncheck()
@@ -178,6 +209,8 @@ if __name__ == "__main__":
             with sync_playwright() as pw:
                 browser=pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER","chrome"))
                 try:
+                    blocked_legacy_upgrade(browser,url)
+                    print("PASS blocked v1 IndexedDB upgrade resumes and retains history",flush=True)
                     for static in (False, True):
                         run(browser,url,static)
                         print("PASS battle report / replay / mute / counter", "IndexedDB" if static else "SQLite", flush=True)

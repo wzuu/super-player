@@ -19,10 +19,11 @@ const affixes = Object.keys(affixTitles);
 const has = (b, trait) => b.affixes?.includes(trait);
 const gap = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
-export function blastArea(game, center, radius, damage, source = 'environment', ignore = null) {
+export function blastArea(game, center, radius, damage, explosive = true) {
   const { x, y, z } = center,
     { beasts, level, player } = game;
   const candidates = beasts.hash.query(x - radius, z - radius, x + radius, z + radius, []);
+  const impact = explosive ? { blastOrigin: center } : null;
   function visible(target) {
     const origin = beasts.air.set(x, y + 0.5, z),
       ray = beasts.line.set(target.x - x, target.y + 0.6 - origin.y, target.z - z);
@@ -30,13 +31,13 @@ export function blastArea(game, center, radius, damage, source = 'environment', 
     return distance <= radius && (!distance || level.visible(origin, ray.divideScalar(distance), distance));
   }
   for (const target of candidates) {
-    if (!target.active || target === ignore || !visible(target)) continue;
+    if (!target.active || !visible(target)) continue;
     const distance = Math.max(0.1, Math.hypot(target.x - x, target.z - z));
     target.perkPushX = (5 * (target.x - x)) / distance;
     target.perkPushZ = (5 * (target.z - z)) / distance;
     target.knockX = target.perkPushX;
     target.knockZ = target.perkPushZ;
-    beasts.damage(target, damage, game, source);
+    beasts.damage(target, damage, game, 'environment', impact);
   }
   if (visible(player)) player.hurt(damage * 0.3, game, undefined, center);
 }

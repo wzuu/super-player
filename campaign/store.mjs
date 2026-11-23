@@ -20,13 +20,13 @@ async function request(profile, path, data, timeout = 8000) {
   return response.json();
 }
 
-async function openCampaign() {
+async function openCampaign(onUpgradeBlocked) {
   const profile = activeProfile();
   const api = (...args) => request(profile, ...args);
   const namespace = root.pathname + (profile ? '@' + profile : '');
   if (globalThis.offlineCampaignLevels) {
     const { openBrowserStore } = await import('./browser-store.mjs');
-    return openBrowserStore(globalThis.offlineCampaignLevels, namespace);
+    return openBrowserStore(globalThis.offlineCampaignLevels, namespace, onUpgradeBlocked);
   }
   const manifest = await fetch(new URL('levels.json', import.meta.url), {
     cache: 'no-store',
@@ -54,11 +54,11 @@ async function openCampaign() {
     };
   }
   const { openBrowserStore } = await import('./browser-store.mjs');
-  return openBrowserStore(levels, namespace);
+  return openBrowserStore(levels, namespace, onUpgradeBlocked);
 }
 
-export function campaignStore() {
-  loading ??= openCampaign().catch((error) => {
+export function campaignStore(onUpgradeBlocked) {
+  loading ??= openCampaign(onUpgradeBlocked).catch((error) => {
     loading = undefined;
     throw error;
   });

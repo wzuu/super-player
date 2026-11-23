@@ -107,8 +107,11 @@ def verify_roles(page):
       const before=p.hp;m.damage(boom,900,g,'weapon');
       if(p.hp!==before)throw Error('引爆前击倒仍伤及玩家');
       const next=spawn(0,p.x-2,0); next.role='volatile';next.playerVisible=true;m.refreshHash();
+      const neighbor=spawn(0,next.x,.75);neighbor.hp=1;m.refreshHash();
       m.traits.step(next,g,.02);g.time=next.traitAt+.05;m.traits.step(next,g,.02);
       if(next.active || p.hp>=before)throw Error('延时引爆未伤及近处玩家');
+      const debris=m.corpses.find(c=>c.x===neighbor.x && c.z===neighbor.z && c.until>g.time);
+      if(neighbor.active || !debris || debris.lift<=0 || debris.slideZ<=0)throw Error('爆炸残影未沿爆心方向击飞');
       const elite=spawn(1,-5,0);elite.affixes=['split','armor'];const old=elite.hp;
       p.z=3;p.x=-5;elite.fx=0;elite.fz=1;m.damage(elite,10,g,'weapon');
       if(Math.abs(old-elite.hp-4.6)>.01)throw Error('精英正面装甲');

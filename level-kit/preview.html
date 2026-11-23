@@ -362,13 +362,14 @@
       import('@level-kit/runtime.mjs'), import(sceneModule),
     ]);
     const campaignId = document.body.dataset.campaignLevel;
+    const storageStatus = message => { document.getElementById('menu-status').textContent = message; };
     let campaign = null;
     if (document.body.hasAttribute('data-practice')) {
       const select=document.getElementById('practice-weapon');
       try {
         const {campaignStore}=await import(location.protocol==='file:'?'offline/campaign/store.mjs':'../campaign/store.mjs');
         const {rifleSkins}=await import('@level-kit/rifle-skins.mjs');
-        const store=await campaignStore(), progress=await store.progress();
+        const store=await campaignStore(storageStatus), progress=await store.progress();
         const cleared=new Set(progress.levels.filter(stage=>stage.cleared).map(stage=>stage.id));
         for (const [id,skin] of Object.entries(rifleSkins)) if (cleared.has(skin.unlock ?? id))
           select.add(new Option((skin.category ?? '步枪')+' · '+skin.name,id));
@@ -379,7 +380,7 @@
       } catch { /* 单独练习仍可使用默认训练步枪 */ }
     }
     if (campaignId && (location.protocol !== 'file:' || new URLSearchParams(location.search).has('campaign'))) {
-      campaign = await import(location.protocol==='file:'?'offline/campaign/save.mjs':'../campaign/save.mjs').then(module => module.connectCampaign(campaignId));
+      campaign = await import(location.protocol==='file:'?'offline/campaign/save.mjs':'../campaign/save.mjs').then(module => module.connectCampaign(campaignId, storageStatus));
       if (!campaign) return;
     }
     startLevel(definition, campaign, campaignStage);

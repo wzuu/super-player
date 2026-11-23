@@ -327,7 +327,7 @@ async function equipRifle(skin) {
 
 async function refreshProgress() {
   const revision = loadoutRevision;
-  const store = await campaignStore();
+  const store = await campaignStore(feedback);
   const [updated, rows] = await Promise.all([store.progress(), store.statistics().catch(()=>null)]);
   statisticsAvailable=rows!==null;
   if(statisticsAvailable) {
