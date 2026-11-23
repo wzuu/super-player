@@ -1,0 +1,13 @@
+[
+  {"id":"underground-lab","title":"地下实验室","brief":"穿过失控的研究设施，在红色警报中夺回核心权限卡。"},
+  {"id":"shanhai-secret-realm","title":"上古秘境","brief":"在血月升起前越过古城残垣，深入饕餮驻守的祭坛。"},
+  {"id":"rain-city","title":"雨夜废城","brief":"从地铁口进入暴雨淹没的街区，寻找钟楼后的异常裂隙。"},
+  {"id":"buried-tomb","title":"流沙王陵","brief":"利用柱廊掩护穿过沙暴，在金字塔顶引爆太阳圣核。"},
+  {"id":"polar-station","title":"极夜冰站","brief":"在暴风雪中管理体温，穿越开裂的冰湖夺回冰核样本。"},
+  {"id":"drowned-city","title":"沉穹古都","brief":"穹顶随时破裂，在积水的古城中找到通往屋顶的台阶。"},
+  {"id":"ember-fortress","title":"烬火要塞","brief":"岩浆涨潮会封闭低沟，沿环路和高桥突入湖心石台。"},
+  {"id":"derelict-station","title":"失压环站","brief":"穿过失压的轨道站舱段，登上反应堆跃迁平台。"},
+  {"id":"neon-undercity","title":"霓雨下城","brief":"利用电磁脉冲瘫痪机械部队，从霓虹广场夺取主控密钥。"},
+  {"id":"jungle-temple","title":"雨蚀天阶","brief":"从雷雨涨水的丛林撤向高地，登上羽蛇神殿。"},
+  {"id":"bloodmoon-castle","title":"血月古堡","brief":"翻越墓穴和钟楼回廊，在血月下夺取伯爵的圣杯。"}
+]

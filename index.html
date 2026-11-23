@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="超级玩家单机闯关。逐关推进、查看对战记录、收集战利品。">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./campaign/home.css">
+  <title>超级玩家</title>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <a class="brand" href="#missions"><span class="brand-mark" aria-hidden="true"></span>超级玩家</a>
+      <nav aria-label="游戏首页">
+        <a href="#missions" aria-current="page">战役关卡</a>
+        <a href="#history">对战记录</a>
+        <a href="#collection">个人收藏</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="shell feedback" id="feedback" hidden>
+      <p id="status" role="status"></p>
+      <button id="retry" class="secondary-action" type="button" hidden>重新读取</button>
+    </div>
+    <section id="view-missions" aria-labelledby="game-title">
+      <div class="hero">
+        <img id="hero-art" class="hero-art" src="./campaign/images/underground-lab.webp" alt="" width="960" height="540" fetchpriority="high">
+        <div class="shell hero-inner">
+          <div class="hero-copy">
+            <p class="eyebrow">单人战役</p>
+            <h1 id="game-title" tabindex="-1">超级玩家</h1>
+            <p class="hero-description">深入各地战场，击败各关首领，带着搜集到的战利品撤离。</p>
+            <div class="hero-actions">
+              <a id="continue" class="primary-action" hidden>开始战役</a>
+              <span id="current-mission" class="current-mission"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="shell mission-section">
+        <div class="section-heading">
+          <div>
+            <h2>战役关卡</h2>
+            <p>完成当前关卡后，下一关自动开放。</p>
+          </div>
+          <div class="campaign-progress">
+            <label for="campaign-progress">通关进度 <strong id="progress-count">读取中</strong></label>
+            <progress id="campaign-progress" aria-label="通关进度" value="0"></progress>
+          </div>
+        </div>
+        <ol id="mission-list" class="mission-list" role="list"></ol>
+      </div>
+    </section>
+
+    <section id="view-history" class="shell archive-section" aria-labelledby="history-title" hidden>
+      <div class="section-heading">
+        <div>
+          <h1 id="history-title" tabindex="-1">对战记录</h1>
+          <p>查看每局的胜负、击杀、用时和带回的战利品。</p>
+        </div>
+        <p id="battle-count" class="section-count"></p>
+      </div>
+      <p id="history-empty" class="empty" hidden>还没有对战记录。完成一局后，结果会显示在这里。</p>
+      <div id="history-region" class="table-region" tabindex="0" role="region" aria-labelledby="history-title" hidden>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">关卡</th>
+              <th scope="col">结果</th>
+              <th scope="col">击杀</th>
+              <th scope="col">用时</th>
+              <th scope="col">带回</th>
+              <th scope="col">价值</th>
+              <th scope="col">结算时间</th>
+            </tr>
+          </thead>
+          <tbody id="battle-list"></tbody>
+        </table>
+      </div>
+      <button id="more-battles" class="secondary-action more-battles" type="button" hidden>加载更多</button>
+    </section>
+
+    <section id="view-collection" class="shell archive-section" aria-labelledby="collection-title" hidden>
+      <div class="section-heading">
+        <div>
+          <h1 id="collection-title" tabindex="-1">个人收藏</h1>
+          <p>通关解锁武器外观，成功撤离带回的宝物会登记在图鉴里。</p>
+        </div>
+      </div>
+      <section id="armory" class="armory" aria-labelledby="armory-title" hidden>
+        <div class="armory-heading">
+          <h2 id="armory-title">武器外观</h2>
+          <p id="rifle-count" class="section-count"></p>
+        </div>
+        <div class="armory-layout">
+          <div class="rifle-detail">
+            <div id="rifle-stage" class="rifle-stage">
+              <canvas id="rifle-canvas" tabindex="0" aria-label="武器三维预览" aria-describedby="rifle-description rifle-preview-tip"></canvas>
+              <div class="rifle-stage-controls">
+                <span id="rifle-preview-tip">拖动或方向键旋转 / 滚轮或加减键缩放</span>
+                <button id="rifle-reset-view" class="secondary-action" type="button">重置视角</button>
+              </div>
+            </div>
+            <div class="rifle-info">
+              <div>
+                <p id="rifle-source" class="rifle-source"></p>
+                <h3 id="rifle-name"></h3>
+                <p id="rifle-description" class="rifle-description"></p>
+              </div>
+              <div class="rifle-actions">
+                <p id="rifle-equipped" class="rifle-equipped"></p>
+                <button id="rifle-equip" class="primary-action" type="button" aria-disabled="true">佩戴外观</button>
+                <button id="rifle-default" class="secondary-action" type="button" hidden>恢复关卡默认</button>
+              </div>
+            </div>
+            <p id="rifle-feedback" class="rifle-feedback" role="status"></p>
+          </div>
+          <ol id="rifle-list" class="rifle-list" aria-label="所有武器外观" role="list"></ol>
+        </div>
+      </section>
+      <section class="loot-section" aria-labelledby="loot-title">
+        <div class="armory-heading">
+          <h2 id="loot-title">战利品图鉴</h2>
+          <p id="collection-count" class="section-count"></p>
+        </div>
+        <div class="collection-toolbar" hidden>
+          <label for="collection-level">关卡</label>
+          <select id="collection-level"></select>
+          <strong id="selected-loot-count"></strong>
+        </div>
+        <ul id="collection-list" class="collection-list" role="list"></ul>
+      </section>
+    </section>
+
+    <noscript><p class="shell feedback">请启用 JavaScript 后进入游戏。</p></noscript>
+  </main>
+  <footer class="shell footer">超级玩家 <span>进度保存在本机</span></footer>
+  <script>
+    if (location.protocol === 'file:') {
+      document.getElementById('feedback').hidden = false;
+      document.getElementById('status').textContent = '在项目目录运行 python3 server.py，再访问 http://127.0.0.1:8000/ 进入战役。';
+    }
+  </script>
+  <script src="./level-kit/vendor/three-r160.js"></script>
+  <script>
+    {
+      const map = document.createElement('script');
+      map.type = 'importmap';
+      map.textContent = JSON.stringify({ imports: { ...globalThis.levelThreeModules?.(), '@level-kit/': './level-kit/src/' } });
+      document.currentScript.after(map);
+    }
+  </script>
+  <script type="module" src="./campaign/home.mjs"></script>
+</body>
+</html>
