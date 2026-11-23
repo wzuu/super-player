@@ -13,6 +13,7 @@ const coverUrl = id => './campaign/images/' + id + '.webp';
 const option = $('collection-level');
 const more = $('more-battles');
 let progress;
+let loadoutRevision = 0;
 let before;
 let loading = false;
 let selectedRifle, previewPromise, savingRifle = false;
@@ -238,6 +239,7 @@ async function equipRifle(skin) {
     if (!response.ok) throw new Error(result.error);
     const restoreFocus = skin === null && document.activeElement === $('rifle-default');
     progress.equippedSkin = result.equippedSkin;
+    loadoutRevision++;
     if (restoreFocus) $('rifle-equip').focus({ preventScroll: true });
     status.textContent = skin ? '已佩戴 ' + rifleSkins[skin].name : '已恢复使用各关卡默认外观';
   } catch {
@@ -248,25 +250,47 @@ async function equipRifle(skin) {
   }
 }
 
+async function refreshProgress() {
+  const revision = loadoutRevision;
+  const updated = await read('/api/progress');
+  // 补存读取和佩戴写入可并行。保留读取期间已保存的最新选择。
+  if (revision !== loadoutRevision) updated.equippedSkin = progress.equippedSkin;
+  progress = updated;
+  $('history-error').hidden = true;
+  renderMissions();
+  $('battle-list').replaceChildren();
+  appendBattles(progress);
+  const selection = option.value;
+  option.replaceChildren(...progress.levels.map((level, index) =>
+    new Option(order(index) + ' / ' + level.title, level.id)));
+  option.value = progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
+  option.closest('.collection-toolbar').hidden = false;
+  renderCollection();
+  renderRifles();
+}
+
 async function loadProgress() {
   if (loading) return;
   loading = true;
   try {
-    const saved = await flushPendingBattles();
-    progress = await read('/api/progress');
-    renderMissions();
-    $('battle-list').replaceChildren();
-    appendBattles(progress);
-    const selection = option.value;
-    option.replaceChildren(...progress.levels.map((level, index) =>
-      new Option(order(index) + ' / ' + level.title, level.id)));
-    option.value = progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
-    option.closest('.collection-toolbar').hidden = false;
-    renderCollection();
-    renderRifles();
+    await refreshProgress();
+    let complete = true, refreshHistory = false;
+    for await (const battle of flushPendingBattles()) {
+      if (!battle) {
+        complete = false;
+        continue;
+      }
+      refreshHistory = true;
+      // 首次通关立即开放下一关，其他写入在队列结束时统一刷新。
+      if (battle.won && progress.levels.some(level => level.id === battle.level && !level.cleared)) {
+        await refreshProgress();
+        refreshHistory = false;
+      }
+    }
+    if (refreshHistory) await refreshProgress();
     const locked = new URLSearchParams(location.search).get('locked');
     const denied = progress.levels.find(level => level.id === locked && !level.unlocked);
-    if (!saved) feedback('还有对战记录等待写入，请重新读取。', true);
+    if (!complete) feedback('还有对战记录等待写入，请重新读取。', true);
     else feedback(denied ? denied.title + '尚未解锁，请先通关上一关。' : '');
   } catch {
     feedback('无法读取存档。请确认本机游戏服务已启动，再试一次。', true);
@@ -276,14 +300,19 @@ async function loadProgress() {
 }
 
 more.addEventListener('click', async () => {
-  if (!before || loading) return;
+  if (!before) return;
+  const snapshot = progress;
   more.disabled = true;
   try {
-    appendBattles(await read('/api/battles?before=' + before));
-    feedback('');
+    const page = await read('/api/battles?before=' + before);
+    if (snapshot !== progress) return;
+    appendBattles(page);
+    $('history-error').hidden = true;
     if (!before) $('history-region').focus({ preventScroll: true });
   } catch {
-    feedback('暂时无法加载更多对战记录，请重试。');
+    if (snapshot !== progress) return;
+    $('history-error').textContent = '暂时无法加载更多对战记录，请重试。';
+    $('history-error').hidden = false;
   } finally {
     more.disabled = false;
   }

@@ -121,7 +121,194 @@ def check_fatal_steam(page, url):
     page.wait_for_function("run.game.phase === 'play'")
 
 
+def check_pending_saves(browser, url):
+    page = browser.new_page()
+    first, second = LEVELS[:2]
+    battles = [dict(id=str(uuid4()), level=first["id"], won=True, kills=0,
+                    endedAt=1000 + i, durationMs=100, loot=[]) for i in range(3)]
+    page.goto(url + "/")
+    page.locator("#continue").wait_for()
+    page.evaluate("""rows => rows.forEach(b =>
+        localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b)))""", battles)
+    held = []
+
+    def hold_write(route):
+        held.append(route)
+        page.evaluate("count => window.pendingWrites = count", len(held))
+        if len(held) == 3:
+            route.continue_()
+
+    page.route("**/api/battles", hold_write)
+    with page.expect_request("**/api/battles"):
+        page.reload()
+    page.wait_for_function("id => document.querySelector('#continue').getAttribute('href') === './' + id + '/'",
+                           arg=first["id"], timeout=3000)
+    assert page.locator("#continue").is_visible()
+    page.wait_for_function("window.pendingWrites === 1")
+    held[0].continue_()
+    page.wait_for_function("id => document.querySelector('#continue').getAttribute('href') === './' + id + '/'",
+                           arg=second["id"], timeout=3000)
+    page.wait_for_function("window.pendingWrites === 2")
+    held[1].fulfill(status=503, body="{}")
+    page.locator("#retry").wait_for()
+    assert page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('super-player:pending:')).length") == 1
+    page.unroute("**/api/battles", hold_write)
+    page.locator("#retry").click()
+    page.locator("#retry").wait_for(state="hidden")
+    assert page.request.get(url + "/api/progress").json()["battleCount"] == 3
+    page.close()
+
+
+def check_frame_timing(browser, url, fps):
+    page = browser.new_page(viewport={"width": 480, "height": 320})
+    stage = "shanhai-secret-realm"
+    page.route(url + "/" + stage + "/", expose_game)
+    page.add_init_script("""const nativeFrame = requestAnimationFrame.bind(window);
+        window.requestAnimationFrame = fn => {
+            if (fn.name !== 'animate') return nativeFrame(fn);
+            window.gameFrame = fn;
+            return 0;
+        };""")
+    page.goto(url + "/" + stage + "/")
+    page.wait_for_function("!!window.run && !!window.gameFrame")
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+    with page.expect_response("**/api/battles") as saved:
+        timings = page.evaluate("""fps => {
+            const g = run.game, w = g.weapon;
+            const start = performance.now();
+            gameFrame(start);
+            g.time = 119;
+            w.ammo = 0;
+            w.reload(g);
+            let moonAt, reloadAt;
+            for (let frame = 1; frame <= fps * 2; frame++) {
+                gameFrame(start + frame * 1000 / fps);
+                if (g.encounter.phase === 'active') moonAt ??= frame / fps;
+                if (w.ammo > 0) reloadAt ??= frame / fps;
+            }
+            g.finish(false);
+            return [moonAt, reloadAt, g.time];
+        }""", fps)
+    assert saved.value.ok
+    moon, reload_time, elapsed = timings
+    assert abs(moon - 1) <= 1 / fps + 1e-8, timings
+    assert abs(reload_time - 1.8) <= 1 / fps + 1e-8, timings
+    assert abs(elapsed - 121) < 1e-8, timings
+    assert saved.value.request.post_data_json["durationMs"] == 121000
+    page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+    page.evaluate("""() => {
+        gameFrame(performance.now());
+        Object.defineProperty(document, 'hidden', {configurable:true, value:true});
+        document.dispatchEvent(new Event('visibilitychange'));
+        gameFrame(performance.now() + 60000);
+    }""")
+    assert page.evaluate("run.game.phase") == "pause"
+    paused = page.evaluate("run.game.time")
+    page.evaluate("""() => {
+        delete document.hidden;
+        document.dispatchEvent(new Event('visibilitychange'));
+        gameFrame(performance.now() + 60000);
+    }""")
+    assert page.evaluate("run.game.time") == paused
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+    page.evaluate("window.resumedFrame = performance.now() + 20; gameFrame(resumedFrame)")
+    resumed = page.evaluate("run.game.time")
+    assert 0 < resumed - paused < 1
+    page.evaluate("""() => {
+        gameFrame(resumedFrame + 800);
+        // 首批 320 毫秒推进后，在补算定时器执行前切入后台。
+        Object.defineProperty(document, 'hidden', {configurable:true, value:true});
+        document.dispatchEvent(new Event('visibilitychange'));
+    }""")
+    assert abs(page.evaluate("run.game.time") - resumed - .32) < 1e-8
+    page.wait_for_function("!document.pointerLockElement")
+    page.evaluate("""() => {
+        delete document.hidden;
+        document.dispatchEvent(new Event('visibilitychange'));
+    }""")
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+    page.evaluate("gameFrame(performance.now())")
+    page.wait_for_function("t => run.game.time >= t - 1e-8", arg=resumed + .8, timeout=3000)
+    page.close()
+
+
+def check_history_pages(page, url):
+    # 多页记录中有同一毫秒结束的对战，且旧局可在新局之后补写。
+    rows = []
+    newest = int(time.time() * 1000) + 1000
+    for i in range(46):
+        battle = dict(id=str(uuid4()), level=LEVELS[0]["id"], won=False, kills=0,
+                      endedAt=newest + (i * 7 % 3), durationMs=100, loot=[])
+        assert page.request.post(url + "/api/battles", headers={"Origin": url}, data=battle).ok
+        rows.append(battle)
+    expected = [b["id"] for b in sorted(reversed(rows), key=lambda b: b["endedAt"], reverse=True)]
+    history = page.request.get(url + "/api/progress").json()
+    ids = [row["id"] for row in history["battles"]]
+    while history["nextBefore"]:
+        history = page.request.get(url + "/api/battles?before=" + str(history["nextBefore"])).json()
+        ids.extend(row["id"] for row in history["battles"])
+    assert ids[:len(expected)] == expected
+    assert len(ids) == len(set(ids))
+
+    # 部分补存失败时，历史翻页不能覆盖战役重试入口。
+    pending = dict(rows[0], id=str(uuid4()))
+    page.goto(url + "/#history")
+    page.evaluate("b => localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b))", pending)
+    page.route("**/api/battles", lambda route: route.fulfill(status=503))
+    page.reload()
+    page.locator("#retry").wait_for()
+    page.route("**/api/battles?before=*", lambda route: route.fulfill(status=503))
+    page.locator("#more-battles").click()
+    page.locator("#history-error").wait_for()
+    assert page.locator("#retry").is_visible()
+    page.unroute("**/api/battles?before=*")
+    page.locator("#more-battles").click()
+    page.wait_for_function("document.querySelectorAll('#battle-list tr').length > 20")
+    assert page.locator("#history-error").is_hidden() and page.locator("#retry").is_visible()
+    page.unroute("**/api/battles")
+    page.locator("#retry").click()
+    page.locator("#retry").wait_for(state="hidden")
+
+
+def check_loadout_during_replay(page, url):
+    page.goto(url + "/#collection")
+    page.locator("#rifle-default").wait_for()
+    battle = dict(id=str(uuid4()), level=LEVELS[0]["id"], won=False, kills=0,
+                  endedAt=int(time.time() * 1000), durationMs=100, loot=[])
+    page.evaluate("b => localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b))", battle)
+    snapshots = []
+
+    def read_progress(route):
+        response = route.fetch()
+        snapshots.append((route, response))
+        if len(snapshots) == 1:
+            route.fulfill(response=response)
+        else:
+            page.evaluate("window.waitingForProgress = true")
+
+    page.route("**/api/progress", read_progress)
+    page.reload()
+    page.wait_for_function("window.waitingForProgress")
+    page.locator("#rifle-default").click()
+    page.locator("#rifle-default").wait_for(state="hidden")
+    route, response = snapshots[-1]
+    route.fulfill(response=response)
+    count = response.json()["battleCount"]
+    page.wait_for_function("n => document.querySelector('#battle-count').textContent.includes(n + ' 局')", arg=count)
+    assert page.locator("#rifle-default").is_hidden()
+    assert page.request.get(url + "/api/loadout").json()["equippedSkin"] is None
+    page.unroute("**/api/progress", read_progress)
+
+
 def verify(browser, url):
+    check_pending_saves(browser, url)
+    for fps in (20, 60):
+        check_frame_timing(browser, url, fps)
     page = browser.new_page(viewport={"width": 960, "height": 600})
     errors = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
@@ -160,6 +347,8 @@ def verify(browser, url):
     page.goto(f"{url}/{LEVELS[0]['id']}/")
     page.wait_for_function("!!window.run")
     assert page.evaluate("run.game.weapon.combat.skin") == NEW_STAGES[-1]
+    check_history_pages(page, url)
+    check_loadout_during_replay(page, url)
     assert not errors, errors
     page.close()
 

@@ -55,6 +55,35 @@ function setup(skin, { stage = skin, force = [] } = {}) {
   return { c, game, b, a, d, hit, drops, damage, visuals };
 }
 
+for (const [skin, kind, duration] of [
+  ['ember-fortress', 'burn', 4], ['jungle-temple', 'poison', 4], ['brass-factory', 'scald', 3],
+]) {
+  test(kind + ' 到期同帧刷新，完整结清两轮伤害', () => {
+    const { c, game, b, hit, damage } = setup(skin);
+    hit();
+    for (let tick = 1; tick <= duration * 4; tick++) {
+      game.time = tick / 2;
+      if (game.time === duration) hit();
+      c.updateTarget(b, game);
+      assert.equal(damage.length, tick);
+    }
+    assert.ok(damage.every(([, amount]) => amount === (kind === 'scald' ? 1.2 : 0.8)));
+    assert.equal(b.statusEffects.has(kind), false);
+  });
+}
+
+test('末次毒伤致死时不会向已退场敌人重新施加特性', () => {
+  const { c, game, b, hit } = setup('jungle-temple');
+  hit();
+  game.time = 3.5;
+  c.updateTarget(b, game);
+  game.beasts.damage = target => { target.active = false; };
+  game.time = 4;
+  hit();
+  assert.equal(c.charge, 1);
+  assert.equal(b.statusEffects.get('poison').until, 4);
+});
+
 test('防护型腐蚀封顶、样本在下次换弹生效，警报仅在所属场景加速', () => {
   const { c, b, hit, game, drops } = setup('underground-lab', { force: ['sample'] });
   b.type = 1;
