@@ -1,4 +1,4 @@
-import { distantBody, detailedBody, hideTexture } from '@level-kit/beast-visuals.mjs';
+import { distantBody, detailedBody, fitBeastModel, hideTexture } from '@level-kit/beast-visuals.mjs';
 import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
@@ -6,6 +6,7 @@ import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
   const tactic=stageTactic(definition?.weaponSkin);
   const { projectileTint, ichor, spark, coreTint } = colors;
+  const chargeSegments = 8;
 
   function beastModel(type) {
     const body = [], emit = [];
@@ -110,6 +111,30 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       }
     }
 
+    chargeWindup(b, p, game, fx, fz) {
+      const confusion = b.statusEffects.get('confused');
+      const yaw = Math.atan2(fx, fz) + (confusion?.angle ?? 0);
+      b.fx = Math.sin(yaw); b.fz = Math.cos(yaw);
+      b.mode = 'windup'; b.phaseTime = CONFIG.feedback.chargeWindup;
+      const stats = CONFIG.beasts.types[b.type];
+      const groundScale = this.level.movementScale(b.x, b.z, b.y, game);
+      const length = stats.chargeSpeed * stats.chargeTime * groundScale *
+        (game.encounter?.beastSpeedScale ?? 1) * b.perkMoveScale;
+      const step = length / chargeSegments;
+      b.chargeMarkLength = step;
+      b.chargeMarkCount = 0;
+      const heights = b.chargeHeights ??= new Float32Array(chargeSegments + 1);
+      heights[0] = b.y;
+      for (let i = 1; i <= chargeSegments; i++) {
+        const x = b.x + b.fx * step * i, z = b.z + b.fz * step * i;
+        const floor = this.level.surface(x, z, heights[i-1] + .47);
+        if (Math.abs(floor - heights[i-1]) > .47 || this.level.blocked(x, z, floor, b.radius, b.height) ||
+            !this.level.canEnter(b, x, z, floor)) break;
+        heights[i] = floor;
+        b.chargeMarkCount++;
+      }
+      game.sound.spatialCue(b, p, 'charge');
+    }
     listen(b, p, game) {
       const rules = game.encounter, step = game.footstep;
       const heardShot = game.time - game.shotAt < 0.35 &&
@@ -142,8 +167,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const charge = b.type === 1 && distance > 2.2 && distance < 12 && Math.abs(y - b.y) < 1.1;
         const shot = b.type === 2 && distance > 3.4 && distance < type.reach;
         if (contact || (game.time - b.heardAt < 0.37 && (charge || shot))) {
-          b.mode = 'windup'; b.phaseTime = shot ? 0.45 : type.windup ?? 0.24;
-          b.fx = dx / distance; b.fz = dz / distance;
+          if (charge) this.chargeWindup(b, p, game, dx/distance, dz/distance);
+          else {
+            b.mode = 'windup'; b.phaseTime = shot ? 0.45 : type.windup ?? 0.24;
+            b.fx = dx / distance; b.fz = dz / distance;
+            b.chargeMarkLength = 0;
+          }
           b.aim.x = x; b.aim.y = y; b.aim.z = z;
           return;
         }
@@ -151,9 +180,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (!contact && distance < 0.65) {
         b.alert = 0; this.patrol(b); return;
       }
-      const point = this.nav.target;
-      if (!clear && point >= 0 && Math.hypot(this.nav.x(point) - x, this.nav.z(point) - z) < this.nav.cell * 2) {
-        const next = this.nav.next(b.x, b.z);
+      const route = this.nav.fields[b.type];
+      const point = route.target;
+      if ((!clear || b.stuck > 0.24) && point >= 0 && Math.hypot(this.nav.x(point) - x, this.nav.z(point) - z) < this.nav.cell * 2) {
+        const next = route.next(b.x, b.z);
         if (next !== this.nav.index(b.x, b.z)) {
           const nx = this.nav.x(next) - b.x, nz = this.nav.z(next) - b.z;
           const n = Math.max(0.05, Math.hypot(nx, nz));
@@ -189,9 +219,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           b.mode = 'windup'; b.phaseTime = 0.45; b.fx = towardX; b.fz = towardZ; return;
         }
         if (b.type === 1 && distance > 2.2 && distance < 12 && yDiff < 1.1) {
-          b.mode = 'windup'; b.phaseTime = type.windup; b.fx = towardX; b.fz = towardZ; return;
+          this.chargeWindup(b, p, game, towardX, towardZ); return;
         }
         if (b.type !== 2 && distance < type.reach + 0.16 && yDiff < (b.type === 3 ? 1.6 : 0.95)) {
+          b.chargeMarkLength = 0;
           b.mode = 'windup'; b.phaseTime = type.windup ?? 0.24; b.fx = towardX; b.fz = towardZ; return;
         }
       }
@@ -201,7 +232,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (waypoint) {
         aimX = waypoint.x - b.x; aimZ = waypoint.z - b.z;
       } else if (!sees || b.stuck > 0.24) {
-        const next = this.nav.next(b.x, b.z);
+        const next = this.nav.fields[b.type].next(b.x, b.z);
         if (next !== this.nav.index(b.x, b.z)) {
           aimX = this.nav.x(next) - b.x; aimZ = this.nav.z(next) - b.z;
         }
@@ -273,17 +304,13 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           const gap = this.dir.set(p.x - b.x, p.y + 0.7 - this.from.y, p.z - b.z).length();
           if ((!confusion || b.fx * (p.x - b.x) + b.fz * (p.z - b.z) > distance * .85) &&
               this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, gap)), gap)) {
-            p.hurt(damage, game); b.chargeHit = true;
+            p.hurt(damage, game, undefined, b); b.chargeHit = true;
           }
         }
       } else if (b.mode === 'windup') {
         if (b.phaseTime <= 0) {
-          if (b.type === 1 && (!hearingOnly ? distance > 1.9 : Math.hypot(b.aim.x - b.x, b.aim.z - b.z) > 1.9)) {
+          if (b.type === 1 && b.chargeMarkLength > 0) {
             b.mode = 'charge'; b.phaseTime = type.chargeTime; b.chargeHit = false;
-            if (confusion) {
-              const angle = Math.atan2(b.fx, b.fz) + confusion.angle;
-              b.fx = Math.sin(angle); b.fz = Math.cos(angle);
-            }
             x = b.fx * type.chargeSpeed; z = b.fz * type.chargeSpeed;
           } else {
             if (b.type === 2) {
@@ -299,7 +326,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
             } else if ((!confusion || Math.cos(confusion.angle) > .85) && distance < type.reach + 0.2 && Math.abs(p.y - b.y) < (b.type === 3 ? 1.65 : 1.02)) {
               this.from.set(b.x, b.y + b.height * 0.55, b.z);
               const length = this.dir.set(p.x - b.x, p.y + 0.8 - this.from.y, p.z - b.z).length();
-              if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, length)), length)) p.hurt(b.rage ? damage * 1.24 : damage, game);
+              if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, length)), length)) p.hurt(b.rage ? damage * 1.24 : damage, game, undefined, b);
             }
             b.mode = 'move'; b.cooldown = type.recovery * (b.rage ? 0.68 : 1);
           }
@@ -384,37 +411,59 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           shader.vertexShader = 'attribute float beastFlash; varying float vBeastFlash;\n' + shader.vertexShader
             .replace('#include <begin_vertex>', '#include <begin_vertex>\n vBeastFlash = beastFlash;');
           shader.fragmentShader = 'varying float vBeastFlash;\n' + shader.fragmentShader
-            .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += vec3(1.25) * vBeastFlash;');
+            .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+              float edge = 1.0 - abs(dot(normal, normalize(vViewPosition)));
+              totalEmissiveRadiance += vec3(1.25) * vBeastFlash
+                + diffuseColor.rgb * edge * edge * ${Number(appearance.rim).toFixed(4)};`);
         };
         const eyes = new THREE.MeshBasicMaterial({ vertexColors: true, fog:false });
         return [dynamicMesh(body, material, capacity), dynamicMesh(eye, eyes, capacity)];
       };
       this.modelBatches=[];
+      this.footprints=[];
       const far=[];
-      CONFIG.beasts.types.forEach((_,type)=>{
+      CONFIG.beasts.types.forEach((stats,type)=>{
         const [body,eye]=definition.buildBeastModel?.(type,modelContext) ?? beastModel(type);
         const capacity=(type===3 ? 1 : this.pool.length)+appearance.corpses;
-        this.modelBatches.push(createBatch([detailedBody(modelContext,body,type,appearance),eye],capacity,surfaces[type] ?? 'hide'));
-        if(type!==3) far.push(createBatch([distantBody(THREE,body,appearance.gridCells),eye],capacity,false));
+        const rage = type === 3 ? definition.buildRageModel?.(modelContext) ?? [body,eye.clone()] : null;
+        const nearBody = detailedBody(modelContext,body,type,appearance);
+        const farBody = type !== 3 ? distantBody(THREE,body,appearance.gridCells) : null;
+        this.footprints.push(fitBeastModel(nearBody,eye,farBody,stats,appearance.scale[type][0]));
+        this.modelBatches.push(createBatch([nearBody,eye],capacity,surfaces[type] ?? 'hide'));
+        if(farBody) far.push(createBatch([farBody,eye],capacity,false));
         if(type===3){
-          const [rageBody,rageEye]=definition.buildRageModel?.(modelContext) ?? [body,eye];
+          const [rageBody,rageEye]=rage;
           this.rageBatch=this.modelBatches.length;
-          this.modelBatches.push(createBatch([detailedBody(modelContext,rageBody,type,appearance,true),rageEye],capacity,surfaces[type] ?? 'hide'));
+          const detailed = detailedBody(modelContext,rageBody,type,appearance,true);
+          this.footprints.push(fitBeastModel(detailed,rageEye,null,stats,appearance.scale[type][0]));
+          this.modelBatches.push(createBatch([detailed,rageEye],capacity,surfaces[type] ?? 'hide'));
           if(rageBody!==body) rageBody.dispose();
         }
         body.dispose();
       });
       this.farStart=this.modelBatches.length;
       this.modelBatches.push(...far);
+      this.chargeMarks = dynamicMesh(shapes.box,
+        new THREE.MeshBasicMaterial({color: 0xffa447, fog:false, toneMapped:false}), this.pool.length * chargeSegments);
       this.healthBG = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({ color: 0x101523, side: THREE.DoubleSide }), this.pool.length);
       this.healthFG = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), this.pool.length);
+      const shadowMap = canvasTexture(32, 32, ctx => {
+        const fade = ctx.createRadialGradient(16,16,1,16,16,16);
+        fade.addColorStop(0,'rgba(6,9,13,.68)'); fade.addColorStop(1,'rgba(6,9,13,0)');
+        ctx.fillStyle = fade; ctx.fillRect(0,0,32,32);
+      });
+      this.shadows = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({
+        map:shadowMap, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-1,
+      }), this.pool.length);
       this.ai = new BeastAI(level, nav, this);
       this.counts = new Uint16Array(this.modelBatches.length);
     }
     bodyBounds(b) {
-      b.x0 = b.x - b.radius * 1.16; b.x1 = b.x + b.radius * 1.16;
-      b.z0 = b.z - b.radius * (b.type === 0 ? 1.75 : 1.13);
-      b.z1 = b.z + b.radius * (b.type === 0 ? 1.75 : 1.13);
+      const footprint = this.footprints[b.rage && b.type===3 ? this.rageBatch : b.type];
+      const sin = Math.abs(Math.sin(b.yaw)), cos = Math.abs(Math.cos(b.yaw));
+      const x = footprint.x*cos + footprint.z*sin, z = footprint.z*cos + footprint.x*sin;
+      b.x0 = b.x - x; b.x1 = b.x + x;
+      b.z0 = b.z - z; b.z1 = b.z + z;
       b.y0 = b.y + 0.025; b.y1 = b.y + b.height;
     }
     reset(player) {
@@ -425,8 +474,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const spawn = this.level.bossSpawn;
       this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
       for (let i = 1; i < Math.min(CONFIG.beasts.population, this.pool.length); i++) {
-        const site = this.spawnSite(player, true, null);
-        if (site !== -1) this.spawn(this.randomType(), this.nav.x(site), this.nav.z(site));
+        const type = this.randomType(), site = this.spawnSite(type, player, true, null);
+        if (site !== -1) this.spawn(type, this.nav.x(site), this.nav.z(site));
       }
       this.refreshHash(); this.render();
     }
@@ -438,6 +487,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const b = this.pool.find(item => !item.active);
       if (!b) return null;
       const stats = CONFIG.beasts.types[type];
+      if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
         active: true, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         fx: Math.sin(angle), fz: Math.cos(angle), dx: Math.sin(angle) * 0.11, dz: Math.cos(angle) * 0.11,
@@ -468,15 +518,16 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const length = this.line.set(dx, y + 0.80 - camera.position.y, dz).length();
       return this.level.visible(camera.position, this.line.divideScalar(Math.max(length, 0.01)), length);
     }
-    spawnSite(player, initial, viewDirection) {
+    spawnSite(type, player, initial, viewDirection) {
       const sites = this.level.sites, cursor = Math.floor(Math.random() * sites.length);
+      const stats = CONFIG.beasts.types[type];
       for (let k = 0; k < sites.length; k++) {
         const i = sites[(cursor + k) % sites.length];
-        if (this.nav.dist[i] < 0) continue;
+        if (this.nav.fields[type].dist[i] < 0) continue;
         const x = this.nav.x(i), z = this.nav.z(i);
         const dx = x - player.x, dz = z - player.z, d = Math.hypot(dx, dz);
         if (d < CONFIG.beasts.spawnDistance || (initial && d > 76) || this.level.inSafeZone(x, z, 3)) continue;
-        if (!initial && this.level.blocked(x, z, this.level.base(x, z), 0.61, 2.1)) continue;
+        if (this.level.blocked(x, z, this.level.base(x, z), stats.radius, stats.height)) continue;
         let occupied = false;
         for (const b of this.pool) {
           if (b.active && (b.x - x) ** 2 + (b.z - z) ** 2 < (initial ? 1.65 : 2.3) ** 2) { occupied = true; break; }
@@ -565,13 +616,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         this.navTime = 0.24;
       }
       this.refreshHash();
-      let nearest = Infinity;
       for (const b of this.pool) {
         if (!b.active) continue;
         game.weapon.combat.updateTarget(b, game);
         if (!b.active) continue;
         this.ai.update(b, player, game, dt, this.frame);
-        nearest = Math.min(nearest, Math.hypot(b.x - player.x, b.z - player.z));
       }
       this.spawnTime -= dt;
       if (this.spawnTime <= 0) {
@@ -580,9 +629,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const burst = encounter?.spawnBurst ?? CONFIG.beasts.spawnBurst;
         camera.getWorldDirection(this.air);
         for (let i = 0; i < burst && this.live < target; i++) {
-          const spawn = this.spawnSite(player, false, this.air);
+          const type = this.randomType(), spawn = this.spawnSite(type, player, false, this.air);
           if (spawn !== -1) {
-            const child = this.spawn(this.randomType(), this.nav.x(spawn), this.nav.z(spawn));
+            const child = this.spawn(type, this.nav.x(spawn), this.nav.z(spawn));
             child.reinforcement = this.live > CONFIG.beasts.population;
           }
         }
@@ -600,7 +649,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const a = Math.random() * TAU;
         const x = b.x + Math.cos(a) * 3.6, z = b.z + Math.sin(a) * 3.6;
         const floor = this.level.surface(x, z, b.y + 0.45);
-        if (this.live < this.pool.length && !this.level.blocked(x, z, floor, 0.51, 1.15)) {
+        const swarm = CONFIG.beasts.types[0];
+        if (this.live < this.pool.length && !this.level.blocked(x, z, floor, swarm.radius, swarm.height)) {
           const stage = definition.stageBossSummon;
           if (!stage || stage(x, floor, z, game)) {
             if (!stage) {
@@ -614,7 +664,6 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         }
       }
       this.refreshHash();
-      game.threat = nearest;
     }
     fadeHitFlashes(dt, game) {
       for (const b of this.pool) {
@@ -625,7 +674,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     render(dt = 0, t = 0, disabled = false) {
       this.counts.fill(0);
-      let bars = 0;
+      let bars = 0, chargeMarks = 0, shadows = 0;
       for (const b of this.pool) {
         if (!b.active) continue;
         const type = b.type;
@@ -637,6 +686,16 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const i = this.counts[batch]++;
         const [body, luminous] = this.modelBatches[batch];
         const angle = Math.atan2(b.fx, b.fz);
+        if (!disabled && b.type === 1 && b.mode === 'windup' && b.chargeMarkLength > 0) {
+          const step = b.chargeMarkLength;
+          for (let j = 0; j < b.chargeMarkCount; j++) {
+            const along = (j + .5) * step;
+            const y = (b.chargeHeights[j] + b.chargeHeights[j+1]) / 2 + .065;
+            const dy = b.chargeHeights[j+1] - b.chargeHeights[j];
+            setInstance(this.chargeMarks, chargeMarks++, b.x + b.fx * along, y, b.z + b.fz * along,
+              .16, .035, Math.hypot(step,dy)*.88, null, angle, -Math.atan2(dy,step));
+          }
+        }
         const delta = Math.atan2(Math.sin(angle - b.yaw), Math.cos(angle - b.yaw));
         b.yaw += delta * Math.min(1, dt * 16);
         const walk = t * appearance.walkHz[type] + b.blink;
@@ -647,8 +706,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const visualY = b.y + bob + (b.surfaceRoll ? b.height * 0.5 * (1 - Math.cos(b.surfaceRoll)) : 0);
         const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
         setInstance(body, i, b.x, visualY, b.z, 1, breath, 1, null, b.yaw, action, roll);
-        workColor.setScalar(disabled ? 0.31 : b.rage ? 3.2 : b.mode === 'windup' ? 2.85 : 1.90);
+        workColor.setScalar(disabled ? 0.31 : b.rage ? 3.2 : b.mode === 'windup' ? 2.85 : appearance.eyeLight);
         setInstance(luminous, i, b.x, visualY, b.z, 1, breath, 1, workColor, b.yaw, action, roll);
+        if (range2 < appearance.shadowRange ** 2) {
+          const floor = this.level.surface(b.x,b.z,b.y+.05);
+          setInstance(this.shadows,shadows++,b.x,floor+.025,b.z,b.radius*2.6,b.radius*3.1,1,null,b.yaw,-Math.PI/2);
+        }
         if (range2 > 68 ** 2) continue;
         const w = type === 3 ? 1.83 : 0.93, h = type === 3 ? 0.099 : 0.059;
         const ratio = clamp(b.hp / CONFIG.beasts.types[type].hp, 0, 1);
@@ -678,7 +741,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         body.geometry.attributes.beastFlash.needsUpdate = true;
         updateMesh(body, this.counts[i]); updateMesh(luminous, this.counts[i]);
       }
+      this.chargeMarks.visible = chargeMarks > 0;
+      updateMesh(this.chargeMarks, chargeMarks);
       updateMesh(this.healthBG, bars); updateMesh(this.healthFG, bars);
+      this.shadows.visible = shadows > 0;
+      updateMesh(this.shadows, shadows);
     }
   }
 

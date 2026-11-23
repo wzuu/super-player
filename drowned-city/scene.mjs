@@ -218,8 +218,9 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
   function hall(x,z) {
     const r=HALL.radius,y=HALL.roof;
     level.gate.set(x,y,z);
-    level.bossAnchor.set(x,0,z+5.8);
-    level.bossSpawn.set(x+4.8,0,z+4.6);
+    // 成体魔鱼在议事厅南门外驻守，保留厅内原有净高和登顶路线。
+    level.bossAnchor.set(x,0,z+13.5);
+    level.bossSpawn.set(x+2,0,z+13.5);
     add('ringRoof','wall',x,y-.25,z,r*2,.50,r*2,0xb5c7be);
     add('ringRoof','chalk',x,y+.014,z,r*2-.31,.022,r*2-.31,0xadbdb3);
     const band=.56;

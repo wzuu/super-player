@@ -32,6 +32,14 @@
   #world { width: 100%; height: 100%; display: block; }
   #hud { pointer-events: none; container-type: size; }
   #injury { background: radial-gradient(ellipse, transparent 35%, #a62239 120%); opacity: 0; }
+  #directions { position: absolute; inset: 0; z-index: 1; overflow: hidden; pointer-events: none; }
+  #directions i { position: absolute; left: 50%; top: 50%; }
+  .damage-arc { width: 58px; height: 17px; margin: -8px -29px; border-top: 5px solid #ff555f;
+    border-radius: 50%; filter: drop-shadow(0 1px 2px #47101b); }
+  .near-warning { width: 0; height: 0; margin: -5px -6px; border: 6px solid transparent;
+    border-top: 0; border-bottom-width: 11px; filter: drop-shadow(0 1px 2px #171219); }
+  #hud[data-critical] #hp { color: #ff626d; font-weight: 800; }
+  #hud[data-critical] #health { --fill: #ff626d; accent-color: #ff626d; }
   #blast { background: radial-gradient(ellipse at center, #ffd5be80, #ff6ebb33 50%, transparent 85%); opacity: 0; }
   .hud-top {
     position: absolute; inset: 24px 28px auto; display: grid;
@@ -178,7 +186,7 @@
 #preparation {margin:8px 0;max-width:100%;font:14px/1.6 system-ui}
 #preparation select {max-width:100%;font:inherit}
 #menu .screen {max-height:95dvh;overflow:auto}
-#equipment-hud {position:fixed;left:1em;bottom:7em;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
+#equipment-hud {position:absolute;left:0;bottom:calc(100% + 8px);width:max-content;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
 </style>
 </head>
 <body>
@@ -186,6 +194,7 @@
 <div id="hud" hidden>
   <div id="hud-announcement" class="visually-hidden" role="status"></div>
   <div id="injury"></div>
+  <div id="directions" aria-hidden="true"></div>
   <div id="blast"></div>
   <div class="hud-top">
   <section class="top-left instrument" aria-label="当前区域与撤离任务">
@@ -213,6 +222,7 @@
   <div id="cross" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="message" hidden></div>
   <section class="bottom-left instrument" aria-label="玩家状态">
+    <output id="equipment-hud" hidden></output>
     <div class="meter-label"><span>生命</span><output id="hp">100</output></div>
     <progress id="health" aria-label="生命" max="100" value="100"></progress>
     <div class="meter-label"><span>体力</span><span id="posture" hidden>蹲伏</span><output id="energy">100</output></div>
@@ -224,7 +234,6 @@
     <div id="weapon-state"></div>
   </section>
 </div>
-<output id="equipment-hud" hidden></output>
 <output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
 <dialog id="menu" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
   <div class="screen">

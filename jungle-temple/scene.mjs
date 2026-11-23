@@ -570,7 +570,7 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
           game.sound.pickup(true);
           game.ui.notify('已拾取解毒草，毒素解除', 2.3);
           game.effects.spray(splash.set(herb.x, herb.y + .25, herb.z), root, 14, 2.7, .051, 'spark');
-        } else if (t >= this.poisonTick && p.hurt(poison.damage, game, .13)) {
+        } else if (t >= this.poisonTick && p.hurt(poison.damage, game, .13, undefined, 2)) {
           this.poisonTick = t + poison.interval;
         }
       }
@@ -605,7 +605,8 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
       for (let i = 0; i < AMBUSH_SITES.length; i++) {
         const candidate = AMBUSH_SITES[(offset + i) % AMBUSH_SITES.length];
         const [x, z] = candidate, d = Math.hypot(x - p.x, z - p.z);
-        if (d < 8 || d > distance + 2 || level.blocked(x, z, 0, .43, 1.07)) continue;
+        const hunter = tune.beasts.types[0];
+        if (d < 8 || d > distance + 2 || level.blocked(x, z, 0, hunter.radius, hunter.height)) continue;
         if (game.beasts.pool.some(b => b.active && Math.hypot(b.x - x, b.z - z) < 1.8)) continue;
         site = candidate;
         distance = d;

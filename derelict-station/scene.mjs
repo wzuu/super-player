@@ -3,6 +3,8 @@ const CONFIG = {
   graphics: { maxPixelRatio: 1.16, bloomScale: .69, debris: 1450 },
   audio: { ambient: { filter: 'lowpass', frequency: 165, q: .84, activeGain: .12, pauseGain: .067 } },
   beasts: {
+    // 舱门净高 2.49 米，普通凶兽保留进出余量；母体留在挑高的反应堆大厅。
+    appearance: { scale: [[1.28,1.32], [1.42,1.18], [1.20,1.30], [1.34,1.34]] },
     types: [
       { hp: 61, radius: .39, height: 1.11 },
       { hp: 175, radius: .62, height: 2.04 },
@@ -508,10 +510,10 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
       }
       for(const egg of eggs){
         if(!egg.active||egg.hatch>t||game.beasts.live>=game.beasts.pool.length)continue;
-        if(level.blocked(egg.x,egg.z,egg.y,.40,1.13)){egg.active=false;continue;}
         const child=game.beasts.spawn(0,egg.x,egg.z,egg.y);
+        egg.active=false;
         if(!child)continue;
-        child.alert=5.2;egg.active=false;
+        child.alert=5.2;
         point.set(egg.x,egg.y+.25,egg.z);
         game.effects.spray(point,larva,13,4.4,.076,'mist');
       }
@@ -525,7 +527,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
       }
       if(!game.blast){
         pull(p,s,rules.playerPull,dt);
-        if(inside(p.x,p.z,s)&&t>=this.nextDamage&&p.hurt(rules.damage,game,.27)){
+        if(inside(p.x,p.z,s)&&t>=this.nextDamage&&p.hurt(rules.damage,game,.27,point.set(s.side*SHELL.wall,p.y,s.z))){
           this.nextDamage=t+rules.tick;
         }
         if(game.phase!=='play')return;

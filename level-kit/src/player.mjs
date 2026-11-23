@@ -6,6 +6,8 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.box = {};
       this.forward = new V3(); this.visual = new THREE.Euler(0, 0, 0, 'YXZ');
       this.rot = new THREE.Quaternion();
+      this.baseFov = camera.fov;
+      this.hitDirections = new Float64Array(8);
       this.reset();
     }
     reset() {
@@ -19,6 +21,8 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.sprinting = false; this.lastHurt = -Infinity; this.hurtDelay = 0;
       this.slowUntil = -Infinity; this.slowScale = 1;
       this.damageVignette = 0; this.shake = 0; this.bob = 0; this.sway = 0;
+      this.hitDirections.fill(-Infinity);
+      this.impactLeft = this.impactStrength = this.impactBearing = 0;
       this.recoil = 0; this.recoilRoll = 0; this.speedMix = 0;
       this.look.rotation.set(this.level.spawnPitch, this.level.spawnYaw, 0, 'YXZ');
       this.positionCamera(0);
@@ -33,12 +37,25 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
     protected(game) {
       return !this.escaped && this.level.inSafeZone(this.x, this.z) && game.time < CONFIG.player.safeTime;
     }
-    hurt(amount, game, cooldown = CONFIG.player.hurtCooldown) {
+    hurt(amount, game, cooldown = CONFIG.player.hurtCooldown, source, kind = source?.type) {
       if (game.phase !== 'play' || this.hurtDelay > 0 || this.protected(game) || game.kit?.protected(game.time)) return false;
-      this.hp = Math.max(0, this.hp - amount * CONFIG.player.incoming); this.hurtDelay = cooldown; this.lastHurt = game.time;
-      this.damageVignette = Math.min(1, this.damageVignette * 0.5 + 0.25 + amount / 37);
-      this.shake = Math.max(this.shake, Math.min(0.73, 0.20 + amount / 34));
-      game.sound.tone(95, 37, 0.19, 0.28, 'triangle');
+      const feedback = CONFIG.feedback, damage = amount * CONFIG.player.incoming;
+      this.hp = Math.max(0, this.hp - damage); this.hurtDelay = cooldown; this.lastHurt = game.time;
+      const severity = clamp(damage / CONFIG.player.health * 3, 0, 1);
+      this.damageVignette = Math.min(1, this.damageVignette * .5 + .22 + severity + .18 * (1 - this.hp / CONFIG.player.health));
+      this.impactLeft = feedback.impactDuration;
+      this.impactStrength = .3 + .7 * severity;
+      this.impactBearing = NaN;
+      if (source && (source.x !== this.x || source.z !== this.z)) {
+        this.impactBearing = Math.atan2(source.x - this.x, this.z - source.z);
+        const count = this.hitDirections.length;
+        const sector = (Math.round(this.impactBearing * count / (2 * Math.PI)) + count) % count;
+        if (!game.encounter?.hudOffline && game.time - this.hitDirections[sector] >= feedback.mergeWindow) {
+          this.hitDirections[sector] = game.time;
+        }
+      }
+      game.hitStop = Math.max(game.hitStop, feedback.hitStop);
+      game.sound.hurt(kind);
       if (this.hp <= 0) game.finish(false);
       return true;
     }
@@ -113,6 +130,11 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.recoilRoll *= Math.exp(-dt * 10);
       const wobble = this.speedMix * Math.sin(this.bob * 2) * 0.028;
       const p = CONFIG.player;
+      const feedback = CONFIG.feedback;
+      this.impactLeft = Math.max(0, this.impactLeft - dt);
+      const impact = p.steady ? 0 : (this.impactLeft / feedback.impactDuration) ** 2 * this.impactStrength * feedback.hitShake;
+      const fov = this.baseFov - feedback.impactFov * impact;
+      if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
       const targetEye = this.crouched ? p.crouch.eye : p.eye;
       this.eye = lerp(this.eye, targetEye, 1 - Math.exp(-dt * 17));
       camera.position.set(this.x, this.y + this.eye + wobble, this.z);
@@ -120,6 +142,11 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.visual.set(this.recoil + randomRange(-0.028, 0.028) * this.shake,
         randomRange(-0.021, 0.021) * this.shake,
         this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * this.shake, 'YXZ');
+      if (impact && Number.isFinite(this.impactBearing)) {
+        const angle = this.impactBearing + this.look.rotation.y;
+        this.visual.x -= Math.cos(angle) * feedback.impactAngle * impact;
+        this.visual.z -= Math.sin(angle) * feedback.impactAngle * impact;
+      }
       if (p.steady) this.visual.set(0,0,0,'YXZ');
       this.rot.setFromEuler(this.visual);
       camera.quaternion.copy(this.look.quaternion).multiply(this.rot);

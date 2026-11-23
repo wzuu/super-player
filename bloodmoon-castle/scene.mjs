@@ -2,6 +2,7 @@ const CONFIG = {
   map: { cell: 3.6, fog: 0.014, navCell: 0.9 },
   graphics: { maxPixelRatio: 1.25, bloomScale: 0.64 },
   beasts: {
+    appearance: { minSwarmHeight: 1.62 },
     capacity: 100,
     types: [
       { hp: 48, speed: 7.22, radius: 0.43, height: 0.68, damage: 7 },

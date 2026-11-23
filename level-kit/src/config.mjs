@@ -2,6 +2,11 @@ const DEFAULT_CONFIG = {
   audio: { ambient: null },
   map: { cell: 4, fog: 0.021, hash: 4, navCell: 1.25 },
   graphics: { maxPixelRatio: 1.25, bloomScale: 0.72 },
+  feedback: {
+    arcDuration: 0.8, mergeWindow: 0.1, criticalHealth: 0.3,
+    impactDuration: 0.15, impactAngle: 0.033, impactFov: 3, hitStop: 0.04,
+    warningRange: 5, warningCount: 4, chargeWindup: 0.42,
+  },
   player: {
     eye: 1.7, height: 1.77, radius: 0.33, health: 100, walk: 5.25, backward: 0.81,
     sprint: 8.1, stamina: 100, sprintUse: 24, staminaRegen: 17, sprintResume: 19,
@@ -19,6 +24,9 @@ const DEFAULT_CONFIG = {
     memory: 7, separation: 1.35,
     appearance: {
       far: 16, hysteresis: 2, gridCells: 8, corpses: 12, fallTime: 0.42,
+      // 群袭、冲撞、抛射、首领的横向与竖向比例，共用于模型、碰撞和寻路。
+      scale: [[1.28, 1.32], [1.42, 1.27], [1.20, 1.40], [1.34, 1.34]],
+      minSwarmHeight: 1.28, rim: 0.23, eyeLight: 2.4, shadowRange: 16,
       surfaces: {
         'underground-lab': ['hide','metal','hide','metal'], 'rain-city': ['fur','metal','hide','hide'],
         'shanhai-secret-realm': ['fur','fur','hide','hide'], 'polar-station': ['fur','fur','hide','fur'],
@@ -85,6 +93,13 @@ function merge(base, patch) {
 // 每个关卡得到独立配置，避免场景间共享数组或对象。
 export function makeConfig(overrides = {}, campaignStage = 0) {
   const config = merge(DEFAULT_CONFIG, overrides);
+  for (const [i, stats] of config.beasts.types.entries()) {
+    const [width, height] = config.beasts.appearance.scale[i];
+    stats.radius *= width;
+    stats.height *= height;
+    if (i === 0) stats.height = Math.max(stats.height, config.beasts.appearance.minSwarmHeight);
+    if (i === 3) stats.height = Math.max(stats.height, config.beasts.types[0].height * 2.5);
+  }
   if (campaignStage > 0) {
     const rules = CAMPAIGN_DIFFICULTY;
     const steps = campaignStage - 1;

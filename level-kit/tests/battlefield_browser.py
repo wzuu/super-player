@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 
 from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT, LEVELS, expose_game
+from hit_feedback import check_emp_feedback, check_hit_feedback
 from uuid import uuid4
 import base64
 
@@ -54,6 +55,7 @@ def probe(page, url):
         page.screenshot(path=output)
     if "--baseline" not in sys.argv:
         check_features(page)
+        check_hit_feedback(page)
     page.close()
 
 
@@ -104,6 +106,39 @@ def check_features(page):
     print("PASS 分批/倒地、堆叠/障碍/跨层、部分补给、手雷、核心与过期", flush=True)
 
 
+def check_beast_clearance(page, stage):
+    coverage = page.evaluate("""async stage => {
+      const T=await import('three'), {level,beasts}=run.game, types=run.config.beasts.types;
+      const boss=level.bossSpawn;
+      if(level.blocked(boss.x,boss.z,boss.y,types[3].radius,types[3].height)) throw Error('首领出生点被挡');
+      function walk(type,x,z,dx,dz,steps) {
+        const {radius,height}=types[type], body={x,z,y:level.base(x,z),radius,height};
+        for(let i=0;i<steps;i++){
+          if(level.move(body,dx,dz,.47)<.001) throw Error('窄路卡住 '+[type,body.x,body.y,body.z]);
+          body.y=Math.max(level.foot(body.x,body.z,body.y+.27,radius),body.y-.15);
+        }
+      }
+      for(let type=0;type<3;type++) {
+        if(stage==='buried-tomb') for(const x of [-12.4,12.4]) {
+          walk(type,x,-17,0,-.1,100); walk(type,x,-27,0,.1,100);
+        }
+        if(stage==='derelict-station') {
+          walk(type,-11,-11.5,-.1,0,60); walk(type,-17,-11.5,.1,0,60);
+        }
+      }
+      // 站姿、默认垂直视野，在两米外瞄准群袭体中心，测量屏幕内的真实顶点。
+      const camera=new T.PerspectiveCamera(73,16/9,.05,160);
+      camera.position.set(0,1.7,2); camera.lookAt(0,types[0].height*.5,0); camera.updateMatrixWorld();
+      let low=1,high=-1;
+      const pos=beasts.modelBatches[0][0].geometry.attributes.position, v=new T.Vector3();
+      for(let i=0;i<pos.count;i++){
+        v.fromBufferAttribute(pos,i).project(camera); low=Math.min(low,v.y);high=Math.max(high,v.y);
+      }
+      return (Math.min(1,high)-Math.max(-1,low))/2;
+    }""",stage)
+    assert coverage >= .4, (stage, coverage)
+
+
 def audit(browser, url):
     # 每关用独立页面释放 WebGL 资源，以相同角度把四种原型绘成纯色剪影。
     for index, level in enumerate(LEVELS):
@@ -112,6 +147,8 @@ def audit(browser, url):
         page.route(path,expose_game)
         page.goto(path)
         page.wait_for_function("!!window.run")
+        if "--baseline" not in sys.argv:
+            check_beast_clearance(page,level["id"])
         result=page.evaluate("""async () => {
           const T=await import('three'), {renderer:r,game}=run, b=game.beasts;
           const s=new T.Scene();s.background=new T.Color(0xe6edf1);
@@ -152,6 +189,7 @@ def audit(browser, url):
               return manager.damage(drone,drone.hp+100,g) && g.kills===kills+1 &&
                 manager.nextCorpse===slot && g.encounter.wrecks.some(w=>w.active && w.x===drone.x && w.z===drone.z);
             }"""), "无人机应只生成关卡坠毁残骸"
+            check_emp_feedback(page)
         if output:=os.environ.get("BATTLEFIELD_AUDIT"):
             Path(output,f"{index+1:02}-{level['id']}.png").write_bytes(base64.b64decode(result["png"].split(",")[1]))
         response=page.request.post(url+"/api/battles",headers={"Origin":url},data={

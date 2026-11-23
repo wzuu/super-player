@@ -34,6 +34,8 @@ export const defaults = {
   volume: 80,
   muted: false,
   steady: false,
+  hitShake: 1,
+  directionIndicators: true,
   difficulty: 'standard',
   quality: 'auto',
   metrics: false,
@@ -52,10 +54,11 @@ export function preferences() {
     ['sensitivity', 0.25, 3],
     ['fov', 55, 105],
     ['volume', 0, 100],
+    ['hitShake', 0, 1],
   ]) {
     if (Number.isFinite(raw[name])) prefs[name] = Math.max(min, Math.min(max, raw[name]));
   }
-  for (const name of ['muted', 'steady', 'metrics', 'gamepad'])
+  for (const name of ['muted', 'steady', 'metrics', 'gamepad', 'directionIndicators'])
     if (typeof raw[name] === 'boolean') prefs[name] = raw[name];
   if (['auto', 'high', 'medium', 'low'].includes(raw.quality)) prefs.quality = raw.quality;
   if (['assist', 'standard', 'hard'].includes(raw.difficulty)) prefs.difficulty = raw.difficulty;

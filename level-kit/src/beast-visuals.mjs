@@ -121,3 +121,17 @@ export function detailedBody({ THREE, mergeGeometries }, source, type, appearanc
   plate.dispose();
   return merged;
 }
+// 把两级模型和发光部件一起对齐到足底与实际碰撞高度；由同一包围盒计算命中范围。
+export function fitBeastModel(body, eyes, far, stats, widthScale) {
+  body.computeBoundingBox();
+  eyes.computeBoundingBox();
+  const bounds = body.boundingBox.clone().union(eyes.boundingBox);
+  const heightScale = stats.height / Math.max(.01, bounds.max.y - bounds.min.y);
+  for (const geometry of [body, eyes, far]) {
+    if (geometry) geometry.translate(0, -bounds.min.y, 0).scale(widthScale, heightScale, widthScale);
+  }
+  return {
+    x: Math.max(Math.abs(bounds.min.x), Math.abs(bounds.max.x)) * widthScale,
+    z: Math.max(Math.abs(bounds.min.z), Math.abs(bounds.max.z)) * widthScale,
+  };
+}
