@@ -477,7 +477,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       return this.damage(b, damage, game, source, hit);
     }
     damage(b, amount, game, source = 'environment', hit = null) {
-      if (!b.active || !(amount > 0)) return false;
+      if (game.phase !== 'play' || !b.active || !(amount > 0)) return false;
       const type = b.type, combat = game.weapon.combat;
       const applied = Math.min(b.hp, amount * combat.damageScale(b, source, game.time));
       b.hp -= applied;
@@ -526,7 +526,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       let nearest = Infinity;
       for (const b of this.pool) {
         if (!b.active) continue;
-        if (b.statusEffects.size) game.weapon.combat.updateTarget(b, game);
+        game.weapon.combat.updateTarget(b, game);
         if (!b.active) continue;
         this.ai.update(b, player, game, dt, this.frame);
         nearest = Math.min(nearest, Math.hypot(b.x - player.x, b.z - player.z));
@@ -577,7 +577,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     fadeHitFlashes(dt, game) {
       for (const b of this.pool) {
         if (!b.active) continue;
-        if (b.statusEffects.size) game.weapon.combat.updateTarget(b, game);
+        game.weapon.combat.updateTarget(b, game);
         if (b.flash > 0) b.flash = Math.max(0, b.flash - dt);
       }
     }

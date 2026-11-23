@@ -79,6 +79,48 @@ def check_exit(page, url, level_id):
     assert next(level for level in progress["levels"] if level["id"] == level_id)["cleared"]
 
 
+def check_frost_immunity(page, url):
+    page.goto(url + "/polar-station/")
+    page.wait_for_function("!!window.run")
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+    result = page.evaluate("""() => {
+        const g = run.game, combat = g.weapon.combat;
+        const b = g.beasts.pool.find(b => b.active && b.type !== 3);
+        const hit = () => combat.hit(b, {damage: 1}, g);
+        for (let i = 0; i < 5; i++) hit();
+        g.time += 2;
+        g.beasts.update(.016, g.player, g);
+        for (let i = 0; i < 4; i++) hit();
+        g.beasts.update(.016, g.player, g);
+        const before = b.perkMoveScale;
+        hit();
+        g.beasts.update(.016, g.player, g);
+        return [before, b.statusEffects.size, b.perkMoveScale];
+    }""")
+    assert abs(result[0] - .68) < 1e-6 and result[1:] == [0, 1], result
+
+
+def check_fatal_steam(page, url):
+    kills = page.evaluate("""() => {
+        const g = run.game, b = g.beasts.pool.find(b => b.active && b.type !== 3);
+        const atVent = {x: 29, y: 0, z: 5};
+        Object.assign(g.player, atVent, {hp: 1, hurtDelay: 0, escaped: true});
+        Object.assign(b, atVent, {hp: 1});
+        g.encounter.active.set(1, g.time + 6);
+        g.encounter.tick = 0;
+        const before = g.kills;
+        g.step(.016);
+        return [g.phase, before, g.kills];
+    }""")
+    page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    latest = page.request.get(url + "/api/progress").json()["battles"][0]
+    assert latest["level"] == "brass-factory" and not latest["won"], latest
+    assert kills[0] == "fail" and kills[1] == kills[2] == latest["kills"], (kills, latest)
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase === 'play'")
+
+
 def verify(browser, url):
     page = browser.new_page(viewport={"width": 960, "height": 600})
     errors = []
@@ -94,6 +136,7 @@ def verify(browser, url):
         })
         assert response.ok, response.text()
 
+    check_frost_immunity(page, url)
     equipped = None
     for stage in NEW_STAGES:
         page.goto(f"{url}/{stage}/")
@@ -104,6 +147,8 @@ def verify(browser, url):
         page.wait_for_function("run.game.phase === 'play' && !!document.pointerLockElement")
         if equipped is None:
             check_reload(page)
+        if stage == "brass-factory":
+            check_fatal_steam(page, url)
         check_exit(page, url, stage)
         page.goto(url + "/#collection")
         title = next(level["title"] for level in LEVELS if level["id"] == stage)

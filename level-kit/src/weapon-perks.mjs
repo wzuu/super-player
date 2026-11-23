@@ -456,6 +456,7 @@ export class WeaponCombat {
   updateTarget(b, game) {
     const time = game.time;
     b.perkMoveScale = 1;
+    if (!b.statusEffects.size) return false;
     let controlled = false;
     for (const [kind, effect] of b.statusEffects) {
       if (kind === 'burn' || kind === 'poison' || kind === 'scald') {
@@ -492,15 +493,8 @@ export class WeaponCombat {
     for (const effect of b.statusEffects.values()) {
       const name = effectTitles[effect.type];
       if (!name || effect.until <= game.time) continue;
-      const icon = controlKinds.has(effect.type) ? '◇' : effect.type === 'marked' ? '◎' : '·';
       labels.push(
-        icon +
-          ' ' +
-          name +
-          (effect.stacks > 1 ? '×' + effect.stacks : '') +
-          ' ' +
-          Math.ceil(effect.until - game.time) +
-          '秒',
+        name + (effect.stacks > 1 ? '×' + effect.stacks : '') + ' ' + Math.ceil(effect.until - game.time) + '秒',
       );
     }
     return labels.slice(-2).join(' / ');
