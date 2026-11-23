@@ -810,6 +810,10 @@ function polarModel(type,{THREE,shapes,mergeGeometries},rage=false){
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'机场跑道',at:[-9,26],entries:[[-17,22],[1,19]]},
+    {name:'钻探塔管线',at:[-23,9],entries:[[-29,13],[-20,1]]},
+  ]},
   weaponSkin: 'polar-station',
   pageTitle:'极夜冰站 | 第五关',
   config:CONFIG,
@@ -825,6 +829,7 @@ export default {
   createEncounter,
   createPortal,
   buildBeastModel:polarModel,
+  onProjectileHit(game) {game.sound.stageEvent('impact',game,game.player);},
   buildRageModel(helpers){return polarModel(3,helpers,true);},
   onBossRage(beast,game,{THREE,brighter}){
     const center=new THREE.Vector3(beast.x,beast.y+2.65,beast.z);

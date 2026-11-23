@@ -7,13 +7,17 @@ const storeFiles = [
   'campaign/store.mjs',
   'campaign/browser-store.mjs',
   'campaign/save.mjs',
+  'campaign/onboarding.mjs',
   'level-kit/src/gear.mjs',
 ];
 const homeFiles = [
   ...storeFiles,
   'campaign/home.mjs',
+  'campaign/reports.mjs',
   'campaign/weapon-preview.mjs',
-  ...['preferences', 'rifle-skins', 'rifle-model', 'rifle-textures'].map(
+  'campaign/weapon-build.mjs',
+  'level-kit/src/field-sites.mjs',
+  ...['preferences', 'rifle-skins', 'rifle-model', 'rifle-textures','shotgun-model','weapon-perks'].map(
     (n) => 'level-kit/src/' + n + '.mjs',
   ),
 ];

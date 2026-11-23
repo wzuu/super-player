@@ -30,7 +30,7 @@ def measure(page, url, stage, count):
     page.wait_for_function("window.run && run.game.phase==='play' && !!document.pointerLockElement")
     page.mouse.down()
     try:
-        result = page.evaluate("""async count => {
+        result = page.evaluate("""async ([count, expansion]) => {
           const T=await import('three'), {game:g,camera,renderer}=run, b=g.beasts;
           g.player.hurtDelay=1000;
           // 固定观察点，保留 AI、枪械、射线、HUD、空间音频和关卡事件的正常步进。
@@ -59,6 +59,14 @@ def measure(page, url, stage, count):
             place(null,b.live);
           }
           b.pool.filter(a=>a.active).forEach(place); b.refreshHash();
+          let roles=0, affixes=0, actionMillis=null;
+          if(expansion){
+            for(const actor of b.pool.filter(a=>a.active && a.type!==3)){
+              actor.role=['volatile','shield','brood'][actor.type];roles++;
+              actor.shield=actor.role==='shield'?105:0;
+              if(actor.id%8===0){actor.affixes=['thorn'];affixes++;}
+            }
+          }
           const gl=renderer.getContext(), info=gl.getExtension('WEBGL_debug_renderer_info');
           const gpu=gl.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER);
           const frame=()=>new Promise(requestAnimationFrame);
@@ -66,6 +74,14 @@ def measure(page, url, stage, count):
           const times=[];const initialAmmo=g.weapon.ammo+g.weapon.reserve;
           while(previous-start<8100){
             const now=await frame();
+            if(expansion && actionMillis===null && now-start>3250){
+              const clock=performance.now(), f=g.field, p=g.player, saved={x:p.x,y:p.y,z:p.z};
+              Object.assign(p,f.lever);f.interact(g);Object.assign(p,saved);
+              for(const trap of f.traps)f.hit(trap,999,g);
+              b.nav.rebuild(p.x,p.z);
+              actionMillis=+(performance.now()-clock).toFixed(2);
+              if(!f.switchUsed || f.traps.some(t=>t.active))throw Error('压力期间机关和危险物未触发');
+            }
             const live=b.pool.filter(a=>a.active), outside=live.filter(a=>!visible(a));
             let shown=live.length-outside.length;
             while(shown<count){
@@ -76,10 +92,10 @@ def measure(page, url, stage, count):
           }
           const fps=1000*times.length/times.reduce((a,v)=>a+v,0);
           times.sort((a,b)=>a-b);
-          return {gpu,frames:times.length,minVisible,fps:+fps.toFixed(1),
+          return {gpu,frames:times.length,minVisible,roles,affixes,actionMillis,fps:+fps.toFixed(1),
             p95:+times[Math.floor(times.length*.95)].toFixed(1),shots:initialAmmo-g.weapon.ammo-g.weapon.reserve,
             phase:g.phase,ratio:renderer.getPixelRatio()};
-        }""", count)
+        }""", [count, bool(os.environ.get("EXPANSION_LOAD"))])
         print(stage, result, flush=True)
         assert result["minVisible"] >= count and result["phase"] == "play" and result["shots"] > 20, result
     finally:

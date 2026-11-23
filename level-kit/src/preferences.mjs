@@ -12,6 +12,10 @@ export const defaultKeys = {
   KeyE: 'KeyE',
   Digit1: 'Digit1',
   Digit2: 'Digit2',
+  KeyM: 'KeyM',
+  KeyI: 'KeyI',
+  KeyV: 'KeyV',
+  KeyG: 'KeyG',
 };
 export const actionLabels = [
   '前进',
@@ -27,14 +31,20 @@ export const actionLabels = [
   '技能二',
   '道具一',
   '道具二',
+  '切换音效',
+  '检视武器',
+  '切换视角',
+  '确认深入',
 ];
 export const defaults = {
   sensitivity: 1,
   fov: 73,
   volume: 80,
   muted: false,
+  recordReplay: false,
   steady: false,
   hitShake: 1,
+  attackShake: 0.5,
   directionIndicators: true,
   difficulty: 'standard',
   quality: 'auto',
@@ -55,18 +65,24 @@ export function preferences() {
     ['fov', 55, 105],
     ['volume', 0, 100],
     ['hitShake', 0, 1],
+    ['attackShake', 0, 1],
   ]) {
     if (Number.isFinite(raw[name])) prefs[name] = Math.max(min, Math.min(max, raw[name]));
   }
-  for (const name of ['muted', 'steady', 'metrics', 'gamepad', 'directionIndicators'])
+  for (const name of ['muted', 'steady', 'metrics', 'gamepad', 'directionIndicators', 'recordReplay'])
     if (typeof raw[name] === 'boolean') prefs[name] = raw[name];
   if (['auto', 'high', 'medium', 'low'].includes(raw.quality)) prefs.quality = raw.quality;
   if (['assist', 'standard', 'hard'].includes(raw.difficulty)) prefs.difficulty = raw.difficulty;
-  if (
-    Object.keys(defaultKeys).every((id) => typeof raw.keys?.[id] === 'string') &&
-    new Set(Object.keys(defaultKeys).map((id) => raw.keys[id])).size === Object.keys(defaultKeys).length
-  ) {
-    for (const id of Object.keys(defaultKeys)) prefs.keys[id] = raw.keys[id];
+  const saved = Object.keys(defaultKeys).filter(id => typeof raw.keys?.[id] === 'string' && raw.keys[id]);
+  const used = new Set(saved.map(id => raw.keys[id]));
+  if (used.size === saved.length) {
+    for (const id of saved) prefs.keys[id] = raw.keys[id];
+    for (const id of Object.keys(defaultKeys).filter(id => !saved.includes(id))) {
+      // 新增动作时保留旧改绑，优先使用默认键，其次使用空出的键位。
+      const code = [defaultKeys[id], ...Object.values(defaultKeys), 'KeyJ', 'KeyK'].find(key => !used.has(key));
+      prefs.keys[id] = code;
+      used.add(code);
+    }
   }
   return prefs;
 }
@@ -78,4 +94,33 @@ export function keyName(code) {
     .replace(/^(Key|Digit)/, '')
     .replace('ShiftLeft', 'Shift')
     .replace('Space', '空格');
+}
+
+export function bindSoundControl(button, apply = () => {}) {
+  let binding;
+  function refresh(prefs = preferences()) {
+    binding = prefs.keys.KeyM;
+    const state = prefs.muted ? '已静音' : '音效开启';
+    button.textContent = state + ' · ' + keyName(prefs.keys.KeyM);
+    button.setAttribute('aria-pressed', String(!prefs.muted));
+    apply(prefs, state);
+  }
+  function toggle() {
+    const prefs = preferences();
+    prefs.muted = !prefs.muted;
+    try { storePreferences(prefs); } catch { /* 此页面仍立即切换 */ }
+    refresh(prefs);
+  }
+  button.addEventListener('click', toggle);
+  document.addEventListener('keydown', event => {
+    if (event.repeat || event.defaultPrevented || event.isComposing || event.altKey || event.metaKey || event.ctrlKey ||
+        event.target.closest?.('input, select, textarea, [contenteditable="true"], #panel[open]') ||
+        event.code !== binding) return;
+    event.preventDefault();
+    toggle();
+  });
+  window.addEventListener('pageshow', () => refresh());
+  window.addEventListener('storage', event => { if (event.key === key || event.key === null) refresh(); });
+  refresh();
+  return refresh;
 }

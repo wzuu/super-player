@@ -14,6 +14,7 @@ from uuid import UUID
 ROOT = Path(__file__).resolve().parent
 LEVELS = json.loads((ROOT / "campaign/levels.json").read_text(encoding="utf-8"))
 LEVEL_IDS = [level["id"] for level in LEVELS]
+WEAPON_UNLOCKS = {**{level: level for level in LEVEL_IDS}, "shotgun-pump": "rain-city", "shotgun-forge": "brass-factory"}
 LOOT_PER_LEVEL = 10
 PAGE_SIZE = 20
 
@@ -35,6 +36,15 @@ CREATE TABLE IF NOT EXISTS battle_loot (
 );
 CREATE INDEX IF NOT EXISTS battles_history ON battles(ended_at DESC, sequence DESC);
 CREATE INDEX IF NOT EXISTS battles_progress ON battles(won, level);
+CREATE TABLE IF NOT EXISTS battle_reports (
+    battle_id TEXT PRIMARY KEY REFERENCES battles(id), detail TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS battle_replays (
+    battle_id TEXT PRIMARY KEY REFERENCES battles(id), replay TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS secret_rooms (
+    level TEXT PRIMARY KEY, claimed INTEGER NOT NULL DEFAULT 0
+);
 CREATE TABLE IF NOT EXISTS quartermaster (
     slot INTEGER PRIMARY KEY CHECK(slot=1), revision INTEGER NOT NULL, state TEXT NOT NULL
 );
@@ -98,6 +108,7 @@ def progress(db):
         """)},
         **weapon_loadout(db),
         "lootPerLevel": LOOT_PER_LEVEL,
+        "discoveries": [row[0] for row in db.execute("SELECT level FROM secret_rooms ORDER BY level")],
         "battleCount": db.execute("SELECT COUNT(*) FROM battles").fetchone()[0],
         "loot": [dict(row) for row in db.execute(
             """
@@ -132,27 +143,24 @@ def write_gear(db, data):
 
 
 def weapon_loadout(db):
-    row = db.execute(
-        """
-        SELECT skin FROM weapon_loadout WHERE slot = 1
-        AND EXISTS (SELECT 1 FROM battles WHERE won = 1 AND level = skin)
-        """
-    ).fetchone()
-    return {"equippedSkin": row["skin"] if row and row["skin"] in LEVEL_IDS else None}
+    row = db.execute("SELECT skin FROM weapon_loadout WHERE slot = 1").fetchone()
+    skin = row["skin"] if row else None
+    won = skin in WEAPON_UNLOCKS and db.execute("SELECT 1 FROM battles WHERE won=1 AND level=?", (WEAPON_UNLOCKS[skin],)).fetchone()
+    return {"equippedSkin": skin if won else None}
 
 
 def save_loadout(db, data):
     if not isinstance(data, dict) or set(data) != {"skin"}:
         raise ValueError("武器外观设置无效")
     skin = data["skin"]
-    if skin is not None and skin not in LEVEL_IDS:
+    if skin is not None and (not isinstance(skin, str) or skin not in WEAPON_UNLOCKS):
         raise ValueError("武器外观不存在")
     with db:
         db.execute("BEGIN IMMEDIATE")
         if skin is None:
             db.execute("DELETE FROM weapon_loadout WHERE slot = 1")
         else:
-            if not db.execute("SELECT 1 FROM battles WHERE level = ? AND won = 1", (skin,)).fetchone():
+            if not db.execute("SELECT 1 FROM battles WHERE level = ? AND won = 1", (WEAPON_UNLOCKS[skin],)).fetchone():
                 raise PermissionError("通关对应关卡后才能佩戴")
             db.execute(
                 "INSERT INTO weapon_loadout VALUES (1, ?) ON CONFLICT(slot) DO UPDATE SET skin = excluded.skin",
@@ -163,6 +171,30 @@ def save_loadout(db, data):
 
 def whole_number(value, minimum=0, maximum=2**53 - 1):
     return type(value) is int and minimum <= value <= maximum
+
+
+def battle_detail(db, battle_id):
+    row = db.execute("""SELECT b.id, b.level, b.won, b.kills, b.duration_ms AS durationMs,
+                        b.ended_at AS endedAt, r.detail,
+                        EXISTS(SELECT 1 FROM battle_replays WHERE battle_id=b.id) AS hasReplay
+                        FROM battles b LEFT JOIN battle_reports r ON r.battle_id=b.id WHERE b.id=?""",
+                     (battle_id,)).fetchone()
+    if row is None:
+        return None
+    data = dict(row)
+    detail = data.pop("detail")
+    data["report"] = json.loads(detail) if detail else None
+    data["loot"] = [dict(item) for item in db.execute(
+        "SELECT name,value FROM battle_loot WHERE battle_id=? ORDER BY name", (battle_id,))]
+    return data
+
+
+def statistic_rows(db):
+    fields = ("weapon", "weaponKills", "eliteKills", "hits", "shots", "maxCombo", "grade", "mode", "variation")
+    columns = ", ".join(f"json_extract(r.detail, '$.{key}') AS {key}" for key in fields)
+    return [dict(row) for row in db.execute(f"""SELECT b.level, b.won, b.kills, b.duration_ms AS durationMs,
+            {columns}, json_extract(r.detail, '$.scores') AS scoreJson
+            FROM battles b LEFT JOIN battle_reports r ON b.id=r.battle_id""")]
 
 
 def validate_battle(data):
@@ -178,7 +210,7 @@ def validate_battle(data):
     if (
         level not in LEVEL_IDS or type(won) is not bool or not whole_number(kills)
         or not whole_number(ended_at, 1, 8_640_000_000_000_000) or not whole_number(duration_ms)
-        or not isinstance(items, list) or len(items) > LOOT_PER_LEVEL
+        or not isinstance(items, list) or len(items) > 64
         or (not won and items)
     ):
         raise ValueError("对战记录无效")
@@ -194,11 +226,14 @@ def validate_battle(data):
     if (not isinstance(remaining, dict) or len(remaining) > 2 or any(
             key not in allowed or not whole_number(n, 0, 3) for key, n in remaining.items())):
         raise ValueError("携带数量无效")
-    return battle_id, level, won, ended_at, duration_ms, kills, loot, remaining
+    report = data.get("report")
+    if report is not None and not isinstance(report, dict):
+        raise ValueError("战报格式无效")
+    return battle_id, level, won, ended_at, duration_ms, kills, loot, remaining, report
 
 
 def save_battle(db, battle):
-    battle_id, level, won, ended_at, duration_ms, kills, loot, remaining = battle
+    battle_id, level, won, ended_at, duration_ms, kills, loot, remaining, report = battle
     position = LEVEL_IDS.index(level)
     # 并行请求也在同一事务中检查前置关卡、写入对战与战利品。
     with db:
@@ -214,13 +249,23 @@ def save_battle(db, battle):
                 "INSERT INTO battles (id, level, won, ended_at, duration_ms, kills) VALUES (?, ?, ?, ?, ?, ?)",
                 (battle_id, level, won, ended_at, duration_ms, kills),
             )
+            for name in list(loot):
+                if name.startswith("秘藏·"):
+                    db.execute("INSERT OR IGNORE INTO secret_rooms(level) VALUES (?)", (level,))
+                    if not db.execute("UPDATE secret_rooms SET claimed=1 WHERE level=? AND claimed=0", (level,)).rowcount:
+                        del loot[name]
             db.executemany(
                 "INSERT INTO battle_loot (battle_id, name, value) VALUES (?, ?, ?)",
                 ((battle_id, name, value) for name, value in loot.items()),
             )
-            if won and remaining:
+            if report is not None:
+                db.execute("INSERT INTO battle_reports VALUES (?, ?)", (battle_id, json.dumps(report, allow_nan=False)))
+            recovered_core = "精英改装材料·穿透弹芯" in loot
+            if won and (remaining or recovered_core):
                 snapshot = gear_snapshot(db)
                 stock = snapshot["state"].setdefault("stock", {})
+                if recovered_core:
+                    snapshot["state"].setdefault("mods", {})["pierce"] = True
                 for key, n in remaining.items():
                     stock[key] = stock.get(key, 0) + n
                 db.execute("INSERT OR REPLACE INTO quartermaster VALUES(1,?,?)",
@@ -265,7 +310,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         parts = urlsplit(self.path)
         path = parts.path
-        if path in {"/api/progress", "/api/battles", "/api/loadout", "/api/gear"}:
+        if path in {"/api/progress", "/api/battles", "/api/loadout", "/api/gear", "/api/report", "/api/replay", "/api/statistics"}:
             try:
                 with closing(self.profile_db()) as db:
                     if path == "/api/progress":
@@ -274,6 +319,17 @@ class Handler(SimpleHTTPRequestHandler):
                         result = gear_snapshot(db)
                     elif path == "/api/loadout":
                         result = weapon_loadout(db)
+                    elif path == "/api/statistics":
+                        result = statistic_rows(db)
+                        for row in result:
+                            row["scores"] = json.loads(row.pop("scoreJson") or "{}")
+                    elif path in {"/api/report", "/api/replay"}:
+                        battle_id = str(UUID(parse_qs(parts.query).get("id", [""])[0]))
+                        if path == "/api/report":
+                            result = battle_detail(db, battle_id)
+                        else:
+                            row = db.execute("SELECT replay FROM battle_replays WHERE battle_id=?", (battle_id,)).fetchone()
+                            result = json.loads(row[0]) if row else None
                     else:
                         before = int(parse_qs(parts.query).get("before", [2**63 - 1])[0])
                         if not 1 <= before <= 2**63 - 1:
@@ -292,6 +348,8 @@ class Handler(SimpleHTTPRequestHandler):
         level = segment[0]
         if path in {"/", "/index.html"}:
             file = ROOT / "index.html"
+        elif path in {"/practice/", "/practice/index.html", "/campaign/onboarding.mjs"}:
+            file = ROOT / ("practice/index.html" if level == "practice" else "campaign/onboarding.mjs")
         elif level in LEVEL_IDS and path in {f"/{level}", f"/{level}/", f"/{level}/index.html"}:
             try:
                 with closing(self.profile_db()) as db:
@@ -308,8 +366,8 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             file = ROOT / level / "index.html"
         elif path in {"/campaign/profiles.mjs", "/campaign/home.css", "/campaign/home.mjs", "/campaign/save.mjs", "/campaign/weapon-preview.mjs",
-                      "/campaign/levels.json", "/campaign/store.mjs", "/campaign/browser-store.mjs",
-                      "/level-kit/preview.html", "/level-kit/vendor/three-r160.js",
+                      "/campaign/levels.json", "/campaign/store.mjs", "/campaign/browser-store.mjs", "/campaign/reports.mjs",
+                      "/campaign/weapon-build.mjs", "/level-kit/preview.html", "/level-kit/vendor/three-r160.js",
                       "/level-kit/starter/scene.mjs"}:
             file = ROOT.joinpath(*segment)
         elif (
@@ -345,7 +403,7 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
-        if self.path not in {"/api/battles", "/api/loadout", "/api/gear"}:
+        if self.path not in {"/api/battles", "/api/loadout", "/api/gear", "/api/replay", "/api/discovery"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         host = self.local_host()
@@ -356,14 +414,33 @@ class Handler(SimpleHTTPRequestHandler):
             if self.headers.get_content_type() != "application/json":
                 raise ValueError("请提交 JSON 数据")
             size = int(self.headers.get("Content-Length", "0"))
-            if not 0 < size <= (262_144 if self.path == "/api/gear" else 16_384):
+            limit = {"/api/gear": 262_144, "/api/replay": 524_288, "/api/battles": 32_768}.get(self.path, 16_384)
+            if not 0 < size <= limit:
                 raise ValueError("请求大小无效")
             data = json.loads(self.rfile.read(size).decode("utf-8"))
             with closing(self.profile_db()) as db:
                 if self.path == "/api/gear":
                     result = write_gear(db, data)
+                elif self.path == "/api/discovery":
+                    level = data.get("level")
+                    if level not in LEVEL_IDS or not unlocked_levels(db)[LEVEL_IDS.index(level)]["unlocked"]:
+                        raise ValueError("关卡尚未开放")
+                    with db:
+                        db.execute("INSERT OR IGNORE INTO secret_rooms(level) VALUES (?)", (level,))
+                    result = {"claimed": bool(db.execute("SELECT claimed FROM secret_rooms WHERE level=?", (level,)).fetchone()[0])}
                 elif self.path == "/api/battles":
                     result = save_battle(db, validate_battle(data))
+                elif self.path == "/api/replay":
+                    battle_id = str(UUID(data.get("id", "")))
+                    replay = data.get("replay")
+                    if not isinstance(replay, dict) or not isinstance(replay.get("samples"), list):
+                        raise ValueError("回放格式无效")
+                    with db:
+                        if not db.execute("SELECT id FROM battles WHERE id=?", (battle_id,)).fetchone():
+                            raise ValueError("找不到本局记录")
+                        db.execute("INSERT OR IGNORE INTO battle_replays VALUES (?,?)",
+                                   (battle_id, json.dumps(replay, allow_nan=False)))
+                    result = {"saved": True}
                 else:
                     result = save_loadout(db, data)
             self.json_response(HTTPStatus.OK, result)

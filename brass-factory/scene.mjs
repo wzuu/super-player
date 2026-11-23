@@ -394,7 +394,7 @@ function createEncounter({ CONFIG: settings, level, sound }) {
           this.last < 0
             ? Math.floor(Math.random() * count)
             : (this.last + 1 + Math.floor(Math.random() * (count - 1))) % count;
-        sound.hiss(0.66, 3300, 710, 0.23);
+        sound.stageEvent('warning',game,vents[this.selected]);
         game.ui.notify(vents[this.selected].name + '升压，注意白色预兆', 1.8);
       }
       if (this.selected >= 0 && t >= this.next) {
@@ -402,7 +402,7 @@ function createEncounter({ CONFIG: settings, level, sound }) {
         if (this.active.size < rules.maxActive) this.active.set(this.last, this.next + rules.duration);
         this.next += rules.interval;
         this.selected = -1;
-        sound.hiss(0.92, 4600, 370, 0.31);
+        sound.stageEvent('danger',game,vents[this.last]);
       }
       if (this.selected >= 0)
         this.status = { title: '管道升压', detail: vents[this.selected].name, remaining: this.next - t };
@@ -564,12 +564,16 @@ function createEnvironment(context) {
       }
       updateMesh(gateSteam, 28);
       const p = game.player;
-      scene.fog.density = enc.inPipe(p.x, p.z, p.y) ? density * 2.8 : density;
+      scene.fog.density = density * (enc.inPipe(p.x, p.z, p.y) ? 2.8 : 1) * (game.variation?.fog ?? 1);
     },
   };
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'货运月台',at:[-8,23],entries:[[-15,25],[-2,16]]},
+    {name:'锅炉机坊',at:[23,5],entries:[[31,7],[18,-1]]},
+  ]},
   config: CONFIG,
   grid: MAP_GRID,
   weaponSkin: 'brass-factory',

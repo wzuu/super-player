@@ -56,6 +56,39 @@ function setup(skin, { stage = skin, force = [] } = {}) {
   return { c, game, b, a, d, hit, drops, damage, visuals };
 }
 
+test('毒爆先结清已到期毒伤再消耗层数，环境和武器分别归因',()=>{
+  const {c,b,game,damage}=setup('ember-fortress');
+  b.statusEffects.set('poison',{until:2,tickAt:.5,stacks:2});
+  game.time=.5;
+  c.element(b,'fire',game,'environment');
+  assert.equal(damage[0][1],1.6);
+  assert.equal(damage[0][2],'weapon');
+  assert.equal(damage.at(-1)[2],'environment');
+  assert.equal(b.statusEffects.has('poison'),false);
+  const count=damage.length;c.element(b,'fire',game,'environment');
+  assert.equal(damage.length,count);
+});
+test('导电需要潮湿，96 个近邻最多串三个且不重复',()=>{
+  const {c,b,game,damage}=setup('drowned-city');
+  const crowd=Array.from({length:95},(_,i)=>beast(0,2+(i+1)*.036));
+  game.beasts.hash.query=()=>[b,...crowd];game.level={movementScale:()=>1};
+  c.element(b,'electric',game,'weapon');assert.equal(damage.length,0);
+  game.level.movementScale=()=>.6;
+  c.element(b,'electric',game,'weapon');
+  assert.equal(damage.length,4);assert.equal(new Set(damage.map(row=>row[0])).size,4);
+  c.element(b,'electric',game,'weapon');assert.equal(damage.length,4);
+});
+test('冻结重击与蒸汽寒霜只在条件满足时触发，首领保留控制抗性',()=>{
+  const {c,b,game,damage}=setup('shotgun-pump');
+  c.element(b,'heavy',game,'weapon');assert.equal(damage.length,0);
+  b.type=3;b.statusEffects.set('brittle',{until:2,stacks:1});
+  c.element(b,'heavy',game,'weapon');assert.equal(b.statusEffects.size,0);
+  assert.equal(damage[0][1],20*1.3*.6);
+  game.time=1;game.encounter.inSteam=()=>true;
+  c.element(b,'ice',game,'weapon');
+  assert.ok(c.mistUntil>game.time);assert.ok(damage.length>1);
+});
+
 for (const [skin, kind, duration] of [
   ['ember-fortress', 'burn', 4], ['jungle-temple', 'poison', 4], ['brass-factory', 'scald', 3],
 ]) {
@@ -352,7 +385,7 @@ test('穿透跳过第一个目标且仍受掩体射程限制', () => {
 
 test('登记关卡均有武器钩子，长期触发率与失败上限符合预期', () => {
   const levels = JSON.parse(readFileSync(new URL('../../campaign/levels.json', import.meta.url), 'utf8'));
-  assert.deepEqual(Object.keys(weaponPerks).sort(), levels.map(level => level.id).sort());
+  assert.deepEqual(Object.keys(weaponPerks).sort(), [...levels.map(level => level.id),'shotgun-pump','shotgun-forge'].sort());
   let seed = 7;
   const random = () => (seed = (Math.imul(1664525, seed) + 1013904223) >>> 0) / 4294967296;
   const c = new WeaponCombat('rain-city', 'rain-city', 20, random);

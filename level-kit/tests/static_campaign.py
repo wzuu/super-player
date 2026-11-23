@@ -30,6 +30,7 @@ def verify(browser, root, site):
     for level in LEVELS:
         page.route(root + level["id"] + "/", expose_game)
     page.goto(root)
+    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
     page.evaluate("""async first => {
         const store = await (await import('./campaign/store.mjs')).campaignStore();

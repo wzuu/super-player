@@ -1,5 +1,20 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'shotgun-pump': {
+    name:'雨巷破阵',category:'霰弹枪',unlock:'rain-city',detail:'泵动霰弹枪。宽扇面弹丸适合近距离群敌，远处快速衰减。逐发装填，有弹即可打断装填射击。',
+    base:'#5f7279',trim:'#b0c7c6',dark:'#684b38',light:'#82dfcf',
+    backdrop:'#203338',key:'#cae3dc',fill:'#86aab8',metalness:.55,roughness:.45,
+  },
+  'shotgun-forge': {
+    name:'铜炉雷鸣',category:'霰弹枪',unlock:'brass-factory',detail:'锻铜泵动霰弹枪。击杀后 3 秒内每发装填提速 32%，适合在贴近的兽群间接战。',
+    base:'#75482e',trim:'#dba966',dark:'#393a40',light:'#ffbc61',
+    backdrop:'#322a23',key:'#ffd49b',fill:'#ad8574',metalness:.73,roughness:.38,
+  },
+  'paris-tower': {
+    name:'塔灯救援型',detail:'铁灰机匣、铜色桁架纹和救援信标的蓝绿灯带。',
+    base:'#80674d',trim:'#d2a65b',dark:'#41454e',light:'#66e6d9',
+    backdrop:'#283345',key:'#ffce99',fill:'#a4cdef',metalness:.58,roughness:.44,
+  },
   'underground-lab': {
     name: '生化防护型', detail: '白灰防护漆、黄黑警示纹和荧光绿样本管。腐蚀弹逐层削弱护甲，回收样本管可强化下一弹匣。红色警报期间射速提升。',
     base: '#c9cac1', trim: '#f7bc38', dark: '#343d3a', light: '#a7ff44',

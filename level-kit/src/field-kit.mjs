@@ -1,4 +1,4 @@
-import { supplies } from '@level-kit/gear.mjs';
+import { supplies,applyBranches } from '@level-kit/gear.mjs';
 
 export function createFieldKit(config, keys, visual) {
   const { THREE, scene } = visual;
@@ -51,6 +51,8 @@ export function createFieldKit(config, keys, visual) {
     pulse(g) {
       const p = g.player;
       area(g, p.x, p.y, p.z, 6, (b) => {
+        g.weapon.combat.element(b,'heavy',g);
+        if(!b.active) return;
         const d = Math.max(0.01, Math.hypot(b.x - p.x, b.z - p.z)),
           power = b.type === 3 ? 28 : 56;
         b.perkPushX = ((b.x - p.x) / d) * power;
@@ -59,9 +61,15 @@ export function createFieldKit(config, keys, visual) {
     },
     slow(g) {
       const p = g.player;
-      area(g, p.x, p.y, p.z, 8, (b) =>
-        b.statusEffects.set('slowed', { until: g.time + 4, scale: b.type === 3 ? 0.78 : 0.45 }),
-      );
+      area(g, p.x, p.y, p.z, 8, (b) => {
+        g.weapon.combat.element(b,'ice',g);
+        if (!b.active) return;
+        b.statusEffects.set('slowed', { until:g.time+4, scale:b.type===3 ? .78 : .45 });
+        if(Math.hypot(b.x-p.x,b.z-p.z)<2.7) {
+          const kind=b.type===3?'brittle':'frozen';
+          b.statusEffects.set(kind,{type:kind,until:g.time+1.2,stacks:1});
+        }
+      });
     },
     decoy(g) {
       const p = g.player;
@@ -74,7 +82,10 @@ export function createFieldKit(config, keys, visual) {
         yaw = p.look.rotation.y;
       const x = p.x - Math.sin(yaw) * 4,
         z = p.z - Math.cos(yaw) * 4;
-      area(g, x, p.y, z, 5, (b) => g.beasts.damage(b, config.beasts.types[0].hp * 2, g, 'equipment'));
+      area(g,x,p.y,z,5,b=>{
+        g.weapon.combat.element(b,'fire',g);
+        if(b.active) g.beasts.damage(b,config.beasts.types[0].hp*2,g,'equipment');
+      });
       burst(g, x, p.y, z);
     },
     medkit(g) {
@@ -104,9 +115,7 @@ export function createFieldKit(config, keys, visual) {
         counts: { medkit: 1, grenade: 1 },
         mods: {},
       };
-      config.weapon.magazine = baseWeapon.magazine + (kit.mods.magazine ? 6 : 0);
-      config.weapon.reloadTime = baseWeapon.reloadTime * (kit.mods.reload ? 0.92 : 1);
-      config.weapon.heatRecovery = baseWeapon.heatRecovery * (kit.mods.recovery ? 1.1 : 1);
+      applyBranches(config.weapon,baseWeapon,kit.mods);
       cooldown = {};
       healing = roll = invulnerable = 0;
       marker.visible = false;
@@ -130,6 +139,7 @@ export function createFieldKit(config, keys, visual) {
         return g.ui.notify('槽位空置、冷却中或物资已用尽', 1);
       const effect = effects[id] ?? effects.cache;
       if (effect(g) === false) return g.ui.notify('当前无法使用此装备', 1);
+        g.training?.did('slot'+slot);
       if (slot < 2) cooldown[id] = g.time + supplies[id].cooldown;
       else kit.counts[id]--;
       burst(g, g.player.x, g.player.y, g.player.z);

@@ -28,9 +28,9 @@ def expose_game(route, *, render=True):
     html = response.text()
     if not render:
         # 合成帧在一次 JS 调用中推进，只测时钟。真实战役用例保留每一帧的 WebGL 绘制。
-        draw = "    composer.render(dt);"
+        draw = "composer.render(dt);"
         assert html.count(draw) == 1
-        html = html.replace(draw, "")
+        html = html.replace(draw, "void 0;")
     assert html.count(entry) == 1, "关卡入口已变更"
     route.fulfill(response=response, body=html.replace(entry, entry.replace("startLevel(", "window.run = startLevel(")))
 
@@ -71,41 +71,54 @@ def check_reload(page):
 
 
 def finish_at_gate(page):
-    name = page.evaluate("""() => {
-        const g = run.game, boss = g.beasts.boss;
-        g.beasts.damage(boss, boss.hp + 1, g, 'weapon');
-        const items = g.pickups.objects;
-        const treasure = items.find(i => i.active && i.kind === 'rare');
-        const core = items.find(i => i.active && i.kind === 'core');
-        for (const item of [treasure, core]) {
-            Object.assign(g.player, {x:item.x, y:item.y, z:item.z});
-            g.pickups.update(.05, g.player, g);
+    name, interact = page.evaluate("""() => {
+        const {game:g,nav}=run, s=g.story;
+        const at=t=>{Object.assign(g.player,{x:t.x,y:t.y,z:t.z});nav.rebuild(t.x,t.z);};
+        const treasure=g.pickups.objects.find(i=>i.active && i.kind==='rare');
+        const treasureName=treasure.name;
+        at(treasure);g.pickups.update(.05,g.player,g);
+        const tick=()=>{g.time+=.5;g.beasts.releaseSplits(g);g.objective.step(.5,g);s.step(.5,g);};
+        for(let n=0;n<2400 && g.phase==='play' && s.stage!=='complete';n++) {
+            const state=s.stage,t=s.target;
+            if(t)at(t);
+            if(state==='rescue')return [treasureName,true];
+            if(state==='boss') {
+                const b=g.beasts.boss;
+                if(b) {
+                    at(b);
+                    for(let phase=0;phase<3;phase++) {
+                        g.time+=2;g.beasts.damage(b,1e7,g,'weapon');
+                        if(phase<2 && (!b.active || b.fight.stage!==phase+1))throw Error('首领未逐阶段转场');
+                    }
+                    if(!g.bossDead)throw Error('首领仍在场');
+                    at(g.pickups.keyItem);
+                    if(!g.pickups.takeKey(g.player,g))throw Error('核心无法拾取');
+                }
+            }else if(state==='use'||state==='beacon') {
+                if(!s.interact(g))throw Error('任务目标不能交互 '+state);
+            }else {
+                if(g.objective.mode==='escort' && t)g.objective.drone.position.set(t.x,t.y+1,t.z);
+                for(const b of g.beasts.pool)if(b.active && b.type!==3)g.beasts.damage(b,1e7,g,'weapon');
+            }
+            tick();
         }
-        return treasure.name;
-    }""")
-    page.keyboard.press("f")
-    page.wait_for_function("run.game.core")
-    page.evaluate("""() => {
-        const g=run.game;
-        g.kills = run.config.beasts.killsToWin;
-        const gate = g.level.gate;
-        if (g.objective.mode === 'escort') {
-            const spawn = g.level.spawn;
-            for (let i=0; i<=200; i++) {
+        if(g.phase==='win')return [treasureName,false];
+        if(s.stage!=='complete')throw Error('分区未完成 '+s.stage);
+        const gate=g.level.gate;
+        if(g.objective.mode==='escort'){
+            const d=g.objective.drone.position,start={x:d.x,y:d.y-1,z:d.z};
+            for(let i=0;i<=200;i++){
                 const t=i/200;
-                Object.assign(g.player,{x:spawn.x+(gate.x-spawn.x)*t,
-                    y:spawn.y+(gate.y-spawn.y)*t,z:spawn.z+(gate.z-spawn.z)*t});
+                at({x:start.x+(gate.x-start.x)*t,y:start.y+(gate.y-start.y)*t,z:start.z+(gate.z-start.z)*t});
                 g.objective.step(.2,g);
             }
         }
-        Object.assign(g.player, {x:gate.x, y:gate.y, z:gate.z});
-        if (g.objective.mode === 'hold') {
-            if (g.ready()) throw Error('坚守计时尚未开始');
-            for (let i=0;i<451;i++) g.objective.step(.1,g);
-        }
-        if (!g.ready()) throw Error('撤离条件尚未满足 '+g.objective.label(g));
+        at(gate);
+        if(!g.ready())throw Error('撤离条件未满足 '+g.objective.label(g));
+        return [treasureName,true];
     }""")
-    page.keyboard.press("f")
+    if interact:
+        page.keyboard.press("f")
     page.wait_for_function("run.game.phase === 'win'")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
     return name
@@ -125,7 +138,7 @@ def check_frost_immunity(page, url):
     page.wait_for_function("run.game.phase === 'play'")
     result = page.evaluate("""() => {
         const g = run.game, combat = g.weapon.combat;
-        const b = g.beasts.pool.find(b => b.active && b.type !== 3);
+        const b = g.beasts.spawn(0, g.player.x + 2, g.player.z);
         const hit = () => combat.hit(b, {damage: 1}, g);
         for (let i = 0; i < 5; i++) hit();
         g.time += 2;
@@ -142,7 +155,7 @@ def check_frost_immunity(page, url):
 
 def check_fatal_steam(page, url):
     kills = page.evaluate("""() => {
-        const g = run.game, b = g.beasts.pool.find(b => b.active && b.type !== 3);
+        const g = run.game, b = g.beasts.spawn(0, g.player.x + 2, g.player.z);
         const atVent = {x: 29, y: 0, z: 5};
         Object.assign(g.player, atVent, {hp: 1, hurtDelay: 0, escaped: true});
         Object.assign(b, atVent, {hp: 1});
@@ -166,9 +179,12 @@ def check_pending_saves(browser, url):
     battles = [dict(id=str(uuid4()), level=first["id"], won=True, kills=0,
                     endedAt=1000 + i, durationMs=100, loot=[]) for i in range(3)]
     page.goto(url + "/")
+    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
-    page.evaluate("""rows => rows.forEach(b =>
-        localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b)))""", battles)
+    page.evaluate("""rows => {
+        rows.forEach(b => localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b)));
+        localStorage.removeItem('super-player:first-entry:v1');
+    }""", battles)
     held = []
 
     def hold_write(route):
@@ -377,8 +393,7 @@ def verify(browser, url):
             check_fatal_steam(page, url)
         check_exit(page, url, stage)
         page.goto(url + "/#collection")
-        title = next(level["title"] for level in LEVELS if level["id"] == stage)
-        page.locator(".rifle-option").filter(has_text=title).click()
+        page.locator(f'.rifle-option[data-weapon-id="{stage}"]').click()
         page.locator("#rifle-equip").click()
         page.wait_for_function("document.querySelector('#rifle-equip').textContent === '已佩戴'")
         assert page.request.get(url + "/api/loadout").json()["equippedSkin"] == stage

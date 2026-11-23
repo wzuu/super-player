@@ -27,6 +27,49 @@ const MAP_CELLS = 2 * HALF / CONFIG.map.cell;
 const REACTOR = { x: 0, z: -1 };
 const AIRLOCK = { x: 0, z: 32, width: 7.4, depth: 0.54, height: 3.48 };
 const HATCH = { x: -13, z: -8.5, width: 2.8, depth: 0.58, height: 2.95 };
+// 主线封锁门使用从地板到顶棚的完整围护。清理过的房间保持安静。
+function isolationRoom(id,x,z,w,d,doorX,gap) {
+  const left=x-w/2,right=x+w/2,front=z+d/2,back=z-d/2,h=5.4;
+  return [
+    [null,left,z,.42,d,h], [null,right,z,.42,d,h], [null,x,back,w,.42,h],
+    [null,(left+doorX-gap/2)/2,front,doorX-gap/2-left,.42,h,true],
+    [null,(right+doorX+gap/2)/2,front,right-doorX-gap/2,.42,h,true],
+    [id,doorX,front,gap,.44,h],
+  ];
+}
+const labStory = {
+  type:'lab',
+  walls:[
+    [null,-20,22,40,.46,5.4,true],[null,21.6,22,36.8,.46,5.4,true],['security',1.6,22,3.2,.48,5.4],
+    ...isolationRoom('power',27,-12,20,17,29,3.5),
+    ...isolationRoom('reactor',0,-2,23,23,6.3,3.5),
+    ...isolationRoom('service',-9,-21,8,9,-9,3.3),
+  ],
+  terminals:[[2.6,26],[-24,-9],[29,-9],[0,-10.1]],
+  locks:[
+    {id:'security',at:[1.6,22],why:'需清空安检室，从值班台取安保卡'},
+    {id:'power',at:[29,-3.5],why:'机房门需要样本封存模块'},
+    {id:'reactor',at:[6.3,9.5],why:'反应堆隔离门需要机房供电和通行证'},
+    {id:'service',at:[-9,-16.5],why:'需取得零号核心权限卡，在裂隙控制台解除封锁'},
+  ],
+  route:[
+    {kind:'fight',name:'气闸安检室',label:'清理安检室守卫',at:[2,27.2],entries:[[-4,25],[5,24]],count:4,cap:3,mix:[0],range:10},
+    {kind:'use',label:'从值班台领取安保卡',at:[2.6,26]},
+    {kind:'use',label:'刷安保卡开启样本走廊',door:'security',at:[1.6,23.1]},
+    {kind:'fight',name:'西侧样本走廊',label:'清理走廊转角',at:[-10,15.5],entries:[[-16.9,14.4],[-15.6,9]],count:4,cap:3,mix:[0,0,2],range:12},
+    {kind:'fight',name:'西侧培养室',label:'清理培养罐之间的守卫',at:[-23,-8],entries:[[-30,-8],[-24,-15]],count:7,cap:4,mix:[0,2,0,1]},
+    {kind:'use',label:'从培养舱取样本封存模块',at:[-24,-9]},
+    {kind:'use',label:'以封存模块解锁机房',door:'power',at:[29,-2.5]},
+    {kind:'fight',name:'服务器机房',label:'击退维修通道与机柜守卫',at:[28,-9],entries:[[29,-15],[19,-13]],count:6,cap:4,mix:[1,0,2,0]},
+    {kind:'use',label:'恢复机房供电并取通行证',at:[29,-9]},
+    {kind:'fight',name:'机房检修口',label:'击退红色警报增援',alarm:true,at:[29,-9],entries:[[29,-17],[19,-12]],count:5,cap:3,mix:[0,2,0]},
+    {kind:'use',label:'刷反应堆通行证开门',door:'reactor',at:[6.3,10.6]},
+    {kind:'boss',label:'击败反应堆的零号实验体'},
+    {kind:'use',label:'用核心权限卡解除裂隙封锁',door:'service',at:[0,-9.5]},
+    {kind:'fight',name:'北侧检修通道',label:'击退检修通道守卫',at:[-9,-17.5],entries:[[-9,-22],[-7,-24]],count:4,cap:3,mix:[0,0,2],range:10},
+    {kind:'reach',label:'穿过检修通道，抵达撤离气闸',at:[-9,-23],win:true},
+  ],
+};
 const LANDMARKS = {
   spawn: [0, 0, 36.6], boss: [6.8, 0, -3.5], gate: [0, 0.16, -10.6],
   loot: [
@@ -537,7 +580,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
       if (this.active || now < this.cooldownUntil) {
         this.countedKills = game.kills;
         this.lastShot = game.shotAt;
-      } else {
+      } else if (!game.story?.managed) {
         while (killTimes.length && now - killTimes[0] > rules.streakWindow) killTimes.shift();
         while (this.countedKills < game.kills) {
           killTimes.push(now);
@@ -757,6 +800,7 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 }
 
 export default {
+  story:labStory,
   weaponSkin: 'underground-lab',
   config: CONFIG,
   grid: MAP_GRID,
@@ -821,6 +865,6 @@ export default {
     loot: '研究物资',
     safe: '气闸安全缓冲区',
     rage: '零号实验体挣脱拘束，变异幼体正在聚集',
-    brief: '收容失效。沿主走廊夺取核心权限卡，完成失控实验体清剿目标，在反应堆大厅引爆能量裂隙。持续开火或连续击杀会触发红色警报。',
+    brief: '收容失效。先去安检室取卡，再进入培养室与机房恢复供电。反应堆隔离门后是零号实验体，核心权限卡可打开检修气闸。',
   },
 };

@@ -509,7 +509,7 @@ function createEnvironment({ THREE, scene, camera, CONFIG: options, mapData, see
       const outside = THREE.MathUtils.smoothstep(camera.position.y, -.18, .87);
       const weather = intensity * (.24 + outside * .76);
       scene.fog.color.copy(baseFog).lerp(stormFog, weather);
-      scene.fog.density = THREE.MathUtils.lerp(options.map.fog, options.storm.fog, weather);
+      scene.fog.density = THREE.MathUtils.lerp(options.map.fog, options.storm.fog, weather) * (game.variation?.fog ?? 1);
       sky.material.uniforms.storm.value = intensity;
       dust.material.uniforms.tick.value = t;
       dust.material.uniforms.storm.value = intensity;
@@ -706,6 +706,10 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }) {
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'陵前沙地',at:[-10,24],entries:[[-17,21],[-2,18]]},
+    {name:'西侧柱廊',at:[-23,3],entries:[[-32,7],[-25,-5]]},
+  ]},
   weaponSkin: 'buried-tomb',
   pageTitle: '流沙王陵 | 第四关',
   config: CONFIG,

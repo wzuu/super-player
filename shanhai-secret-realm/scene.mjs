@@ -585,7 +585,7 @@ function createEnvironment({ THREE, scene, camera, CONFIG: setup, mapData, shape
       skyMaterial.uniforms.zenith.value.copy(duskZenith).lerp(nightZenith, night);
       skyMaterial.uniforms.horizon.value.copy(duskHorizon).lerp(nightHorizon, night).lerp(redHorizon, red);
       scene.fog.color.copy(duskFog).lerp(nightFog, night).lerp(redFog, red * 0.75);
-      scene.fog.density = setup.map.fog + night * 0.001;
+      scene.fog.density = (setup.map.fog + night * 0.001) * (game.variation?.fog ?? 1);
       rimLight.color.copy(duskSun).lerp(nightSun, night).lerp(redSun, red);
       rimLight.intensity = 1.55 - night * 0.50 + red * 0.25;
       skyLight.intensity = 1.66 - night * 0.24;
@@ -851,6 +851,10 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'荒冢墓园',at:[-8,25],entries:[[-16,24],[0,18]]},
+    {name:'古城祭坛',at:[4,-2],entries:[[-9,-8],[13,-7]]},
+  ]},
   weaponSkin: 'shanhai-secret-realm',
   pageTitle: '上古秘境 | 第二关',
   config: CONFIG, grid: MAP_GRID, loot, ammo, buildMap, createEnvironment, createEncounter, createPortal, buildBeastModel,

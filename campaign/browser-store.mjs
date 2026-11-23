@@ -11,7 +11,7 @@ function battleRecord(battle) {
   if (typeof id !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id) ||
       typeof won !== 'boolean' || !nonnegative(kills) || !nonnegative(durationMs) ||
       !nonnegative(endedAt) || endedAt === 0 || endedAt > 8640000000000000 ||
-      !Array.isArray(loot) || loot.length > 10 || (!won && loot.length)) {
+      !Array.isArray(loot) || loot.length > 64 || (!won && loot.length)) {
     throw new Error('对战记录无效');
   }
   const names = new Set();
@@ -30,7 +30,7 @@ function historyPage(rows, before) {
   const start = before == null ? 0 : rows.findIndex(row => row.sequence === before) + 1;
   const page = rows.slice(start, start + 20);
   return {
-    battles: page.map(({ loot, ...row }) => ({
+    battles: page.map(({ loot, stats, ...row }) => ({
       ...row, lootCount: loot.length, lootValue: loot.reduce((sum, item) => sum + item.value, 0),
     })),
     nextBefore: start + page.length < rows.length ? page.at(-1).sequence : null,
@@ -38,14 +38,39 @@ function historyPage(rows, before) {
 }
 
 export async function openBrowserStore(levels, path) {
-  const open = indexedDB.open('super-player:' + path, 1);
-  open.onupgradeneeded = () => {
-    const records = open.result.createObjectStore('battles', { keyPath: 'sequence', autoIncrement: true });
-    records.createIndex('id', 'id', { unique: true });
-    records.createIndex('outcome', ['level', 'won']);
-    open.result.createObjectStore('settings');
+  const open = indexedDB.open('super-player:' + path, 3);
+  open.onupgradeneeded = event => {
+    if (event.oldVersion < 1) {
+      const records = open.result.createObjectStore('battles', { keyPath: 'sequence', autoIncrement: true });
+      records.createIndex('id', 'id', { unique: true });
+      records.createIndex('outcome', ['level', 'won']);
+      open.result.createObjectStore('settings');
+    }
+    if (event.oldVersion < 2) {
+      open.result.createObjectStore('reports');
+      open.result.createObjectStore('replays');
+    } else {
+      // 旧版战报已经记录精英击杀。升级时补入统计摘要，以后浏览统计不用读取详细战报。
+      const battles = open.transaction.objectStore('battles');
+      open.transaction.objectStore('reports').openCursor().onsuccess = event => {
+        const cursor = event.target.result;
+        if (!cursor) return;
+        const count = cursor.value.eliteKills;
+        if (Number.isSafeInteger(count) && count >= 0) {
+          battles.index('id').get(cursor.key).onsuccess = found => {
+            const row = found.target.result;
+            if (row) {
+              row.stats = {...row.stats, eliteKills:count};
+              battles.put(row);
+            }
+            cursor.continue();
+          };
+        } else cursor.continue();
+      };
+    }
   };
   const db = await result(open);
+  db.onversionchange = () => db.close();
   async function transaction(names, mode, work) {
     const tx = db.transaction(names, mode);
     const completed = new Promise((resolve, reject) => {
@@ -76,19 +101,32 @@ export async function openBrowserStore(levels, path) {
     canEnter: id => transaction('battles', 'readonly', tx => unlocked(tx.objectStore('battles'), id)),
     async save(battle) {
       const record = battleRecord(battle);
-      return transaction(['battles','settings'], 'readwrite', async tx => {
+      return transaction(['battles','settings','reports'], 'readwrite', async tx => {
         const records = tx.objectStore('battles');
         let row = await result(records.index('id').get(record.id));
         if (!row) {
           if (!await unlocked(records, record.level)) throw new Error('请先通关上一关');
           row = record;
+          if (row.loot.some(item=>item.name.startsWith('秘藏·'))) {
+            const settings=tx.objectStore('settings'), rooms=(await result(settings.get('discoveries'))) ?? {};
+            if (rooms[row.level]?.claimed) row.loot=row.loot.filter(item=>!item.name.startsWith('秘藏·'));
+            else {rooms[row.level]={claimed:true}; await result(settings.put(rooms,'discoveries'));}
+          }
+          if (battle.report) {
+            await result(tx.objectStore('reports').add(battle.report, row.id));
+            const keys = ['weapon','weaponKills','eliteKills','hits','shots','maxCombo','grade','mode','variation','scores'];
+            row.stats = Object.fromEntries(keys.filter(key => battle.report[key] != null).map(key => [key, battle.report[key]]));
+          }
           await result(records.add(row));
-          if (row.won && battle.remaining) {
-            if (typeof battle.remaining !== 'object' || Array.isArray(battle.remaining) || Object.keys(battle.remaining).length>2) throw Error('携带数量无效');
+          const recoveredCore = row.loot.some(item => item.name === '精英改装材料·穿透弹芯');
+          if (row.won && (battle.remaining || recoveredCore)) {
+            const remaining = battle.remaining ?? {};
+            if (typeof remaining !== 'object' || Array.isArray(remaining) || Object.keys(remaining).length>2) throw Error('携带数量无效');
             const settings=tx.objectStore('settings');
             const gear=(await result(settings.get('gear'))) ?? {revision:0,state:{}};
             const stock=gear.state.stock ??= {};
-            for (const [id,n] of Object.entries(battle.remaining)) {
+            if (recoveredCore) (gear.state.mods ??= {}).pierce = true;
+            for (const [id,n] of Object.entries(remaining)) {
               if (!/^(medkit|grenade|ammo|mine|cache-[a-z-]+)$/.test(id) || !Number.isSafeInteger(n) || n<0 || n>3) throw Error('携带数量无效');
               stock[id]=(stock[id]??0)+n;
             }
@@ -100,6 +138,28 @@ export async function openBrowserStore(levels, path) {
         return { nextLevel, campaignCleared: Boolean(row.won && !nextLevel) };
       });
     },
+    discover: level => transaction(['settings','battles'],'readwrite',async tx=>{
+      if (!await unlocked(tx.objectStore('battles'),level)) throw Error('关卡尚未开放');
+      const settings=tx.objectStore('settings'), rooms=(await result(settings.get('discoveries'))) ?? {};
+      rooms[level] ??= {claimed:false};
+      await result(settings.put(rooms,'discoveries'));
+      return rooms[level];
+    }),
+    report: id => transaction(['battles','reports','replays'], 'readonly', async tx => {
+      const row = await result(tx.objectStore('battles').index('id').get(id));
+      if (!row) return null;
+      const report = await result(tx.objectStore('reports').get(id));
+      const hasReplay = await result(tx.objectStore('replays').count(id));
+      return {...row, report, hasReplay};
+    }),
+    statistics: () => transaction('battles','readonly', async tx =>
+      (await result(tx.objectStore('battles').getAll())).map(({level,won,kills,durationMs,stats}) => ({level,won,kills,durationMs,...stats}))),
+    replay: id => transaction('replays','readonly', tx => result(tx.objectStore('replays').get(id))),
+    saveReplay: (id, replay) => transaction(['battles','replays'],'readwrite', async tx => {
+      if (!await result(tx.objectStore('battles').index('id').count(id))) throw Error('找不到本局记录');
+      const replays = tx.objectStore('replays');
+      if (!await result(replays.count(id))) await result(replays.add(replay, id));
+    }),
     gear: () => transaction(['settings','battles'],'readonly', async tx => {
       const rows = await result(tx.objectStore('battles').getAll());
       const saved = await result(tx.objectStore('settings').get('gear'));
@@ -117,7 +177,8 @@ export async function openBrowserStore(levels, path) {
       equippedSkin: (await result(tx.objectStore('settings').get('skin'))) ?? null,
     })),
     equip: skin => transaction(['settings', 'battles'], 'readwrite', async tx => {
-      if (skin !== null && !await hasWin(tx.objectStore('battles'), skin)) throw new Error('通关后才能佩戴');
+      const unlock = {'shotgun-pump':'rain-city','shotgun-forge':'brass-factory'}[skin] ?? skin;
+      if (skin !== null && (!levels.some(level=>level.id===unlock) || !await hasWin(tx.objectStore('battles'), unlock))) throw new Error('通关后才能佩戴');
       await result(tx.objectStore('settings').put(skin, 'skin'));
       return { equippedSkin: skin };
     }),
@@ -148,6 +209,7 @@ export async function openBrowserStore(levels, path) {
           ...level, cleared: wins.has(level.id), unlocked: !i || wins.has(levels[i - 1].id),
         })),
         best, equippedSkin: skin ?? null, lootPerLevel: 10, battleCount: rows.length,
+        discoveries: Object.keys((await result(tx.objectStore('settings').get('discoveries'))) ?? {}),
         loot: [...loot.values()].sort((a, b) => a.firstAt - b.firstAt || a.name.localeCompare(b.name)),
         ...historyPage(rows),
       };

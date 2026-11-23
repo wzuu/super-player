@@ -25,9 +25,19 @@ export function createPickupVisuals({
     return g.scale(w, h, d).translate(x, y, z);
   }
   const box = (...args) => part(shapes.box, ...args);
+  // 叠成三角形，从侧面也能看出分开的弹匣。底板与匣身共用实例批次。
+  const magazines = [
+    [-0.21, -0.04, -0.10, 0.31],
+    [0.02, 0.03, 0.16, 0.13],
+    [0.22, -0.01, -0.09, -0.16],
+  ].flatMap(([x, y, z, tilt]) =>
+    [box(0, 0, 0, 0.14, 0.51, 0.11), box(0, -0.27, 0, 0.20, 0.06, 0.15)]
+      .map((part) => part.rotateZ(tilt).translate(x, y, z)),
+  );
   const recipes = {
-    case: [box(0, 0, 0, 0.45, 0.22, 0.23), ...[-0.13, 0, 0.13].map((x) => box(x, 0.13, 0, 0.05, 0.08, 0.2))],
-    cross: [box(0, 0, 0, 0.44, 0.14, 0.18), box(0, 0, 0, 0.14, 0.43, 0.18)],
+    case: magazines,
+    cross: [box(0, 0, 0, 0.21, 0.62, 0.21),
+      ...[-0.20, 0.20].flatMap(d => [box(d, 0, 0, 0.19, 0.21, 0.21), box(0, 0, d, 0.21, 0.21, 0.19)])],
     ball: [part(sphere, 0, 0, 0, 0.35, 0.35, 0.35), box(0.04, 0.19, 0, 0.14, 0.09, 0.12)],
     vial: [part(shapes.cylinder, 0, 0, 0, 0.17, 0.4, 0.17), box(0, 0.23, 0, 0.2, 0.07, 0.2)],
     gem: [part(oct, 0, 0, 0, 0.42, 0.54, 0.39)],
@@ -37,7 +47,19 @@ export function createPickupVisuals({
       box(0.1, -0.24, 0, 0.22, 0.09, 0.14),
     ],
   };
-  const models = Object.fromEntries(Object.entries(recipes).map(([key, parts]) => [key, mergeGeometries(parts)]));
+  const models = Object.fromEntries(Object.entries(recipes).map(([key, parts]) => {
+    const mesh = mergeGeometries(parts);
+    if (key === 'case' || key === 'cross') {
+      // 将明暗烘进顶点，暗场保持轮廓，泛光处也能读出厚度。
+      const normals = mesh.getAttribute('normal'), shades = [];
+      for (let i = 0; i < normals.count; i++) {
+        const shade = 0.67 + 0.18 * normals.getY(i) + 0.12 * normals.getX(i);
+        shades.push(shade, shade, shade);
+      }
+      mesh.setAttribute('color', new THREE.Float32BufferAttribute(shades, 3));
+    }
+    return [key, mesh];
+  }));
   for (const parts of Object.values(recipes)) for (const geometry of parts) geometry.dispose();
   oct.dispose();
   sphere.dispose();
@@ -64,7 +86,7 @@ export function createPickupVisuals({
           style,
           tint: new THREE.Color(style.color),
           count: 0,
-          body: dynamicMesh(models[style.shape], material(), cfg.pool),
+          body: dynamicMesh(models[style.shape], material({vertexColors: models[style.shape].hasAttribute('color')}), cfg.pool),
           icon: dynamicMesh(shapes.plane, material({ map: icon, alphaTest: 0.4 }), cfg.pool),
         },
       ];
@@ -151,7 +173,7 @@ export function createPickupVisuals({
       color.copy(tint);
       if (key) color.lerp(white, pulse);
       else if (pop) color.lerp(white, pop);
-      const height = style.beam + (key ? pulse * 0.45 : 0);
+      const height = style.beam * (cfg.beamScale ?? 1) + (key ? pulse * 0.45 : 0);
       setInstance(
         key ? coreBeam : beam,
         key ? keys++ : beams++,

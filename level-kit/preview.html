@@ -60,6 +60,9 @@
   }
   .area { color: var(--cyan); font-size: 12px; font-weight: 700; letter-spacing: .13em; }
   .objective { margin: 5px 0 0; font-size: 13px; line-height: 1.55; }
+  #objective-detail { margin: 2px 0 0; font-size: 12px; color: var(--cyan); }
+  #task-panel[data-update] { border-color: var(--cyan); box-shadow: inset 3px 0 var(--cyan); }
+  #task-update { color: var(--cyan); margin-inline-start: .6em; font-size: 11px; }
   .tallies { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 9px; color: var(--muted); font-size: 11px; }
   .tallies strong { color: var(--ink); margin-left: 5px; font: 600 13px var(--mono); }
   #map-offline { display: none; }
@@ -68,6 +71,7 @@
   #hud[data-offline] .bottom-right,
   #hud[data-offline] #boss,
   #hud[data-offline] #cross,
+  #hud[data-offline] #reload-ring, #hud[data-offline] #aim-dot,
   #hud[data-offline] #message,
   #hud[data-offline] #map { visibility: hidden; }
   #hud[data-offline] #map-offline {
@@ -110,6 +114,10 @@
   #condition p { margin: 4px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
   #posture { color: var(--cyan); font-size: 10px; margin-inline-start: auto; white-space: nowrap; }
   #boss progress { --fill: var(--red); margin-bottom: 0; }
+  .boss-meter {position:relative}
+  .boss-meter::after {content:'';position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to right,transparent calc(35% - 1px),#eff9ff 35%,transparent calc(35% + 1px),
+      transparent calc(70% - 1px),#eff9ff 70%,transparent calc(70% + 1px))}
   #boss strong { color: #ffafb7; font-size: 12px; font-weight: 650; }
   #cross { --gap: 7px; display: block; position: absolute; top: 50%; left: 50%; width: 0; height: 0; color: #edfffc; filter: drop-shadow(0 0 2px #02070a); }
   #cross i { position: absolute; display: block; border-radius: 1px; background: currentColor; }
@@ -119,6 +127,17 @@
   #cross i:nth-child(4) { width: 1px; height: 5px; top: var(--gap); left: 0; }
   #cross i:nth-child(5) { width: 3px; height: 3px; left: -1px; top: -1px; border-radius: 50%; }
   #cross[data-hit="hit"] { color: var(--orange); }
+  #hud[data-aim] #cross:not([data-hit]), #hud[data-aim] #cross[data-hit=""] { visibility:hidden; }
+  #aim-dot, #reload-ring { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; border-radius:50%; }
+  #aim-dot { width:4px; height:4px; background:#ff3e32; box-shadow:0 0 2px #4b0803,0 0 4px #ee4539; }
+  #reload-ring { width:58px; height:58px; background:conic-gradient(#e6fff7 var(--remaining,1turn),#17282788 0); mask:radial-gradient(farthest-side,transparent calc(100% - 2px),#000 0); }
+  #cross[data-hit="weak"] { color: #ffe75e; transform: rotate(45deg); }
+  #cross[data-hit="critical-kill"] { color: #fff08b; transform: rotate(45deg) scale(1.8); outline: 1px solid currentColor; }
+  #combo { position: absolute; right: 3%; top: 49%; color: #ffda80; font-weight: bold; text-shadow: 0 1px 3px black; }
+  #hud[data-offline] #combo { visibility: hidden; }
+  #hud[data-steam]::before { content:""; position:absolute; inset:0; background:radial-gradient(ellipse at center,transparent 12%,#d1d8d551 85%); pointer-events:none; }
+  #trait-label {position:absolute;right:3%;top:44%;font-size:12px;color:#f4ceff;text-shadow:0 1px 3px black}
+  #hud[data-offline] #trait-label {visibility:hidden}
   #cross[data-hit="kill"] { color: var(--red); transform: scale(1.55) rotate(45deg); }
   #message { position: absolute; top: calc(50% + 37px); left: 50%; transform: translateX(-50%); max-width: 80%; width: max-content; padding: 7px 12px; background: #07111be8; border: 1px solid var(--border); color: var(--ink); font-size: 12px; text-align: center; }
   #menu {
@@ -182,10 +201,32 @@
   }
 #equipment-hud .kit-slot {display:inline-flex;gap:.35em;margin:.2em;padding:.2em;border:1px solid #668390;background:linear-gradient(0deg,#657082 var(--cooldown,0%),transparent var(--cooldown,0%))}
 .kit-slot kbd {color:#94e9db;font-weight:bold}
-#kit-slots {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-#preparation {margin:8px 0;max-width:100%;font:14px/1.6 system-ui}
-#preparation select {max-width:100%;font:inherit}
-#menu .screen {max-height:95dvh;overflow:auto}
+#menu .screen {height:100dvh;min-height:0;place-content:center;grid-template: minmax(0,1fr) / minmax(0,1000px);padding:clamp(12px,4vw,56px)}
+.brief {width:100%;display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0;align-self:center;height:min(610px,100%);background:#0a1722ef;border:1px solid var(--border)}
+.brief-body {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-content:start;gap:24px;overflow:auto;padding:clamp(16px,3vw,35px);scrollbar-gutter:stable}
+.brief-body > * {min-width:0}
+.brief h1 {font-size:clamp(28px,4vw,54px)}
+.brief h2 {margin:0 0 8px;font-size:18px}
+.brief h3 {margin:15px 0 5px;font-size:15px}
+.brief footer {border-top:1px solid var(--border);padding:12px clamp(16px,3vw,35px);background:#0b1926}
+.brief details summary {cursor:pointer;color:var(--cyan);padding:8px 0;font-weight:650}
+.brief select {min-width:0;max-width:100%;padding:5px;color:var(--ink);background:#132733;border:1px solid var(--border);font:inherit}
+.brief :is(select,summary):focus-visible {outline:2px solid var(--cyan);outline-offset:2px}
+.mission-choice {margin:16px 0;padding:12px;border-left:3px solid var(--cyan);background:#15303b}
+.mission-choice label {display:block;color:var(--cyan);font-size:13px;font-weight:bold;margin-bottom:6px}
+#mission-rule,#shop-detail,#loadout-state,#shop-status {margin:6px 0;font-size:13px;line-height:1.6}
+#loadout-state,#shop-detail {color:var(--muted)}
+#shop-status {color:var(--orange)}
+#kit-slots,#kit-preview {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#kit-preview > div {padding:9px;background:#10232f;border:1px solid var(--border);display:grid;grid-template-columns:auto 1fr;column-gap:7px;align-items:start}
+#kit-preview kbd {grid-row:span 2;color:var(--cyan);font:700 15px var(--mono);overflow-wrap:anywhere}
+#kit-preview small {color:var(--muted)}
+#kit-slots label {min-width:0;display:grid;font-size:13px}
+.shop-row {display:flex;align-items:center;gap:7px}
+.shop-row select {flex:1}
+.controls {margin:4px 0}
+#menu-status:empty, #shop-status:empty {display:none}
+@media(max-width:730px){.brief-body{grid-template-columns:minmax(0,1fr);gap:12px}.brief footer .actions{gap:6px}.brief footer :is(button,a){min-height:36px;padding:6px 8px}.brief #start{min-width:100px}}
 #equipment-hud {position:absolute;left:0;bottom:calc(100% + 8px);width:max-content;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
 </style>
 </head>
@@ -193,13 +234,16 @@
 <canvas id="world" aria-label="第一人称关卡画面"></canvas>
 <div id="hud" hidden>
   <div id="hud-announcement" class="visually-hidden" role="status"></div>
+  <div id="combo" role="status"></div>
+  <div id="trait-label"></div>
   <div id="injury"></div>
   <div id="directions" aria-hidden="true"></div>
   <div id="blast"></div>
   <div class="hud-top">
-  <section class="top-left instrument" aria-label="当前区域与撤离任务">
-    <div id="area" class="area">出生点</div>
-    <p id="objective" class="objective">清除凶兽并夺取关键道具</p>
+  <section id="task-panel" class="top-left instrument" aria-label="当前区域与撤离任务">
+    <div><span id="area" class="area">出生点</span><span id="task-update" hidden>目标更新</span></div>
+    <p id="objective" class="objective" role="status"></p>
+    <p id="objective-detail" hidden></p>
     <div class="tallies"><span>击杀<strong id="kills">0</strong></span><span><span id="loot-title">宝物</span><strong id="loot">0 / 10</strong></span></div>
   </section>
   <section class="top-right instrument" aria-label="战术小地图">
@@ -210,7 +254,7 @@
   <div class="top-signals">
   <section id="boss" aria-label="首领凶兽状态" hidden>
     <div class="meter-label"><strong id="boss-title">首领凶兽</strong><span id="boss-phase"></span></div>
-    <progress id="boss-health" aria-label="首领凶兽生命值" max="100" value="100"></progress>
+    <div class="boss-meter"><progress id="boss-health" aria-label="首领凶兽生命值" max="100" value="100"></progress></div>
   </section>
   <section id="condition" aria-labelledby="condition-title" hidden>
     <div class="meter-label"><strong id="condition-title"></strong><span id="condition-time"></span></div>
@@ -220,6 +264,7 @@
   </div>
   </div>
   <div id="cross" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <div id="aim-dot" hidden aria-hidden="true"></div><div id="reload-ring" hidden aria-hidden="true"></div>
   <div id="message" hidden></div>
   <section class="bottom-left instrument" aria-label="玩家状态">
     <output id="equipment-hud" hidden></output>
@@ -232,38 +277,52 @@
     <div class="ammo-label" id="rifle-label">机关枪</div>
     <div class="ammo-line"><output id="ammo">60</output><span id="reserve">/ 300</span></div>
     <div id="weapon-state"></div>
+    <small id="sound-state"></small>
   </section>
 </div>
 <output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
 <dialog id="menu" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
   <div class="screen">
     <section class="brief">
-      <div id="menu-tag" class="brief-tag">地图关卡</div>
+      <div class="brief-body"><div>
+      <div id="menu-tag" class="brief-tag">地图关卡</div><p id="run-variation"></p>
       <h1 id="menu-title">走位射击</h1>
       <p id="menu-text">沿开阔路线边打边退，击杀凶兽，夺取关键道具并引爆传送门。</p>
-      <dl class="controls" id="guide">
+      <div class="mission-choice"><label for="mission-mode">行动目标</label><select id="mission-mode" aria-describedby="mission-rule"></select>
+        <p id="mission-rule"></p></div>
+      <details id="key-guide"><summary>按键说明</summary><dl class="controls" id="guide">
         <div><dt>WASD</dt><dd>移动</dd></div>
-        <div><dt>鼠标 / 左键</dt><dd>瞄准 / 连射</dd></div>
+        <div><dt>鼠标左键 / 右键</dt><dd>射击 / 按住红点瞄准</dd></div>
         <div><dt>Shift / 空格</dt><dd>冲刺 / 跳跃</dd></div>
         <div><dt>R / F / Esc</dt><dd>提前换弹（空仓自动） / 交互 / 暂停</dd></div>
         <div id="crouch-help" hidden><dt>C</dt><dd>按住蹲伏</dd></div>
         <div><dt>Q / E</dt><dd>主动技能</dd></div>
         <div><dt>1 / 2</dt><dd>携带道具</dd></div>
-      </dl>
-      <label>行动目标 <select id="mission-mode"></select></label>
-      <details id="preparation" hidden><summary>装备选择与补给站 · 默认沿用上次装备</summary>
-        <p>每局免费配给急救包和手雷各一件。携带物资撤离时入库，失败时丢失。</p>
-        <div id="kit-slots"></div><p><span id="credits"></span>　<select id="shop-item" aria-label="军需物品"></select> <button id="shop-buy">兑换</button></p>
-      </details>
+        <div><dt>V</dt><dd>第一人称 / 肩后视角</dd></div>
+      </dl></details>
       <div id="summary" hidden></div>
+      </div><section id="loadout-pane" aria-labelledby="kit-title">
+        <h2 id="kit-title">本次携带</h2><div id="kit-preview"></div><p id="loadout-state"></p><p id="weapon-build"></p>
+        <details id="preparation" hidden><summary>调整装备与补给</summary>
+          <div id="kit-slots"></div>
+          <h3>补给站 · <span id="credits"></span></h3>
+          <div class="shop-row"><select id="shop-item" aria-label="军需物品"></select> <button id="shop-buy" type="button">兑换</button></div>
+          <p id="shop-detail"></p><p id="shop-status" role="status"></p>
+        </details>
+      </section></div>
+      <footer>
+      <details id="practice-controls" hidden><summary>完整操作说明</summary><p id="practice-bindings"></p></details>
+      <label id="practice-armory" hidden>练习武器 <select id="practice-weapon"><option value="">默认训练步枪</option></select></label>
       <div class="actions">
         <a id="next-level" class="action-link" hidden>进入下一关</a>
         <button id="start" type="button" disabled autofocus>进入关卡</button>
+        <button id="practice-restart" type="button" hidden>重开练习</button>
         <a id="campaign-home" class="action-link" href="../" hidden>返回首页</a>
         <button id="retry-save" type="button" hidden>重试保存</button>
         <button id="sound" type="button" aria-pressed="true">音效开启</button>
       </div>
       <p id="menu-status" role="status">正在加载关卡</p>
+      </footer>
     </section>
   </div>
 </dialog>
@@ -304,6 +363,21 @@
     ]);
     const campaignId = document.body.dataset.campaignLevel;
     let campaign = null;
+    if (document.body.hasAttribute('data-practice')) {
+      const select=document.getElementById('practice-weapon');
+      try {
+        const {campaignStore}=await import(location.protocol==='file:'?'offline/campaign/store.mjs':'../campaign/store.mjs');
+        const {rifleSkins}=await import('@level-kit/rifle-skins.mjs');
+        const store=await campaignStore(), progress=await store.progress();
+        const cleared=new Set(progress.levels.filter(stage=>stage.cleared).map(stage=>stage.id));
+        for (const [id,skin] of Object.entries(rifleSkins)) if (cleared.has(skin.unlock ?? id))
+          select.add(new Option((skin.category ?? '步枪')+' · '+skin.name,id));
+        const url=new URL(location.href),requested=url.searchParams.get('weapon');
+        if ([...select.options].some(option=>option.value===requested)) select.value=requested;
+        select.onchange=()=>{url.searchParams.set('weapon',select.value);location.assign(url);};
+        document.getElementById('practice-armory').hidden=select.options.length<2;
+      } catch { /* 单独练习仍可使用默认训练步枪 */ }
+    }
     if (campaignId && (location.protocol !== 'file:' || new URLSearchParams(location.search).has('campaign'))) {
       campaign = await import(location.protocol==='file:'?'offline/campaign/save.mjs':'../campaign/save.mjs').then(module => module.connectCampaign(campaignId));
       if (!campaign) return;

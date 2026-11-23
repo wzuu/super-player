@@ -279,7 +279,7 @@ export function createWeaponPreview(canvas, reset) {
   }
 
   return {
-    show(next, visible) {
+    show(next, visible, kills = 0) {
       if (visible && id !== next) {
         model?.dispose();
         particles.forEach(effect => effect.dispose());
@@ -312,6 +312,7 @@ export function createWeaponPreview(canvas, reset) {
         camera.updateProjectionMatrix();
         resetView();
       }
+      model?.setCount(kills);
       active = visible;
       schedule();
     },

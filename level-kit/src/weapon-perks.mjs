@@ -36,6 +36,12 @@ const beastStages = new Set([
 ]);
 const waterStages = new Set(['drowned-city', 'jungle-temple']);
 const coefficients = new Map();
+export const reactionCatalog = [
+  {id:'toxic',name:'毒爆',rule:'中毒目标被火焰击中时消耗全部毒层，伤害附近敌人。毒镖步枪可接手雷。',tint:'fire',radius:4,scale:.7,limit:5},
+  {id:'conduct',name:'导电',rule:'潮湿、积水或蒸汽中的目标遭电击时，依次传到附近最多三个敌人。',tint:'arc',radius:4.5,scale:.50,limit:3},
+  {id:'shatter',name:'碎冰',rule:'冻结目标遭重击或近距霰弹时碎裂。贴身释放减速力场可短时冻结。',tint:'ice',radius:0,scale:1.3,limit:0},
+  {id:'vapor',name:'蒸爆',rule:'寒霜命中烫伤目标或活跃蒸汽喷口中的敌人时，产生蒸汽团并伤害邻近敌人。',tint:'steam',radius:3.5,scale:.6,limit:4},
+];
 
 // 连续未触发时线性增加机会；求出系数，使长期平均触发率仍等于配置值。
 function chanceCoefficient(rate) {
@@ -131,7 +137,7 @@ function slow(target, time, duration, scale) {
   effect.scale = Math.min(previous?.scale ?? 1, scale);
 }
 
-function area(c, center, radius, game, visitor, maximum = Infinity) {
+function area(c, center, radius, game, visitor, maximum = Infinity,exclude = null) {
   // 在同一帧内，死亡特效可能再次调用空间查询。保持各次查询的候选列表独立。
   const nearby = game.beasts.hash.query(
     center.x - radius,
@@ -145,7 +151,7 @@ function area(c, center, radius, game, visitor, maximum = Infinity) {
   );
   for (const other of nearby) {
     if (
-      other === center ||
+      other === center || exclude?.has(other) ||
       !other.active ||
       Math.hypot(other.x - center.x, other.y - center.y, other.z - center.z) > radius
     )
@@ -172,6 +178,9 @@ function perk(onHit = NONE, onKill = NONE, passive = NONE) {
 }
 
 export const weaponPerks = {
+  'paris-tower': perk(),
+  'shotgun-pump': perk(),
+  'shotgun-forge': perk(NONE,(c,b,h,g)=>{c.fastLoadUntil=g.time+3;}),
   'underground-lab': perk(
     (c, b, h, g) => {
       put(b, 'corrosion', g.time, 6, 5);
@@ -198,7 +207,7 @@ export const weaponPerks = {
   }),
   'rain-city': perk((c, b, h, g) => {
     put(b, 'wet', g.time, 5);
-    if (c.roll('heavy', 0.05)) push(b, g.player, b.type === 1 ? 4 : 8);
+    if (c.roll('heavy', 0.05)) {h.heavy=true;push(b, g.player, b.type === 1 ? 4 : 8);}
     if (c.roll('luck', 0.01)) {
       h.damage *= 2;
       drop(b, g, 'ammo', '街头补给', 14);
@@ -220,7 +229,7 @@ export const weaponPerks = {
       if (h.headshot && active(b, 'frozen', g.time)) h.damage *= 1.5;
       if (put(b, 'frost', g.time, 4, 5).stacks === 5) {
         b.statusEffects.delete('frost');
-        timedControl(c, b, 'frozen', 1.5, g);
+        if(timedControl(c, b, 'frozen', 1.5, g) && b.type===3) put(b,'brittle',g.time,1.5);
       }
     },
     (c, b, h, g) => {
@@ -229,6 +238,7 @@ export const weaponPerks = {
     },
   ),
   'drowned-city': perk((c, b, h, g) => {
+    h.electric=true;
     if (c.roll('tidePush', 0.1)) push(b, g.player, 7);
     area(
       c,
@@ -377,6 +387,7 @@ export function resetTargetEffects(target) {
   target.statusEffects ??= new Map();
   target.statusEffects.clear();
   target.controlReady = target.empReady = -Infinity;
+  target.reactionReady=-Infinity;
   target.perkPushX = target.perkPushZ = 0;
   target.perkMoveScale = 1;
   target.spawnGeneration = (target.spawnGeneration ?? 0) + 1;
@@ -398,6 +409,8 @@ export class WeaponCombat {
     this.chargedShot = this.penetration = false;
     this.samplePending = this.sampleActive = false;
     this.speedUntil = this.fireUntil = -Infinity;
+    this.fastLoadUntil = -Infinity;
+    this.mistUntil = 0;
     this.fireRate = this.moveSpeed = 1;
   }
   roll(kind, rate) {
@@ -443,9 +456,59 @@ export class WeaponCombat {
     this.generation = target.spawnGeneration;
     if (this.sampleActive) info.damage *= 1.3;
     this.hooks.onHit.call(this, target, info, game);
+    const element=info.heavy ? 'heavy' : info.electric ? 'electric' :
+      this.skin==='ember-fortress' ? 'fire' : this.skin==='polar-station' ? 'ice' : '';
+    if(element) this.react(target,element,game,'weapon');
+  }
+  element(target,element,game,source='equipment') {
+    // 先结清旧层已到期的持续伤害，再读取或消耗状态。
+    if(target.statusEffects.size) this.updateTarget(target,game);
+    if(target.active) this.react(target,element,game,source);
+  }
+  react(target,element,game,source) {
+    const now=game.time, effects=target.statusEffects;
+    const steam=()=>game.encounter?.inSteam?.(target.x,target.z,target.y,game);
+    let rule,stacks=1;
+    if(element==='fire' && active(target,'poison',now)) {
+      rule=reactionCatalog[0];stacks=effects.get('poison').stacks;effects.delete('poison');
+    } else if(element==='electric' && (active(target,'wet',now) || steam() ||
+      (waterStages.has(this.stage) && game.level?.movementScale?.(target.x,target.z,target.y,game)<.99))) {
+      rule=reactionCatalog[1];
+    } else if(element==='heavy' && (active(target,'frozen',now) || active(target,'brittle',now))) {
+      rule=reactionCatalog[2];effects.delete('frozen');effects.delete('brittle');
+    } else if(element==='ice' && (active(target,'scald',now) || steam())) {
+      rule=reactionCatalog[3];effects.delete('scald');
+    } else return;
+    if (target.reactionReady>now && (rule.id==='conduct' || rule.id==='vapor')) return;
+    target.reactionReady=now+.5;
+    this.visual(target,game,rule.tint);
+    const amount=this.baseDamage*rule.scale*stacks;
+    if(rule.id==='conduct') {
+      const visited=new Set([target]);
+      let previous=target;
+      for(let hop=0;hop<rule.limit;hop++) {
+        let next;
+        area(this,previous,rule.radius,game,b=>{next=b;},1,visited);
+        if(!next) break;
+        this.arc(previous,next,game);visited.add(next);
+        game.beasts.damage(next,amount*(next.type===3 ? .6 : 1),game,source);
+        previous=next;
+      }
+    } else if(rule.radius) {
+      area(this,target,rule.radius,game,b=>game.beasts.damage(b,amount*(b.type===3 ? .6 : 1),game,source),rule.limit);
+      if(rule.id==='vapor' && Math.hypot(game.player.x-target.x,game.player.z-target.z)<3.5) this.mistUntil=now+.65;
+    }
+    game.beasts.damage(target,amount*(target.type===3 ? .6 : 1),game,source);
+    this.announceReaction?.(rule,game);
   }
   onKill(target, hit, game) {
     this.hooks.onKill.call(this, target, hit, game);
+  }
+  splash(target,damage,game) {
+    area(this,target,3.5,game,other=>{
+      this.arc(target,other,game);
+      game.beasts.damage(other,damage*.45,game,'weapon');
+    },3);
   }
   damageScale(target, source, time) {
     const corrosion = active(target, 'corrosion', time);

@@ -2,10 +2,13 @@ import { distantBody, detailedBody, fitBeastModel, hideTexture } from '@level-ki
 import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
+import { FoeTraits, roleRules, affixTitles } from '@level-kit/foe-traits.mjs';
+import { bossDamage, bossStep, createBossFight } from '@level-kit/boss-fight.mjs';
+import { stairWaypoint } from '@level-kit/stair-navigation.mjs';
 
-export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
+export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT, campaignStage }) {
   const tactic=stageTactic(definition?.weaponSkin);
-  const { projectileTint, ichor, spark, coreTint } = colors;
+  const { projectileTint, ichor, coreTint } = colors;
   const chargeSegments = 8;
 
   function beastModel(type) {
@@ -213,6 +216,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (b.alert <= 0) { this.patrol(b); return; }
 
       b.playerVisible = sees;
+      const stair = stairWaypoint(b,p,this.level,this.nav);
+      if (stair && !(b.type===2 && Math.hypot(stair.x-b.x,stair.z-b.z)<1.1 && sees && distance<type.reach && b.cooldown<=0)) {
+        const sx=stair.x-b.x, sz=stair.z-b.z, d=Math.hypot(sx,sz);
+        b.dx=d>.18 ? sx/d : 0;b.dz=d>.18 ? sz/d : 0;
+        return;
+      }
       const yDiff = Math.abs(p.y - b.y);
       if (sees && b.cooldown <= 0 && b.mode === 'move' && !p.protected(game)) {
         if (b.type === 2 && distance < type.reach && distance > 3.4) {
@@ -253,7 +262,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
 
     update(b, p, game, dt, frame) {
       const type = CONFIG.beasts.types[b.type];
-      const damage = type.damage * (game.encounter?.beastDamageScale ?? 1);
+      const damage = type.damage * (game.encounter?.beastDamageScale ?? 1) * (game.variation?.damage ?? 1);
       b.flash = Math.max(0, b.flash - dt);
       b.stun = Math.max(0, b.stun - dt);
       b.cooldown = Math.max(0, b.cooldown - dt);
@@ -265,8 +274,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         b.hearingOnly = hearingOnly; b.heardAt = -Infinity; b.alert = 0;
         if (b.mode === 'windup') b.mode = 'move';
       }
-      if (b.type === 3 && !b.rage && b.hp <= type.hp * 0.5) {
-        b.rage = true; b.summon = type.summonCount;
+      if (b.type === 3 && !b.rage && (b.fight ? b.fight.stage===2 : b.hp <= type.hp * 0.5)) {
+        b.rage = true;
+        game.sound.stageEvent?.('danger',game,b);
+        if (!b.fight) b.summon = type.summonCount;
         if (!hearingOnly) b.alert = CONFIG.beasts.memory + 6;
         this.from.set(b.x, b.y + 2, b.z);
         game.effects.spray(this.from, coreTint, 47, 7.5, 0.14, 'mist');
@@ -275,6 +286,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         game.ui.notify(TEXT.rage, 2.1);
       }
 
+      if (b.fight && bossStep(b,game,p,this.level)) return;
       if (Math.abs(b.perkPushX) + Math.abs(b.perkPushZ) > .05) {
         this.level.move(b, b.perkPushX * dt, b.perkPushZ * dt, .47);
         const decay = Math.exp(-7 * dt);
@@ -290,7 +302,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         b.stride = 0;
         return;
       }
-      if (game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
+      if (game.field?.huntStep(b,game,dt) || game.story?.stepBeast(b,game,dt) || game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
       const confusion = b.statusEffects.get('confused');
       let x = 0, z = 0;
       if (b.stun > 0) {
@@ -351,7 +363,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           const speed = b.rage ? type.rageSpeed : type.speed;
           x = (b.dx + separateX * CONFIG.beasts.separation) * speed;
           z = (b.dz + separateZ * CONFIG.beasts.separation) * speed;
-          const turn = b.playerVisible && !hearingOnly ? tactic?.(b,game,distance) : 0;
+          const turn = b.playerVisible && !hearingOnly && !b.stairLeg ? tactic?.(b,game,distance) : 0;
           if (turn) {
             const oldX=x, cos=Math.cos(turn), sin=Math.sin(turn);
             x=oldX*cos-z*sin; z=oldX*sin+z*cos;
@@ -368,8 +380,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           !this.level.inSafeZone(b.x, b.z, 2.6)) {
         x = 0; z = 0;
       }
-      const terrain = this.level.movementScale(b.x, b.z, b.y, game) * (game.encounter?.beastSpeedScale ?? 1);
-      x *= terrain * b.perkMoveScale; z *= terrain * b.perkMoveScale;
+      const terrain = this.level.movementScale(b.x, b.z, b.y, game) * (game.encounter?.beastSpeedScale ?? 1) * b.traitSpeed;
+      x *= terrain * b.perkMoveScale * (game.variation?.speed ?? 1); z *= terrain * b.perkMoveScale * (game.variation?.speed ?? 1);
       const moved = this.level.move(b, x * dt, z * dt, 0.47);
       const floor = this.level.foot(b.x, b.z, b.y + 0.27, b.radius);
       if (b.statusEffects.has('grounded')) {
@@ -379,7 +391,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       b.stride = Math.hypot(x, z);
       if (b.stride > 0.9 && moved < dt * b.stride * 0.22) {
         b.stuck += dt;
-        if (b.mode === 'charge') { b.mode = 'move'; b.stun = 0.95; b.cooldown = 2.0; b.flash = 0.16; }
+        if (b.mode === 'charge') { b.mode = 'move'; b.stun = 0.95; b.cooldown = 2.0; b.flash = 0.16; game.sound.stageEvent?.('impact',game,b); }
       } else {
         b.stuck = Math.max(0, b.stuck - dt * 2);
       }
@@ -456,26 +468,39 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         map:shadowMap, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-1,
       }), this.pool.length);
       this.ai = new BeastAI(level, nav, this);
+      this.traits = new FoeTraits(campaignStage,CONFIG);
+      this.bossTint=coreTint;
+      this.bossMarks=dynamicMesh(new THREE.RingGeometry(.78,1,24),
+        new THREE.MeshBasicMaterial({side:THREE.DoubleSide,depthWrite:false}),3);
+      const badges = {
+        shield: new THREE.TorusGeometry(.5,.085,4,12), brood: new THREE.ConeGeometry(.5,1,5),
+        volatile: new THREE.IcosahedronGeometry(.5,0), elite: new THREE.OctahedronGeometry(.5),
+      };
+      this.badges = Object.fromEntries(Object.entries(badges).map(([name,geometry])=>[name,
+        dynamicMesh(geometry,new THREE.MeshBasicMaterial({fog:false}),this.pool.length)]));
       this.counts = new Uint16Array(this.modelBatches.length);
     }
     bodyBounds(b) {
       const footprint = this.footprints[b.rage && b.type===3 ? this.rageBatch : b.type];
       const sin = Math.abs(Math.sin(b.yaw)), cos = Math.abs(Math.cos(b.yaw));
-      const x = footprint.x*cos + footprint.z*sin, z = footprint.z*cos + footprint.x*sin;
+      const x = (footprint.x*cos + footprint.z*sin)*b.scale, z = (footprint.z*cos + footprint.x*sin)*b.scale;
       b.x0 = b.x - x; b.x1 = b.x + x;
       b.z0 = b.z - z; b.z1 = b.z + z;
       b.y0 = b.y + 0.025; b.y1 = b.y + b.height;
     }
-    reset(player) {
+    reset(player, game) {
+      this.currentGame=game;
+      this.traits.splits.length=0;
       this.live = 0; this.boss = null; this.frame = 0; this.spawnTime = 0; this.navTime = 0;
       for (const b of this.pool) b.active = false;
       for (const corpse of this.corpses) corpse.until=0;
       this.nav.rebuild(player.x, player.z); this.hash.clear();
+      if (game?.training?.kind === 'tutorial' || game?.objective.mode==='hunt' || game?.story?.managed) {this.render();return;}
       const spawn = this.level.bossSpawn;
-      this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
+      if (!game?.training) this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
       for (let i = 1; i < Math.min(CONFIG.beasts.population, this.pool.length); i++) {
         const type = this.randomType(), site = this.spawnSite(type, player, true, null);
-        if (site !== -1) this.spawn(type, this.nav.x(site), this.nav.z(site));
+        if (site !== -1) this.spawnRegular(type, this.nav.x(site), this.nav.z(site));
       }
       this.refreshHash(); this.render();
     }
@@ -483,13 +508,25 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const r = Math.random();
       return r < 0.66 ? 0 : r < 0.86 ? 1 : 2;
     }
+    spawnRegular(type,x,z,y,elite=false) {
+      const b=this.spawn(type,x,z,y);
+      if (this.currentGame && b && !this.currentGame.training) {
+        const patrol=this.currentGame.patrolRemaining>0;
+        this.traits.assign(b,this.currentGame,elite||patrol);
+        if(patrol && b.affixes) this.currentGame.patrolRemaining--;
+      }
+      return b;
+    }
     spawn(type, x, z, y = this.level.base(x, z), angle = randomRange(0, TAU)) {
       const b = this.pool.find(item => !item.active);
       if (!b) return null;
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
-        active: true, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
+        active: true, storyWave:null, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
+        farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
+        maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
+        traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,
         fx: Math.sin(angle), fz: Math.cos(angle), dx: Math.sin(angle) * 0.11, dz: Math.cos(angle) * 0.11,
         lane: Math.random() > 0.5 ? 1 : -1, yaw: angle, blink: randomRange(0, TAU), stride: 0, alert: 0,
         mode: 'move', phaseTime: 0, cooldown: randomRange(0.5, 1.3), stun: 0, flash: 0, patrol: randomRange(0.5, 2),
@@ -500,7 +537,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       resetTargetEffects(b);
       this.bodyBounds(b);
       this.live++;
-      if (type === 3) this.boss = b;
+      if (type === 3) {
+        this.boss = b;
+        if (campaignStage && !this.currentGame?.training) createBossFight(b,CONFIG,campaignStage);
+      }
       return b;
     }
     refreshHash() {
@@ -538,11 +578,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       }
       return -1;
     }
-    retire(b, game) {
+    retire(b, game, source = 'environment', hit = null) {
       if (!b.active) return false;
       b.active = false;
       this.live--;
       game.kills++;
+      game.performance.kill(game, b, source, hit);
       return true;
     }
     eject(b, game) {
@@ -553,25 +594,30 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (!b.active) return false;
       const type = b.type;
       b.flash = 0.115; b.stun = type === 3 ? 0.065 : 0.115;
+      if(type===1 && definition.weaponSkin==='brass-factory') game.sound.stageEvent('impact',game,b);
       b.knockX = dir.x * (type === 3 ? 0.8 : 3.7); b.knockZ = dir.z * (type === 3 ? 0.8 : 3.7);
       if (!game.encounter?.hearingOnly) b.alert = CONFIG.beasts.memory;
-      game.effects.spray(at, ichor, 7, 3.4, 0.094, 'mist');
-      game.effects.spray(at, spark, 5, 4.6, 0.037, 'spark');
+      if (!hit?.quietImpact) game.effects.impact(at, hit?.pellet, ichor);
       return this.damage(b, damage, game, source, hit);
     }
     damage(b, amount, game, source = 'environment', hit = null) {
       if (game.phase !== 'play' || !b.active || !(amount > 0)) return false;
       const type = b.type, combat = game.weapon.combat;
-      const applied = Math.min(b.hp, amount * combat.damageScale(b, source, game.time));
+      amount = this.traits.damage(b,amount,game,source,hit);
+      amount *= combat.damageScale(b,source,game.time);
+      const applied = Math.min(b.hp,b.fight ? bossDamage(b,amount,game,hit) : amount);
       b.hp -= applied;
       if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
-      this.retire(b, game);
+      this.retire(b, game, source, hit);
+      game.field?.defeated(b,game);
       const dropY = this.dropHeight(b);
+      this.traits.defeated(b,game);
       if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
       if (type === 3) {
         game.bossDead = true; this.boss = null;
-        game.pickups.add('core', b.x, b.z, dropY + 0.18, TEXT.keyItem, 0);
+        const site = this.level.pickupSite(b.x,b.z,dropY,game.player,this.nav);
+        game.pickups.add('core', site.x, site.z, site.y + 0.18, TEXT.keyItem, 0);
         game.ui.notify(TEXT.bossDefeated, 2.6);
       }
       if (!definition.onBeastDefeated?.(b, game, source)) {
@@ -582,13 +628,25 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           x: b.x, y: b.y, z: b.z, yaw: b.yaw, roll: b.surfaceRoll, type, rage: b.rage,
           farLOD: b.farLOD, until: game.time + CONFIG.beasts.appearance.fallTime,
         });
+        const lift = source === 'equipment' || hit?.pellet;
+        const impulse = type === 0 && lift ? 1.1 : type === 3 ? .16 : .46;
+        const length = Math.hypot(b.knockX, b.knockZ);
+        corpse.slideX = corpse.slideZ = corpse.lift = 0;
+        if (length > .01) {
+          for (let step = 1; step <= 5; step++) {
+            const dx = b.knockX / length * impulse * step / 5, dz = b.knockZ / length * impulse * step / 5;
+            if (this.level.blocked(b.x + dx, b.z + dz, b.y, b.radius, b.height)) break;
+            corpse.slideX = dx; corpse.slideZ = dz;
+          }
+          if (type === 0 && lift) corpse.lift = .25;
+        }
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');
       }
       const bonusAmmo = game.encounter?.bonusAmmo ?? 0;
       if (bonusAmmo > 0 || type === 3 || game.weapon.reserve < 46 || game.kills % 2 === 0) {
-        const amount = (CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1);
+        const amount = Math.ceil((CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1) * (game.variation?.ammo ?? 1));
         game.pickups.add('ammo', b.x + 0.17, b.z, dropY, '机关枪弹药', amount);
       }
       if (type !== 3 && game.kills % CONFIG.pickups.grenadeEvery === 0) {
@@ -599,6 +657,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         game.pickups.add('health', b.x - 0.26, b.z, dropY, '圣露', bonusHealth);
       }
       return true;
+    }
+    releaseSplits(game) {
+      if (this.traits.splits.length) {
+        for (const position of this.traits.splits.splice(0)) this.traits.offspring(position,game,2);
+      }
     }
     update(dt, player, game) {
       if (dt <= 0) return;
@@ -616,14 +679,17 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         this.navTime = 0.24;
       }
       this.refreshHash();
+      this.releaseSplits(game);
       for (const b of this.pool) {
         if (!b.active) continue;
+        if (b.role || b.affixes) this.traits.step(b,game,dt);
+        if (!b.active || game.phase!=='play') continue;
         game.weapon.combat.updateTarget(b, game);
         if (!b.active) continue;
         this.ai.update(b, player, game, dt, this.frame);
       }
       this.spawnTime -= dt;
-      if (this.spawnTime <= 0) {
+      if (this.spawnTime <= 0 && !game.story?.managed && !game.field?.hunting) {
         this.spawnTime = encounter?.spawnEvery ?? CONFIG.beasts.spawnEvery;
         const target = Math.min((encounter?.population ?? CONFIG.beasts.population) + (game.objective?.reinforcements ?? 0), this.pool.length);
         const burst = encounter?.spawnBurst ?? CONFIG.beasts.spawnBurst;
@@ -631,8 +697,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         for (let i = 0; i < burst && this.live < target; i++) {
           const type = this.randomType(), spawn = this.spawnSite(type, player, false, this.air);
           if (spawn !== -1) {
-            const child = this.spawn(type, this.nav.x(spawn), this.nav.z(spawn));
-            child.reinforcement = this.live > CONFIG.beasts.population;
+            const child = this.spawnRegular(type, this.nav.x(spawn), this.nav.z(spawn));
+            if (child) child.reinforcement = this.live > CONFIG.beasts.population;
           }
         }
         if (!encounter?.hearingOnly && this.live > target) {
@@ -674,6 +740,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     render(dt = 0, t = 0, disabled = false) {
       this.counts.fill(0);
+      const badges={shield:0,brood:0,volatile:0,elite:0};
+      this.traitLabel='';
+      let labelRange=28**2;
       let bars = 0, chargeMarks = 0, shadows = 0;
       for (const b of this.pool) {
         if (!b.active) continue;
@@ -705,16 +774,28 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const roll = b.surfaceRoll + (disabled ? 0 : Math.cos(walk) * 0.062);
         const visualY = b.y + bob + (b.surfaceRoll ? b.height * 0.5 * (1 - Math.cos(b.surfaceRoll)) : 0);
         const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
-        setInstance(body, i, b.x, visualY, b.z, 1, breath, 1, null, b.yaw, action, roll);
+        setInstance(body, i, b.x, visualY, b.z, b.scale, breath*b.scale, b.scale, null, b.yaw, action, roll);
         workColor.setScalar(disabled ? 0.31 : b.rage ? 3.2 : b.mode === 'windup' ? 2.85 : appearance.eyeLight);
-        setInstance(luminous, i, b.x, visualY, b.z, 1, breath, 1, workColor, b.yaw, action, roll);
+        setInstance(luminous, i, b.x, visualY, b.z, b.scale, breath*b.scale, b.scale, workColor, b.yaw, action, roll);
+        const mark=b.role || (b.affixes && 'elite');
+        if (mark && range2<40**2) {
+          const size=b.charging?1+.3*Math.sin(t*16):1;
+          workColor.setHex(({shield:b.shield>0?0x65daff:0x51869b,brood:0xb8ff84,volatile:0xff633a,elite:0xd68aff})[mark]);
+          setInstance(this.badges[mark],badges[mark]++,b.x,b.y+b.height*.83,b.z,size*b.radius*2.3,
+            size*b.height*.62,size*b.radius*1.6,workColor,b.yaw);
+          if (range2<labelRange && b.playerVisible) {
+            labelRange=range2;
+            this.traitLabel=[b.affixes?'精英':'',roleRules[b.role]?.title,
+              ...(b.affixes??[]).map(key=>affixTitles[key]),b.charging?'蓄能中':''].filter(Boolean).join(' · ');
+          }
+        }
         if (range2 < appearance.shadowRange ** 2) {
           const floor = this.level.surface(b.x,b.z,b.y+.05);
           setInstance(this.shadows,shadows++,b.x,floor+.025,b.z,b.radius*2.6,b.radius*3.1,1,null,b.yaw,-Math.PI/2);
         }
         if (range2 > 68 ** 2) continue;
         const w = type === 3 ? 1.83 : 0.93, h = type === 3 ? 0.099 : 0.059;
-        const ratio = clamp(b.hp / CONFIG.beasts.types[type].hp, 0, 1);
+        const ratio = clamp(b.hp / b.maxHP, 0, 1);
         const y = Math.abs(b.surfaceRoll) > 2.10 ? b.y - 0.18 : b.y + b.height + 0.20;
         stamp.position.set(b.x, y, b.z);
         stamp.quaternion.copy(camera.quaternion); stamp.scale.set(w + 0.055, h + 0.035, 1);
@@ -730,9 +811,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         const fall=1-(c.until-t)/CONFIG.beasts.appearance.fallTime;
         const batch=c.farLOD ? this.farStart+c.type : c.rage && c.type===3 ? this.rageBatch : c.type;
         const [body,eye]=this.modelBatches[batch], i=this.counts[batch]++;
-        const y=c.y-.18*fall, roll=c.roll+fall*1.48;
-        setInstance(body,i,c.x,y,c.z,1,1,1,null,c.yaw,0,roll);
-        workColor.setScalar(1-fall);setInstance(eye,i,c.x,y,c.z,1,1,1,workColor,c.yaw,0,roll);
+        const x=c.x+c.slideX*fall, z=c.z+c.slideZ*fall;
+        const y=c.y-.18*fall+c.lift*Math.sin(Math.PI*fall), roll=c.roll+fall*1.48;
+        setInstance(body,i,x,y,z,1,1,1,null,c.yaw,0,roll);
+        workColor.setScalar(1-fall);setInstance(eye,i,x,y,z,1,1,1,workColor,c.yaw,0,roll);
         body.geometry.attributes.beastFlash.setX(i,Math.max(0,1-5*fall));
       }
       for (let i = 0; i < this.counts.length; i++) {
@@ -742,6 +824,26 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         updateMesh(body, this.counts[i]); updateMesh(luminous, this.counts[i]);
       }
       this.chargeMarks.visible = chargeMarks > 0;
+      let marks=0;
+      const boss=this.boss, fight=boss?.fight;
+      if (fight?.winding) {
+        workColor.setHex(0xff9144);
+        const radius=2.2+fight.stage*.5;
+        setInstance(this.bossMarks,marks++,fight.aimX,fight.aimY+.09,fight.aimZ,radius,radius,1,workColor,0,-Math.PI/2);
+        if(fight.pattern===2 && fight.stage>=1)
+          setInstance(this.bossMarks,marks++,fight.nextX,fight.aimY+.09,fight.nextZ,2.5,2.5,1,workColor,0,-Math.PI/2);
+      }
+      if (fight && (fight.weakUntil>t || fight.brokenUntil>t)) {
+        workColor.setHex(0xc7ff78);
+        stamp.position.set(boss.x,boss.y+boss.height*.83,boss.z);
+        stamp.quaternion.copy(camera.quaternion);stamp.translateZ(boss.radius*.8); stamp.scale.set(.45,.45,.45);stamp.updateMatrix();
+        this.bossMarks.setMatrixAt(marks,stamp.matrix);this.bossMarks.setColorAt(marks++,workColor);
+      }
+      this.bossMarks.visible=marks>0; updateMesh(this.bossMarks,marks);
+      for (const [name,count] of Object.entries(badges)) {
+        this.badges[name].visible=count>0;
+        updateMesh(this.badges[name],count);
+      }
       updateMesh(this.chargeMarks, chargeMarks);
       updateMesh(this.healthBG, bars); updateMesh(this.healthFG, bars);
       this.shadows.visible = shadows > 0;

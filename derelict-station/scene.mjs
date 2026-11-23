@@ -512,6 +512,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
         if(!egg.active||egg.hatch>t||game.beasts.live>=game.beasts.pool.length)continue;
         const child=game.beasts.spawn(0,egg.x,egg.z,egg.y);
         egg.active=false;
+        sound.stageEvent('impact',game,egg);
         if(!child)continue;
         child.alert=5.2;
         point.set(egg.x,egg.y+.25,egg.z);
@@ -906,6 +907,10 @@ function alienModel(type,{THREE,shapes,mergeGeometries},rage=false){
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'南停靠舱',at:[-8,20],entries:[[-15,21],[0,14]]},
+    {name:'西侧农业舱',at:[-26,-6],entries:[[-32,-9],[-21,-3]]},
+  ]},
   weaponSkin: 'derelict-station',
   pageTitle:'失压环站 | 第八关',
   grid:MAP_GRID,

@@ -1,14 +1,16 @@
 import { rayBox } from '@level-kit/world.mjs';
 
 export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, stamp, scene, brighter, workColor, randomRange, dynamicMesh, updateMesh, setInstance, colors, definition }) {
-  const { projectileTint, coreTint } = colors;
+  const { projectileTint, coreTint, spark } = colors;
+  const tracers = Object.fromEntries(Object.entries(CONFIG.feedback.tracers)
+    .map(([kind, style]) => [kind, { ...style, tint: brighter(style.color, 2.1) }]));
 
   class Effects {
     constructor() {
       this.dots = Array.from({ length: CONFIG.effects.particles }, () => ({ pos: new V3(), vel: new V3(), tint: new THREE.Color(), life: 0 }));
       this.traces = Array.from({ length: CONFIG.effects.tracers }, () => ({ a: new V3(), b: new V3(), life: 0 }));
       this.dotMesh = dynamicMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial(), this.dots.length);
-      this.traceMesh = dynamicMesh(shapes.box, new THREE.MeshBasicMaterial({ color: brighter(0xffc489, 2.1) }), this.traces.length);
+      this.traceMesh = dynamicMesh(shapes.box, new THREE.MeshBasicMaterial(), this.traces.length);
       this.nextDot = 0; this.nextTrace = 0;
       this.rayVec = new V3();
     }
@@ -17,9 +19,15 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       for (const item of this.traces) item.life = 0;
       updateMesh(this.dotMesh, 0); updateMesh(this.traceMesh, 0);
     }
-    streak(from, to) {
+    streak(from, to, kind = 'rifle') {
       const data = this.traces[this.nextTrace++ % this.traces.length];
-      data.a.copy(from); data.b.copy(to); data.life = 0.052;
+      data.a.copy(from); data.b.copy(to);
+      data.style = tracers[kind]; data.life = data.style.life;
+    }
+    impact(where, pellet, ichor = null) {
+      if (ichor) this.spray(where, ichor, pellet ? 2 : 7, pellet ? 1.8 : 3.4, pellet ? .042 : .094, 'mist');
+      if (pellet) this.spray(where, tracers.pellet.tint, 3, 2.2, .025, 'pellet');
+      else this.spray(where, spark, 5, ichor ? 4.6 : 3.2, ichor ? .037 : .025, 'spark');
     }
     spray(where, color, count, speed, size, style) {
       count = Math.ceil(count * (CONFIG.graphics.particleScale ?? 1));
@@ -29,7 +37,8 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         p.pos.copy(where); p.vel.set(Math.cos(a) * v, randomRange(0.04, 1.0) * v, Math.sin(a) * v);
         p.tint.copy(color);
         p.size = size * randomRange(0.45, 1.6); p.style = style;
-        p.life = p.max = style === 'mist' ? randomRange(0.26, 0.54) : randomRange(0.10, 0.40);
+        p.life = p.max = style === 'mist' ? randomRange(0.26, 0.54)
+          : style === 'pellet' ? randomRange(.075, .15) : randomRange(0.10, 0.40);
       }
     }
     update(dt) {
@@ -52,10 +61,13 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         this.rayVec.subVectors(p.b, p.a);
         const length = this.rayVec.length();
         if (length < 0.01) continue;
-        stamp.position.lerpVectors(p.a, p.b, 0.5);
-        stamp.quaternion.setFromUnitVectors(Y_AXIS, this.rayVec.divideScalar(length));
-        stamp.scale.set(0.021, length, 0.021);
-        stamp.updateMatrix(); this.traceMesh.setMatrixAt(m++, stamp.matrix);
+        const visible = Math.min(length, p.style.length ?? length);
+        this.rayVec.divideScalar(length);
+        stamp.position.copy(p.a).addScaledVector(this.rayVec, visible * .5);
+        stamp.quaternion.setFromUnitVectors(Y_AXIS, this.rayVec);
+        stamp.scale.set(p.style.width, visible, p.style.width);
+        stamp.updateMatrix(); this.traceMesh.setMatrixAt(m, stamp.matrix);
+        this.traceMesh.setColorAt(m++, p.style.tint);
       }
       updateMesh(this.dotMesh, n); updateMesh(this.traceMesh, m);
     }
@@ -171,14 +183,16 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       shot.gravity = projectileGravity;
       shot.slowScale = slowScale; shot.slowDuration = slowDuration;
     }
+    pool(x,y,z,life) {
+      const puddle = this.puddles[this.puddleCursor++ % this.puddles.length];
+      puddle.pos.set(x,this.level.surface(x,z,y+.15)+.038,z);
+      puddle.life = puddle.max = life;
+    }
     splat(p, game, markGround = true) {
       this.effects.spray(p.pos, projectileTint, 13, 4.2, 0.073, 'mist');
       definition.onProjectileImpact?.(p.pos, game);
       if (markGround && p.poolLife > 0) {
-        const pool = this.puddles[this.puddleCursor++ % this.puddles.length];
-        pool.pos.copy(p.pos);
-        pool.pos.y = this.level.surface(p.pos.x, p.pos.z, p.pos.y + 0.15) + 0.038;
-        pool.life = pool.max = p.poolLife;
+        this.pool(p.pos.x,p.pos.y,p.pos.z,p.poolLife);
       }
       p.life = 0;
     }
@@ -199,7 +213,7 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
         const target = rayBox(this.old, this.dir, player.bounds());
         if (target <= distance && target < coverDistance) {
           p.pos.copy(this.old).addScaledVector(this.dir, target);
-          const damage = p.damage * (game.encounter?.beastDamageScale ?? 1);
+          const damage = p.damage * (game.encounter?.beastDamageScale ?? 1) * (game.variation?.damage ?? 1);
           if (player.hurt(damage, game, undefined, p.origin, p.type) && player.hp > 0) {
             if (p.slowDuration > 0) player.slow(p.slowScale, p.slowDuration, game.time);
             definition.onProjectileHit?.(game);

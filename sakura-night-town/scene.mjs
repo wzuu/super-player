@@ -372,7 +372,7 @@ function createEncounter({ CONFIG: settings, sound }) {
         const beat = Math.floor((game.time - this.next) / 0.7);
         if (beat !== this.beat) {
           this.beat = beat;
-          sound.tone(160, 65, 0.09, 0.11, 'triangle');
+          sound.stageEvent('impact',game,script.keys().next().value ?? {x:lanternRoad.x,z:lanternRoad.start});
           sound.tone(200, 95, 0.06, 0.07, 'triangle', 0.15);
           if (beat % 4 === 0) sound.tone(587, beat % 8 === 0 ? 880 : 698, 0.38, 0.065, 'sine');
         }
@@ -539,6 +539,10 @@ function createEnvironment(context) {
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'鸟居参道',at:[-8,18],entries:[[-15,15],[0,10]]},
+    {name:'东侧河岸',at:[26,7],entries:[[29,5],[18,0]]},
+  ]},
   config: CONFIG,
   grid: MAP_GRID,
   weaponSkin: 'sakura-night-town',

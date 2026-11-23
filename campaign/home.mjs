@@ -1,9 +1,14 @@
 import { campaignStore } from './store.mjs';
+import { fieldConfig } from '../level-kit/src/field-sites.mjs';
 import { flushPendingBattles } from './save.mjs';
+import { summarize, renderReport, renderStats } from './reports.mjs';
+import { chooseFirstEntry } from './onboarding.mjs';
 import { rifleSkins, resolveRifleSkin } from '../level-kit/src/rifle-skins.mjs';
+import {weaponBuildPanel} from './weapon-build.mjs';
+import {reactionCatalog} from '../level-kit/src/weapon-perks.mjs';
 
 import { profiles, activeProfile, createProfile, selectProfile } from './profiles.mjs';
-import { preferences, storePreferences, defaultKeys, actionLabels, keyName } from '../level-kit/src/preferences.mjs';
+import { preferences, storePreferences, defaultKeys, actionLabels, keyName, bindSoundControl } from '../level-kit/src/preferences.mjs';
 
 const $ = id => document.getElementById(id);
 const views = ['missions', 'history', 'collection'];
@@ -17,12 +22,19 @@ const coverUrl = id => './campaign/images/' + id + '.webp';
 const option = $('collection-level');
 const more = $('more-battles');
 let progress;
+let statistics = [];
+let statisticsAvailable = true;
+let totals = summarize();
 let loadoutRevision = 0;
 let before;
 let loading = false;
 let selectedRifle, previewPromise, savingRifle = false;
 const rifleOptions = new Map();
 const pageProfile = activeProfile();
+const renderBuild=weaponBuildPanel($('weapon-mod-slots'),campaignStore);
+$('weapon-customize').addEventListener('toggle',()=>{
+  if($('weapon-customize').open && selectedRifle) renderBuild(selectedRifle);
+});
 
 function element(tag, className, content) {
   const node = document.createElement(tag);
@@ -84,9 +96,10 @@ function missionCard(level, index, active) {
   }
   const best = progress.best?.[level.id];
   const record = element('p', 'record', best ? best.kills + ' 击杀 · ' + (best.time == null ? '未撤离' : playTime(best.time)) + ' · ' + best.loot + ' 件' : '暂无成绩');
+  if (best) record.append(' · ' + (totals.levels.get(level.id) ?? '未评级'));
   content.append(record);
   row.tabIndex = 0;
-  row.addEventListener('mouseenter', () => renderHero(index));
+  row.addEventListener('click', () => renderHero(index));
   row.addEventListener('focusin', () => renderHero(index));
   row.append(cover, content);
   return row;
@@ -97,10 +110,20 @@ const accents = ['#82dfcb','#d9bd86','#9ed7ff','#e3c275','#aceaff','#78d4ed','#f
 function renderHero(index) {
   const level = progress.levels[index];
   selectedIndex = index;
-  $('hero-art').src = coverUrl(level.id);
+  const art = $('hero-art');
+  if (art.getAttribute('src') !== coverUrl(level.id)) art.src = coverUrl(level.id);
   $('hero-chapter').textContent = '战役  /  ' + order(index) + '  /  ' + (level.cleared ? '已通关' : level.unlocked ? '可挑战' : '未解锁');
   $('game-title').textContent = level.title;
   document.querySelector('.hero-description').textContent = level.brief;
+  const primary = $('continue');
+  primary.hidden = !level.unlocked;
+  if (level.unlocked) {
+    primary.href = levelUrl(level.id);
+    primary.textContent = level.cleared ? '再次挑战' : index === 0 ? '开始战役' : '继续战役';
+  } else {
+    primary.removeAttribute('href');
+  }
+  $('current-mission').textContent = level.unlocked ? '' : '通关 ' + progress.levels[index - 1].title + ' 后开放';
   document.documentElement.style.setProperty('--accent', accents[index % accents.length]);
   for (const [i, card] of [...$('mission-list').children].entries()) card.toggleAttribute('data-selected', i === index);
 }
@@ -110,25 +133,12 @@ function renderMissions() {
   const levels = progress.levels;
   const current = levels.find(level => level.unlocked && !level.cleared);
   const cleared = levels.filter(level => level.cleared).length;
-  const primary = $('continue');
   const featured = current || levels.at(-1);
-  const art = $('hero-art');
-  const src = coverUrl(featured.id);
-  if (art.getAttribute('src') !== src) art.src = src;
-  primary.href = levelUrl(featured.id);
-  primary.textContent = cleared === 0 ? '开始战役' : current ? '继续战役' : '重玩最终关';
-  primary.hidden = false;
-  $('current-mission').textContent = current
-    ? '第 ' + order(levels.indexOf(current)) + ' 关 / ' + current.title
-    : '全部关卡已通关';
   $('progress-count').textContent = cleared + ' / ' + levels.length;
   $('campaign-progress').max = levels.length;
   $('campaign-progress').value = cleared;
   $('mission-list').replaceChildren(...levels.map((level, index) => missionCard(level, index, level === current)));
   renderHero(levels.indexOf(featured));
-  $('codex-count').textContent = progress.loot.length + ' / ' + levels.length * progress.lootPerLevel + ' 件宝物';
-  $('active-skin').textContent = rifleSkins[progress.equippedSkin]?.name ?? '关卡默认';
-  $('stat-count').textContent = cleared + ' 个战场已通关';
   $('last-played').textContent = progress.battles.length ? '最近游玩 ' + date.format(progress.battles[0].endedAt) : '本机新存档';
 }
 
@@ -152,6 +162,11 @@ function appendBattles(page) {
       number.format(battle.kills), playTime(battle.durationMs), number.format(battle.lootCount) + ' 件',
       number.format(battle.lootValue), date.format(battle.endedAt),
     ].map(value => element('td', '', value)));
+    const details = element('button', 'secondary-action', '查看战报');
+    details.addEventListener('click', () => showReport(battle.id));
+    const action = element('td');
+    action.append(details);
+    row.append(action);
     return row;
   });
   $('battle-list').append(...rows);
@@ -164,7 +179,9 @@ function appendBattles(page) {
 
 function renderCollection() {
   const items = progress.loot.filter(item => item.level === option.value);
-  const slots = Math.max(0, progress.lootPerLevel - items.length);
+  const mainLoot = item=>!(/^(宝库·|传奇·|秘藏·|精英徽记|精英改装材料|猎场徽印)/).test(item.name);
+  const main=items.filter(mainLoot).length;
+  const slots = Math.max(0, progress.lootPerLevel - main);
   const cards = items.map(item => {
     const card = element('li', 'loot-card discovered');
     const mark = element('span', 'loot-mark');
@@ -182,8 +199,8 @@ function renderCollection() {
     cards.push(card);
   }
   $('collection-list').replaceChildren(...cards);
-  $('selected-loot-count').textContent = items.length + ' / ' + progress.lootPerLevel;
-  $('collection-count').textContent = '已收集 ' + progress.loot.length + ' / ' + (progress.levels.length * progress.lootPerLevel);
+  $('selected-loot-count').textContent = main + ' / ' + progress.lootPerLevel + (items.length>main?' · 额外藏品 '+(items.length-main):'');
+  $('collection-count').textContent = '已收集 ' + progress.loot.filter(mainLoot).length + ' / ' + (progress.levels.length * progress.lootPerLevel);
 }
 
 async function loadPreview() {
@@ -212,11 +229,16 @@ function updateWeaponPreview() {
     $('rifle-reset-view').hidden = true;
     $('rifle-preview-tip').textContent = '此浏览器暂时无法显示三维预览。';
   });
-  previewPromise.then(preview => preview?.show(selectedRifle, !$('view-collection').hidden));
+  previewPromise.then(preview => preview?.show(selectedRifle, !$('view-collection').hidden, totals.weapons.get(selectedRifle)?.kills ?? 0));
 }
 
 function renderRifles() {
   const levels = progress.levels.filter(level => Object.hasOwn(rifleSkins, level.id));
+  for (const [id,skin] of Object.entries(rifleSkins)) {
+    if (!skin.unlock) continue;
+    const stage=progress.levels.find(level=>level.id===skin.unlock);
+    if (stage) levels.push({...stage,id});
+  }
   if (!levels.length) return;
   selectedRifle ??= resolveRifleSkin(progress.equippedSkin, levels[0].id);
   const skin = rifleSkins[selectedRifle];
@@ -229,9 +251,11 @@ function renderRifles() {
   $('rifle-source').textContent = source.title + (source.cleared ? ' / 已解锁' : ' / 通关后解锁');
   $('rifle-name').textContent = skin.name;
   $('rifle-description').textContent = skin.detail;
+  if($('weapon-customize').open) renderBuild(selectedRifle);
   $('rifle-canvas').setAttribute('aria-label', skin.name + '三维预览');
-  $('active-skin').textContent = rifleSkins[equipped]?.name ?? '关卡默认';
   $('rifle-equipped').textContent = equipped ? '当前佩戴 ' + rifleSkins[equipped].name : '当前使用关卡默认外观';
+  const weaponStats = totals.weapons.get(selectedRifle);
+  $('rifle-statistics').textContent = statisticsAvailable ? '累计击杀 ' + (weaponStats?.kills ?? 0) + ' · 命中率 ' + (weaponStats?.shots ? Math.round(weaponStats.hits / weaponStats.shots * 100) + '%' : '未记录') : '武器统计暂不可用';
   $('rifle-equip').textContent = selectedEquipped ? '已佩戴' : source.cleared ? '佩戴外观' : '尚未解锁';
   $('rifle-equip').setAttribute('aria-disabled', String(savingRifle || selectedEquipped || !source.cleared));
   $('rifle-default').hidden = !equipped;
@@ -239,8 +263,14 @@ function renderRifles() {
   for (const level of levels) {
     let row = rifleOptions.get(level.id);
     if (!row) {
+      const category=rifleSkins[level.id].category ?? '步枪';
+      if (list.dataset.lastCategory!==category) {
+        list.append(element('li','rifle-category',category));
+        list.dataset.lastCategory=category;
+      }
       const item = element('li');
       const button = element('button', 'rifle-option');
+      button.dataset.weaponId=level.id;
       button.type = 'button';
       const color = element('span', 'rifle-option-color');
       color.style.setProperty('--rifle-color', rifleSkins[level.id].trim);
@@ -287,7 +317,13 @@ async function equipRifle(skin) {
 
 async function refreshProgress() {
   const revision = loadoutRevision;
-  const updated = await (await campaignStore()).progress();
+  const store = await campaignStore();
+  const [updated, rows] = await Promise.all([store.progress(), store.statistics().catch(()=>null)]);
+  statisticsAvailable=rows!==null;
+  if(statisticsAvailable) {
+    statistics=rows;
+    totals=summarize(rows);
+  }
   // 补存读取和佩戴写入可并行。保留读取期间已保存的最新选择。
   if (revision !== loadoutRevision) updated.equippedSkin = progress.equippedSkin;
   progress = updated;
@@ -309,6 +345,7 @@ async function loadProgress() {
   loading = true;
   try {
     await refreshProgress();
+    await chooseFirstEntry(progress.battleCount, './practice/index.html?mode=tutorial', (await campaignStore()).pendingPrefix);
     let complete = true, refreshHistory = false;
     for await (const battle of flushPendingBattles()) {
       if (!battle) {
@@ -382,6 +419,20 @@ function openPanel(title) {
   body.replaceChildren();
   if (!panel.open) panel.showModal();
 }
+async function showReport(id) {
+  openPanel('单局战报');
+  const message = element('p', '', '正在读取战报');
+  body.append(message);
+  try {
+    const store = await campaignStore(), battle = await store.report(id);
+    if (!message.isConnected) return;
+    if (!battle) throw Error();
+    message.remove();
+    renderReport(body, battle, progress.levels, store);
+  } catch {
+    message.textContent = '暂时无法读取本局战报，请重新打开。';
+  }
+}
 function field(label, control) {
   const row = element('label', '', label);
   row.append(control);
@@ -399,6 +450,7 @@ function settings() {
     ['fov', '视野角度', 55, 105, 1],
     ['volume', '主音量', 0, 100, 1],
     ['hitShake', '受击震动强度', 0, 1, 0.1],
+    ['attackShake', '击杀震动强度', 0, 1, 0.1],
   ]) {
     const input = element('input');
     Object.assign(input, { type: 'range', min, max, step, value: prefs[id] });
@@ -448,6 +500,7 @@ function settings() {
     ['directionIndicators', '显示受击方向'],
     ['metrics', '显示性能面板'],
     ['gamepad', '标准手柄输入'],
+    ['recordReplay', '录制战术回放'],
   ]) {
     const input = element('input');
     input.type = 'checkbox';
@@ -487,10 +540,10 @@ function settings() {
     field(actionLabels[i], button);
   }
 }
+const refreshSound = bindSoundControl($('mute'));
 function updateVolume() {
   const prefs = preferences();
-  $('mute').textContent = prefs.muted ? '已静音' : '音量 ' + prefs.volume + '%';
-  $('mute').setAttribute('aria-pressed', String(prefs.muted));
+  refreshSound(prefs);
   $('control-tip').textContent = [
     ['KeyW', 'KeyA', 'KeyS', 'KeyD'].map((k) => keyName(prefs.keys[k])).join('') + ' 移动',
     '鼠标瞄准',
@@ -499,12 +552,6 @@ function updateVolume() {
   ].join(' · ');
 }
 $('settings-open').onclick = settings;
-$('mute').onclick = () => {
-  const p = preferences();
-  p.muted = !p.muted;
-  storePreferences(p);
-  updateVolume();
-};
 updateVolume();
 $('save-open').onclick = () => {
   openPanel('本机存档');
@@ -540,17 +587,30 @@ function showArchive(kind) {
     body.append(
       element('p', '', '累计对战 ' + progress.battleCount + ' 局 · 通关 ' + $('progress-count').textContent),
     );
+    if(statisticsAvailable) renderStats(body, statistics);
+    else body.append(element('p','','本次未能读取战斗统计，请重新读取存档。'));
     for (const level of progress.levels)
       body.append(element('p', '', (level.cleared ? '已达成 · ' : '待达成 · ') + level.title + '撤离'));
   } else {
     body.append(
       element('h3', '', '凶兽'),
-      element('p', '', '群攻型 · 擅长包抄　重甲型 · 直线冲撞　喷吐型 · 远程攻击　首领 · 半血狂暴'),
+      element('p', '', '群攻型擅长包抄，重甲型直线冲撞，喷吐型善于远攻。首领的阶段和破甲状态显示在血条旁。'),
+      element('p', '', '红色鼓胀的自爆体应在引爆前击杀。蓝环护盾体会保护身边的普通凶兽，瞄准核心可破盾。绿色冠状孵化体能治疗或孵化，蓄能时命中即可打断。'),
+      element('p', '', '精英凶兽会掉落额外补给。留意名字旁的词缀，厚甲应从背后攻击，荆棘应拉开距离，燃迹会在经过的地面留下火焰。'),
       element('h3', '', '带回的宝物'),
     );
-    body.append(element('p', '', $('codex-count').textContent));
+    body.append(element('p', '', '已收集 '+progress.loot.length+' 种宝物'));
     for (const item of progress.loot)
       body.append(element('p', '', item.name + ' × ' + item.count + ' · ' + number.format(item.value)));
+    body.append(element('h3','','传奇收藏'));
+    for(const item of progress.loot.filter(i=>i.name.startsWith('传奇·')))body.append(element('p','',item.name));
+    body.append(element('h3','','关卡秘闻'));
+    for(const level of progress.levels){
+      const found=progress.discoveries?.includes(level.id);
+      body.append(element('p','',level.title+' · '+(found?'1 / 1 · '+(fieldConfig(level.id)?.lore??'已发现'):'0 / 1')));
+    }
+    body.append(element('h3','','元素反应'));
+    for(const reaction of reactionCatalog) body.append(element('p','',reaction.name+' · '+reaction.rule));
   }
 }
 for (const button of document.querySelectorAll('[data-panel]'))
@@ -593,14 +653,14 @@ document.addEventListener('keydown', (event) => {
     location.hash = 'missions';
     return;
   }
-  if (!progress || $('view-missions').hidden) return;
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+  const card = event.target.closest('.mission-card');
+  if (!progress || !card || $('view-missions').hidden) return;
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
     event.preventDefault();
-    const i =
-      (selectedIndex + (event.key === 'ArrowLeft' ? -1 : 1) + progress.levels.length) %
-      progress.levels.length;
+    const step = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1;
+    const i = (selectedIndex + step + progress.levels.length) % progress.levels.length;
     $('mission-list').children[i].focus();
-  } else if (event.key === 'Enter' && event.target.matches('.mission-card')) {
+  } else if (event.key === 'Enter' && event.target === card) {
     event.preventDefault();
     event.target.querySelector('a')?.click();
   }

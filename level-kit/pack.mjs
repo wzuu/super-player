@@ -57,12 +57,13 @@ export async function pack(sceneArgument, outputArgument) {
   const campaignId = levels[campaignStage - 1]?.id;
   const registered = campaignId && output === join(root, campaignId, 'index.html');
 
-  const offline = registered ? await offlineScripts(false,levels) : '';
+  const offline = registered || output === join(root,'practice/index.html') ? await offlineScripts(false,levels) : '';
   const html = shell
     .replace('<!doctype html>', '<!doctype html>\n<!-- 由 level-kit/pack.mjs 从场景和公共模块生成 -->')
     .replace('src="./vendor/three-r160.js"', `src="${vendor}"`)
     .replace(", '@level-kit/': './src/'", '')
-    .replace('<body>', registered ? `<body data-campaign-level="${campaignId}">` : '<body>')
+    .replace('<body>', registered ? `<body data-campaign-level="${campaignId}">` :
+      output === join(root, 'practice/index.html') ? '<body data-practice="true">' : '<body>')
     .replace('<!-- LEVEL_SOURCES -->', () => embedded + offline)
     .replace(/    \/\/ LEVEL_SCENE_START[\s\S]*?    \/\/ LEVEL_SCENE_END/,
       `    const sceneModule = '@level/scene.mjs';\n    const campaignStage = ${campaignStage};`);
