@@ -7,6 +7,8 @@
 
 项目处于开发阶段。走位射击关卡以 `LEVEL_BIBLE.md` 为固定提示词，使用 `level-kit/` 和以第三关为基准的 `level-kit/UI_LAYOUT.md`。第一至第十一关使用共享 HUD、菜单、公共运行时和本地 Three.js。
 
+代码已作为 GitHub 公开项目发布在 <https://github.com/wzuu/super-player>（分支 `main`），对外说明见根目录 `README.md`。GitHub Pages 未开启，战役存档仍需本机 `server.py`。
+
 | 游戏 | 已完成 | 下一步 |
 | --- | --- | --- |
 | 战役首页 | 根目录 `index.html` 展示关卡、对战记录和个人收藏。SQLite 保存进度和武器外观佩戴设置 | 其他桌面浏览器待实测 |
@@ -25,6 +27,10 @@
 | 后续关卡标准 | 固定提示词、共享 UI、公共模块、可玩模板、模块预览和单 HTML 打包已就位 | 新关卡填入主题并按圣经与 UI 规范验收 |
 
 ## 已完成与验证结果
+
+- [x] 2026-11-23 初始化 Git 仓库（分支 `main`），提交 67 个文件共 65492 行，用 `gh repo create super-player --public --source . --push` 创建 GitHub 公开仓库 `https://github.com/wzuu/super-player`。验证：不带凭据的 `GET https://api.github.com/repos/wzuu/super-player` 返回 `private=false`，仓库页 `HTTP 200`，`raw.githubusercontent.com` 可取到 `README.md`（4971 字节）和 `rain-city/index.html`（193166 字节），`git ls-remote --heads origin` 与本地 `42dc175` 一致。`.data/` 与 `.DS_Store` 经 `git status --porcelain --ignored` 确认未被跟踪。GitHub Pages 按用户选择暂未开启。
+- [x] 2026-11-23 新增面向外部玩家的 `README.md`（运行方式、战役与单关离线两种玩法、按键表、十一关一览、目录结构、自建关卡步骤、Three.js MIT 声明与已知限制）。核对文中相对链接指向仓库实际存在的文件，路径引用与 `level-kit/README.md` 的打包命令一致。
+- [x] 2026-11-23 扩充 `.gitignore`：在原有 `.data/`、`__pycache__/`、`AGENTS.local.md` 之外补 `.env*`、`.DS_Store`、`._*`、编辑器目录与日志。推送前用关键字扫描确认仓库内无令牌、密码、私钥与个人绝对路径（`shanhai-secret-realm`、`rifle-model` 等命中为文件名与代码标识符误报）。
 
 - [x] 2026-11-23 将首页战场总数和关卡简介中的固定击杀数量改为通用描述。重新打包并检查十一关产物，确认局内击杀进度仍读取实际关卡配置。后续新增关卡沿用通用文案。
 - [x] 2026-11-23 统一战役凶兽难度。保留第一关原有常规目标 56 只，沿用第二关原有的 2 只增量作为后续标准。第一关基础移速减半，之后每关增加首关基准的 5%，第 21 关达到原速上限。规则按登记顺序生效，重打包十一关，更新内部开发规范。
@@ -159,6 +165,8 @@
 
 | 日期 | 决定 | 原因 | 影响 |
 | --- | --- | --- | --- |
+| 2026-11-23 | 以公开仓库发布到 GitHub，仓库名 `super-player`，同时保留全部内部文档并补一份 `README.md` | 用户确认要公开项目并选择保留开发记录，另需面向外部玩家的入口说明 | 内部规格与验收记录对外可见；对外说明只写玩法与扩展方式，难度曲线等内部规则继续留在 `AGENTS.md` 与 `LEVEL_BIBLE.md` |
+| 2026-11-23 | 暂不启用 GitHub Pages | 战役进度依赖 `server.py` 的 SQLite 接口，静态托管下首页功能不可用，开启会误导玩家 | 玩家需本机运行 `python3 server.py` 玩战役；直接打开各关 `index.html` 仍可离线游玩 |
 | 2026-11-23 | 根目录作为战役首页，第一关入口移到关卡目录 | 统一选关、记录和图鉴 | 胜利结算写入 SQLite 后开放下一关，打包器保护首页路径 |
 | 2026-11-23 | 成功撤离解锁本关武器外观。默认按照关卡切换，已佩戴的外观可跨关使用 | 复用已有通关记录，并允许玩家保留喜欢的外观 | SQLite 只新增一个佩戴槽位，关卡直开时使用各自默认外观 |
 | 2026-11-23 | 通过仅监听本机的 Python 标准库服务保存 SQLite，关卡沿用共用本地依赖 | 保持本机单人使用且可在无外网时游玩 | 存档文件默认在 `.data/super-player.sqlite3`，直接打开关卡可离线练习，通过本机服务参加战役 |
@@ -198,7 +206,7 @@
 
 ## 交接备注
 
-接手时先读 `AGENTS.md`。在项目根目录运行 `python3 server.py`，访问 `http://127.0.0.1:8000/`。战役顺序在 `campaign/levels.json`。第一关在 `underground-lab/scene.mjs` 的 `WALLS`、`ROOMS` 与 `LANDMARKS` 调整布局，在 `CONFIG.beasts`、`CONFIG.weapon` 与 `CONFIG.alarm` 调整敌人、机关枪和警报。运行 `node level-kit/pack.mjs underground-lab/scene.mjs` 更新关卡入口。
+接手时先读 `AGENTS.md`。工作目录已是 Git 仓库，远端 `origin` 指向公开项目 `https://github.com/wzuu/super-player`，改动后 `git push` 即对外发布，推送前确认 `.data/` 未被跟踪。在项目根目录运行 `python3 server.py`，访问 `http://127.0.0.1:8000/`。战役顺序在 `campaign/levels.json`。第一关在 `underground-lab/scene.mjs` 的 `WALLS`、`ROOMS` 与 `LANDMARKS` 调整布局，在 `CONFIG.beasts`、`CONFIG.weapon` 与 `CONFIG.alarm` 调整敌人、机关枪和警报。运行 `node level-kit/pack.mjs underground-lab/scene.mjs` 更新关卡入口。
 
 第二关在 `shanhai-secret-realm/scene.mjs` 的 `MAP_GRID` 和 `LANDMARKS` 调整布局。用 `CONFIG.beasts` 调节数量和四类凶兽，用 `CONFIG.weapon` 调节机关枪，用 `CONFIG.moon` 调节血月。运行 `node level-kit/pack.mjs shanhai-secret-realm/scene.mjs` 更新独立入口。
 

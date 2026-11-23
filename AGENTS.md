@@ -12,9 +12,10 @@
 - 战役凶兽难度按登记顺序自动计算。第一关使用各类凶兽原移速的 50%，每关加第一关基准的 5%，最高为原移速。常规同场目标从 56 只开始，每关加 2 只。目前十一关为 56 至 76 只，基础移速为原速的 50% 至 75%。后续关卡沿用这条曲线，详情见开发圣经。
 - 十一关各有默认步枪外观。成功撤离解锁本关外观，已有通关记录自动计入。首页个人收藏可旋转预览、佩戴或恢复关卡默认。佩戴保存在本机 SQLite。造型和程序纹理维护在 `level-kit/src/rifle-*.mjs`。
 - 项目处于开发阶段。后续射击关卡使用 `LEVEL_BIBLE.md` 和 `level-kit/`，第三关雨夜废城的独立入口为 `rain-city/index.html`。
+- 2026-11-23 已初始化为 Git 仓库并推送到 GitHub 公开项目 `https://github.com/wzuu/super-player`（分支 `main`）。新增面向外部玩家的 `README.md`。GitHub Pages 未开启，详情见第 14 节。
 - 第一关《地下实验室》由 `underground-lab/scene.mjs` 和共享组件生成 `underground-lab/index.html`。本版替换原探索关卡，采用 80 米乘 80 米实验设施、四类失控实验体、隐藏捷径和红色警报，已通过 Chromium 单文件验收。
 - 第二关《上古秘境》由 `shanhai-secret-realm/scene.mjs` 和共享组件生成 `shanhai-secret-realm/index.html`，玩法与验收记录见第二关规格和 `PROGRESS.md`。
-- 第三关以 `rain-city/scene.mjs` 为场景源文件，公共逻辑位于 `level-kit/src/`。生成后的 `rain-city/index.html` 使用 Chromium 验收，测试结果见 `PROGRESS.md`。工作区尚未初始化 Git。
+- 第三关以 `rain-city/scene.mjs` 为场景源文件，公共逻辑位于 `level-kit/src/`。生成后的 `rain-city/index.html` 使用 Chromium 验收，测试结果见 `PROGRESS.md`。
 - 第四关《流沙王陵》由 `buried-tomb/scene.mjs` 生成 `buried-tomb/index.html`，采用共享 HUD 与菜单，沙暴通过上方中央状态位显示。
 - 第五关《极夜冰站》由 `polar-station/scene.mjs` 生成 `polar-station/index.html`，温度量表、室内回温和冰弹减速沿用共享运行时扩展。
 - 第六关《沉穹古都》由 `drowned-city/scene.mjs` 生成 `drowned-city/index.html`。穹顶破裂使用共享状态位和小地图事件标记。
@@ -133,7 +134,10 @@
 ## 14. 协作与发布
 
 - 使用中文沟通，禁止输出表情符号。删除数据、变更部署或生产环境、操作服务器、更换技术栈、大范围重构和安装全局依赖须先确认。
-- 暂无 Git 仓库、部署目标、域名或发布流程。敏感信息只放入被 Git 忽略的 `AGENTS.local.md`，本文件只记录非敏感信息和凭据位置。
+- Git 仓库为 `wzuu/super-player`，分支 `main`，**公开可见**。远端用 `origin` 指向 `https://github.com/wzuu/super-player`，推送走 `gh` CLI 已保存的凭据，仓库内不保存令牌。
+- GitHub Pages 未开启。纯静态托管只能单关离线游玩，战役存档依赖 `server.py` 的 `/api/progress`、`/api/battles`、`/api/loadout`，Pages 上不可用。如需开启需再次确认。
+- 公开仓库禁止提交本机存档与个人信息：`.data/`、`AGENTS.local.md`、`.env*`、`.DS_Store` 均在 `.gitignore` 中。推送前确认 `git status --porcelain --ignored` 里 `.data/` 未被跟踪。
+- 敏感信息只放入被 Git 忽略的 `AGENTS.local.md`，本文件与 `README.md`、`PROGRESS.md` 等入库文档只记录非敏感信息和凭据位置。`README.md` 面向外部玩家，不写内部难度曲线与验收细节，内部规则留在本文件与 `LEVEL_BIBLE.md`。
 
 ## 15. 接手与进度维护
 
