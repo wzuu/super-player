@@ -15,6 +15,9 @@ const atmosphere = {
   'neon-undercity': { kind: 'rain', color: '#d09bff', speed: -1.6, size: .063, opacity: .55 },
   'jungle-temple': { kind: 'mist', color: '#a0cdbc', speed: .067, size: .59, opacity: .30 },
   'bloodmoon-castle': { kind: 'bat', color: '#bb5b72', speed: .055, size: .11, opacity: .73 },
+  'sakura-night-town': { kind: 'petal', color: '#ffc7d2', speed: -.24, size: .066, opacity: .88 },
+  'brass-factory': { kind: 'dust', color: '#aaa093', speed: .13, size: .042, opacity: .65 },
+  'haunted-midway': { kind: 'confetti', color: '#ffffff', speed: -.18, size: .052, opacity: .8 },
 };
 
 function makeParticles({ kind, color, speed, size, opacity }) {
@@ -29,6 +32,12 @@ function makeParticles({ kind, color, speed, size, opacity }) {
     origin[3 * i + 2] = random() * 3.2 - 2.8;
   }
   geometry.setAttribute('position', new THREE.BufferAttribute(points, 3));
+  if (kind === 'confetti') {
+    const palette = ['#f86aa7', '#68ddda', '#ffc75a'].map(tint => new THREE.Color(tint));
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) palette[i % palette.length].toArray(colors, i * 3);
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  }
   const map = rifleTexture(THREE, 64, 64, ctx => {
     ctx.fillStyle = '#fff';
     if (kind === 'rain') {
@@ -38,6 +47,11 @@ function makeParticles({ kind, color, speed, size, opacity }) {
       ctx.strokeStyle = '#fffd'; ctx.lineWidth = 3; ctx.beginPath();
       ctx.arc(32, 32, 23, 0, Math.PI * 2); ctx.stroke();
       ctx.beginPath(); ctx.arc(32, 32, 16, 3.7, 4.8); ctx.stroke();
+    } else if (kind === 'petal') {
+      ctx.beginPath(); ctx.moveTo(12, 49); ctx.quadraticCurveTo(11, 18, 40, 9);
+      ctx.lineTo(39, 17); ctx.lineTo(52, 12); ctx.quadraticCurveTo(55, 35, 12, 49); ctx.fill();
+    } else if (kind === 'confetti') {
+      ctx.translate(32, 32); ctx.rotate(.5); ctx.fillRect(-9, -22, 18, 44);
     } else if (bat) {
       ctx.beginPath(); ctx.moveTo(3, 19); ctx.quadraticCurveTo(20, 14, 29, 30);
       ctx.lineTo(29, 23); ctx.lineTo(33, 29); ctx.lineTo(38, 23); ctx.lineTo(39, 30);
@@ -50,7 +64,7 @@ function makeParticles({ kind, color, speed, size, opacity }) {
       fade.addColorStop(1, '#fff0'); ctx.fillStyle = fade; ctx.fillRect(0, 0, 64, 64);
     }
   });
-  const material = new THREE.PointsMaterial({ color, map, size, opacity, transparent: true, depthWrite: false, toneMapped: false });
+  const material = new THREE.PointsMaterial({ color, map, size, opacity, vertexColors: kind === 'confetti', transparent: true, depthWrite: false, toneMapped: false });
   const mesh = new THREE.Points(geometry, material);
   mesh.frustumCulled = false;
   return {
@@ -86,13 +100,42 @@ export function createWeaponPreview(canvas, reset) {
   const ambient = new THREE.AmbientLight(0xe2ecff, 1.27);
   const key = new THREE.DirectionalLight(0xffe4c5, 3.1);
   const fill = new THREE.DirectionalLight(0x80bfff, 1.9);
+  const boilerLamp = new THREE.PointLight(0xffad57, 1.4, 4);
+  boilerLamp.position.set(.65, .72, .6); boilerLamp.visible = false;
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   Object.assign(key.shadow.camera, { left: -1.7, right: 1.7, top: 1.2, bottom: -1.25, near: .15, far: 8 });
   key.shadow.normalBias = .027;
   key.position.set(-1.6, 3.2, 2.1);
   fill.position.set(1.5, .9, -1.2);
-  scene.add(ambient, key, fill);
+  scene.add(ambient, key, fill, boilerLamp);
+
+  // 收藏切换时只切换显隐。管道和铸铁窗架置于展台后方，让枪身轮廓保持清楚。
+  const workshop = new THREE.Group();
+  workshop.visible = false; scene.add(workshop);
+  const iron = new THREE.MeshStandardMaterial({ color: '#343336', metalness: .59, roughness: .78 });
+  const copper = new THREE.MeshStandardMaterial({ color: '#654637', metalness: .67, roughness: .67 });
+  const pipe = new THREE.CylinderGeometry(1, 1, 1, 10);
+  const girder = new THREE.BoxGeometry(1, 1, 1);
+  const stamp = new THREE.Object3D();
+  function scenery(geometry, material, parts) {
+    const mesh = new THREE.InstancedMesh(geometry, material, parts.length);
+    parts.forEach(([x, y, z, w, h, d, angle = 0], i) => {
+      stamp.position.set(x, y, z); stamp.scale.set(w, h, d); stamp.rotation.z = angle;
+      stamp.updateMatrix(); mesh.setMatrixAt(i, stamp.matrix);
+    });
+    workshop.add(mesh);
+  }
+  scenery(pipe, copper, [
+    [-1.75,.42,-1.55,.085,1.6,.085], [-1.48,.64,-1.64,.055,2.03,.055],
+    [.15,1.16,-1.78,.065,4.15,.065,Math.PI/2], [.15,1.41,-1.8,.04,4.15,.04,Math.PI/2],
+    [1.78,.36,-1.72,.12,1.48,.12], [1.78,.22,-1.72,.15,.065,.15], [1.78,.76,-1.72,.15,.065,.15],
+  ]);
+  scenery(girder, iron, [
+    [-1.3,.55,-2.15,.09,2.1,.12], [1.13,.55,-2.15,.09,2.1,.12],
+    [0,.86,-2.12,3.8,.07,.1], [0,.33,-2.12,3.8,.055,.1],
+    [-.62,.61,-2.13,.048,1.17,.09,-1.10], [.43,.61,-2.13,.048,1.17,.09,1.10],
+  ]);
 
   const deck = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({
     color: '#293339', roughness: .83, metalness: .13,
@@ -217,6 +260,8 @@ export function createWeaponPreview(canvas, reset) {
     last = now;
     const cycle = time % 11;
     signals.bloodMoon = cycle > 6;
+    signals.shot = cycle < 3 ? Number(time % .3 < .12) : 0;
+    signals.pressure = Math.min(1, cycle / 3);
     signals.emp = cycle > 6 && cycle < 7.8;
     signals.empRecovery = cycle > 7.8 && cycle < 8.65 ? 8.65 - cycle : 0;
     model?.update(time, signals);
@@ -243,6 +288,9 @@ export function createWeaponPreview(canvas, reset) {
         model = createRifle(id);
         scene.add(model.root);
         const effects = atmosphere[id] ? [atmosphere[id]] : [];
+        boilerLamp.visible = id === 'brass-factory';
+        workshop.visible = boilerLamp.visible;
+        if (id === 'haunted-midway') effects.push({ kind: 'mist', color: '#a77eac', speed: .04, size: .47, opacity: .21 });
         if (id === 'bloodmoon-castle') {
           effects.push({ kind: 'mist', color: '#b53f64', speed: .039, size: .77, opacity: .32 });
         }

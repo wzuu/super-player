@@ -9,5 +9,8 @@
   {"id":"derelict-station","title":"失压环站","brief":"穿过失压的轨道站舱段，登上反应堆跃迁平台。"},
   {"id":"neon-undercity","title":"霓雨下城","brief":"利用电磁脉冲瘫痪机械部队，从霓虹广场夺取主控密钥。"},
   {"id":"jungle-temple","title":"雨蚀天阶","brief":"从雷雨涨水的丛林撤向高地，登上羽蛇神殿。"},
-  {"id":"bloodmoon-castle","title":"血月古堡","brief":"翻越墓穴和钟楼回廊，在血月下夺取伯爵的圣杯。"}
+  {"id":"bloodmoon-castle","title":"血月古堡","brief":"翻越墓穴和钟楼回廊，在血月下夺取伯爵的圣杯。"},
+  {"id":"sakura-night-town","title":"樱落夜町","brief":"追上灯笼长街的百鬼行列，携御神镜返回山间神社。"},
+  {"id":"brass-factory","title":"黄铜机坊","brief":"穿过运转的流水线，引诱机械凶兽踏入爆裂管道的蒸汽。"},
+  {"id":"haunted-midway","title":"永夜游园","brief":"躲开飞驰的过山车，在摩天轮下解开团长怀表的封印。"}
 ]

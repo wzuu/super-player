@@ -1,4 +1,5 @@
 import { SpatialHash } from '@level-kit/world.mjs';
+import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 
 export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
   const { projectileTint, ichor, spark, coreTint } = colors;
@@ -109,7 +110,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     listen(b, p, game) {
       const rules = game.encounter, step = game.footstep;
       const heardShot = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, (b.y - game.shotY) * 2, b.z - game.shotZ) < rules.shotHearing;
+        Math.hypot(b.x - game.shotX, (b.y - game.shotY) * 2, b.z - game.shotZ) < rules.shotHearing * game.shotHearingScale;
       const heardStep = game.time - step.at < 0.28 &&
         Math.hypot(b.x - step.x, (b.y - step.y) * 2, b.z - step.z) < step.radius;
       if (heardShot || heardStep) {
@@ -174,7 +175,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       const inSight = distance < settings.sight && (b.alert > 0 || distance < 4.5 || towardX * b.fx + towardZ * b.fz > settings.sightDot);
       const sees = inSight && this.level.visible(this.from, this.dir, lineDistance);
       const hearing = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, b.z - game.shotZ) < CONFIG.weapon.hearingRadius;
+        Math.hypot(b.x - game.shotX, b.z - game.shotZ) < CONFIG.weapon.hearingRadius * game.shotHearingScale;
       if (sees || hearing) b.alert = settings.memory;
       if (b.alert <= 0) { this.patrol(b); return; }
 
@@ -240,6 +241,23 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         game.ui.notify(TEXT.rage, 2.1);
       }
 
+      if (Math.abs(b.perkPushX) + Math.abs(b.perkPushZ) > .05) {
+        this.level.move(b, b.perkPushX * dt, b.perkPushZ * dt, .47);
+        const decay = Math.exp(-7 * dt);
+        b.perkPushX *= decay; b.perkPushZ *= decay;
+      }
+      if (b.perkMoveScale === 0) {
+        const hover = b.statusEffects.get('hover');
+        if (hover) {
+          hover.baseY ??= b.y;
+          const y = hover.baseY + .75 * Math.sin(Math.PI * Math.min(1, hover.until - game.time));
+          if (!this.level.blocked(b.x, b.z, y, b.radius, b.height)) b.y = y;
+        }
+        b.stride = 0;
+        return;
+      }
+      if (game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
+      const confusion = b.statusEffects.get('confused');
       let x = 0, z = 0;
       if (b.stun > 0) {
         x = b.knockX; z = b.knockZ;
@@ -250,7 +268,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         if (distance < type.reach && Math.abs(p.y - b.y) < 1.32 && !b.chargeHit) {
           this.from.set(b.x, b.y + 0.8, b.z);
           const gap = this.dir.set(p.x - b.x, p.y + 0.7 - this.from.y, p.z - b.z).length();
-          if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, gap)), gap)) {
+          if ((!confusion || b.fx * (p.x - b.x) + b.fz * (p.z - b.z) > distance * .85) &&
+              this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, gap)), gap)) {
             p.hurt(damage, game); b.chargeHit = true;
           }
         }
@@ -258,14 +277,23 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         if (b.phaseTime <= 0) {
           if (b.type === 1 && (!hearingOnly ? distance > 1.9 : Math.hypot(b.aim.x - b.x, b.aim.z - b.z) > 1.9)) {
             b.mode = 'charge'; b.phaseTime = type.chargeTime; b.chargeHit = false;
+            if (confusion) {
+              const angle = Math.atan2(b.fx, b.fz) + confusion.angle;
+              b.fx = Math.sin(angle); b.fz = Math.cos(angle);
+            }
             x = b.fx * type.chargeSpeed; z = b.fz * type.chargeSpeed;
           } else {
             if (b.type === 2) {
               if (!p.protected(game)) {
-                game.projectiles.launch(b, hearingOnly ? b.aim : p);
+                const aim = hearingOnly ? b.aim : p;
+                if (confusion) {
+                  const angle = Math.atan2(aim.x - b.x, aim.z - b.z) + confusion.angle;
+                  this.from.set(b.x + Math.sin(angle) * distance, aim.y, b.z + Math.cos(angle) * distance);
+                }
+                game.projectiles.launch(b, confusion ? this.from : aim);
                 if (distance < 17) game.sound.hiss(0.25, 2100, 490, 0.14);
               }
-            } else if (distance < type.reach + 0.2 && Math.abs(p.y - b.y) < (b.type === 3 ? 1.65 : 1.02)) {
+            } else if ((!confusion || Math.cos(confusion.angle) > .85) && distance < type.reach + 0.2 && Math.abs(p.y - b.y) < (b.type === 3 ? 1.65 : 1.02)) {
               this.from.set(b.x, b.y + b.height * 0.55, b.z);
               const length = this.dir.set(p.x - b.x, p.y + 0.8 - this.from.y, p.z - b.z).length();
               if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, length)), length)) p.hurt(b.rage ? damage * 1.24 : damage, game);
@@ -306,10 +334,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         x = 0; z = 0;
       }
       const terrain = this.level.movementScale(b.x, b.z, b.y, game) * (game.encounter?.beastSpeedScale ?? 1);
-      x *= terrain; z *= terrain;
+      x *= terrain * b.perkMoveScale; z *= terrain * b.perkMoveScale;
       const moved = this.level.move(b, x * dt, z * dt, 0.47);
       const floor = this.level.foot(b.x, b.z, b.y + 0.27, b.radius);
-      if (definition.beastSurface) definition.beastSurface(b, p, this.level, floor, dt, game);
+      if (b.statusEffects.has('grounded')) {
+        b.y = Math.max(floor, b.y - dt * 9); b.surfaceRoll *= Math.exp(-10 * dt);
+      } else if (definition.beastSurface) definition.beastSurface(b, p, this.level, floor, dt, game);
       else b.y = Math.max(floor, b.y - dt * 8);
       b.stride = Math.hypot(x, z);
       if (b.stride > 0.9 && moved < dt * b.stride * 0.22) {
@@ -385,6 +415,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         surfaceRoll: 0, clinging: false, surfaceSide: 1,
         hearingOnly: false, heardAt: -Infinity, heardX: x, heardY: y, heardZ: z, reinforcement: false,
       });
+      resetTargetEffects(b);
       this.bodyBounds(b);
       this.live++;
       if (type === 3) this.boss = b;
@@ -434,24 +465,33 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     eject(b, game) {
       return b.type !== 3 && this.retire(b, game);
     }
-    takeHit(b, damage, at, dir, game) {
+    dropHeight(b) { return definition.beastDropHeight?.(b, this.level) ?? b.y; }
+    takeHit(b, damage, at, dir, game, hit = null, source = hit?.electric ? 'electric' : hit ? 'weapon' : 'environment') {
       if (!b.active) return false;
       const type = b.type;
-      b.hp -= damage;
       b.flash = 0.115; b.stun = type === 3 ? 0.065 : 0.115;
       b.knockX = dir.x * (type === 3 ? 0.8 : 3.7); b.knockZ = dir.z * (type === 3 ? 0.8 : 3.7);
       if (!game.encounter?.hearingOnly) b.alert = CONFIG.beasts.memory;
       game.effects.spray(at, ichor, 7, 3.4, 0.094, 'mist');
       game.effects.spray(at, spark, 5, 4.6, 0.037, 'spark');
+      return this.damage(b, damage, game, source, hit);
+    }
+    damage(b, amount, game, source = 'environment', hit = null) {
+      if (game.phase !== 'play' || !b.active || !(amount > 0)) return false;
+      const type = b.type, combat = game.weapon.combat;
+      const applied = Math.min(b.hp, amount * combat.damageScale(b, source, game.time));
+      b.hp -= applied;
+      if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
       this.retire(b, game);
-      const dropY = definition.beastDropHeight?.(b, this.level) ?? b.y;
+      const dropY = this.dropHeight(b);
+      if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
       if (type === 3) {
         game.bossDead = true; this.boss = null;
         game.pickups.add('core', b.x, b.z, dropY + 0.18, TEXT.keyItem, 0);
         game.ui.notify(TEXT.bossDefeated, 2.6);
       }
-      if (!definition.onBeastDefeated?.(b, game)) {
+      if (!definition.onBeastDefeated?.(b, game, source)) {
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');
@@ -485,6 +525,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.refreshHash();
       let nearest = Infinity;
       for (const b of this.pool) {
+        if (!b.active) continue;
+        game.weapon.combat.updateTarget(b, game);
         if (!b.active) continue;
         this.ai.update(b, player, game, dt, this.frame);
         nearest = Math.min(nearest, Math.hypot(b.x - player.x, b.z - player.z));
@@ -532,9 +574,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.refreshHash();
       game.threat = nearest;
     }
-    fadeHitFlashes(dt) {
+    fadeHitFlashes(dt, game) {
       for (const b of this.pool) {
-        if (b.active && b.flash > 0) b.flash = Math.max(0, b.flash - dt);
+        if (!b.active) continue;
+        game.weapon.combat.updateTarget(b, game);
+        if (b.flash > 0) b.flash = Math.max(0, b.flash - dt);
       }
     }
     render(dt = 0, t = 0, disabled = false) {

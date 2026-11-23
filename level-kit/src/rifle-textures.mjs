@@ -264,6 +264,38 @@ export function rifleFinish(THREE, id, skin) {
       case 'bloodmoon-castle':
         gothicMark(ctx);
         break;
+      case 'sakura-night-town':
+        for (const y of [10, 109]) {
+          stroke(ctx, [[2, y], [118, y], [132, y + 8], [372, y + 8], [387, y], [510, y]], '#edb55a', 3);
+        }
+        for (let i = 0; i < 21; i++) {
+          ctx.save(); ctx.translate(rand() * width, 24 + rand() * 74); ctx.rotate(rand() * tau);
+          for (let petal = 0; petal < 5; petal++) {
+            ctx.rotate(tau / 5); ctx.beginPath(); ctx.ellipse(0, -5, 3, 5, 0, 0, tau);
+            ctx.fillStyle = '#e7b075ad'; ctx.fill();
+          }
+          ctx.restore();
+        }
+        break;
+      case 'brass-factory':
+        stains(ctx, rand, ['#70402ce0', '#402e28d0', '#26292c9f'], 78, 19);
+        flecks(ctx, rand, ['#e6c68c', '#493f38', '#75513a'], 890, 4);
+        for (let i = 0; i < 42; i++) {
+          const x = rand() * width, y = rand() * height;
+          stroke(ctx, [[x, y], [x + 8 + rand() * 30, y - 3]], '#f6dca985', 1);
+        }
+        type(ctx, 'BOILER WORKS', 143, 78, '#382f22', 27);
+        break;
+      case 'haunted-midway':
+        for (let x = -60; x < width; x += 68) {
+          stroke(ctx, [[x, height], [x + 64, 0]], '#d8c298', 32);
+        }
+        flecks(ctx, rand, ['#583e31c0', '#866040d0', '#443a31a8'], 1370, 8);
+        for (let i = 0; i < 40; i++) {
+          const y = rand() * height, x = rand() * width;
+          stroke(ctx, [[x, y], [x + 18, y - 2], [x + 49, y]], '#402d287c', 1);
+        }
+        break;
     }
     flecks(ctx, rand, ['#fff8e03d', '#10151d30'], 330, 4);
     stroke(ctx, [[0, 4], [width, 4]], '#eee0c290', 2);

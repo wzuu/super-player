@@ -25,7 +25,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
       let object = this.objects.find(p => !p.active);
       if (!object) {
         for (const p of this.objects) {
-          if ((p.kind === 'ammo' || p.kind === 'health') && !p.permanent && (!object || p.born < object.born)) object = p;
+          if (!p.permanent && ['ammo', 'health', 'sample'].includes(p.kind) && (!object || p.born < object.born)) object = p;
         }
       }
       if (!object) return;
@@ -40,6 +40,9 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
         else if (item.kind === 'rare') {
           game.loot.push({ name: item.name, value: item.value }); game.value += item.value;
           game.ui.notify('已拾取 ' + item.name + ' / 价值 ' + item.value, 1.7);
+        } else if (item.kind === 'sample') {
+          game.weapon.combat.samplePending = true;
+          game.ui.notify('已回收样本 / 下次换弹伤害提升 30%', 1.7);
         } else if (item.kind === 'health') {
           const restored = Math.min(CONFIG.player.health - player.hp, item.value);
           if (restored <= 0) continue;
@@ -63,7 +66,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
       for (const item of this.objects) {
         if (!item.active) continue;
         const core = item.kind === 'core', rare = item.kind === 'rare';
-        const color = core ? coreTint : rare ? rareTint : item.kind === 'health' ? healthTint : ammoTint;
+        const color = core ? coreTint : rare ? rareTint : item.kind === 'health' || item.kind === 'sample' ? healthTint : ammoTint;
         const a = t * 1.7 + item.x * 0.11;
         const offset = core ? 0.68 : rare ? 0.47 : 0.35;
         const float = Math.sin(a * 1.8) * 0.070;

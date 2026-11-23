@@ -56,6 +56,9 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         if (!b.active) continue;
         ctx.fillStyle = b.type === 3 ? '#ff9a71' : '#f45f76';
         ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), b.type === 3 ? 3.2 : 1.5, 0, TAU); ctx.fill();
+        if (b.statusEffects.has('marked')) {
+          ctx.strokeStyle = '#ffd780'; ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), 4.4, 0, TAU); ctx.stroke();
+        }
       }
       if (game.bossDead && !game.core) {
         const core = game.pickups.objects.find(item => item.active && item.kind === 'core');
@@ -105,7 +108,8 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.tick -= dt;
       if (this.tick > 0) return;
       this.tick = 0.062;
-      const condition = game.encounter?.status;
+      const status = w.combat.status(game);
+      const condition = game.encounter?.status ?? (status ? { title: '武器特性', detail: '' } : null);
       this.nodes.condition.hidden = !condition;
       if (condition) {
         this.text('condition-title', condition.title);
@@ -114,7 +118,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         if (!meter.hidden) meter.value = condition.value;
         const readout = condition.readout ?? (Number.isFinite(condition.remaining) ? Math.max(0, Math.ceil(condition.remaining)) + ' 秒' : '');
         this.text('condition-time', readout);
-        this.text('condition-detail', condition.detail);
+        this.text('condition-detail', [condition.detail, status].filter(Boolean).join(' / '));
       }
       const offline = game.encounter?.hudOffline === true;
       this.nodes.hud.toggleAttribute('data-offline', offline);
@@ -126,7 +130,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.health.value = p.hp; this.nodes.stamina.value = p.energy;
       this.text('ammo', String(w.ammo).padStart(2, '0'));
       this.text('reserve', '/ ' + w.reserve);
-      this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 ? (w.reserve ? '按 R 换弹' : '弹药耗尽') : '');
+      this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 && w.reserve === 0 ? '弹药耗尽' : '');
       this.nodes.cross.style.setProperty('--gap', (7 + w.heat * 12 + (p.sprinting ? 5 : 0)).toFixed(1) + 'px');
       this.text('loot', game.loot.length + ' / ' + (definition.loot?.length ?? 0));
       this.text('kills', game.kills + ' / ' + CONFIG.beasts.killsToWin);

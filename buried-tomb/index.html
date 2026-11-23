@@ -228,7 +228,7 @@
         <div><dt>WASD</dt><dd>移动</dd></div>
         <div><dt>鼠标 / 左键</dt><dd>瞄准 / 连射</dd></div>
         <div><dt>Shift / 空格</dt><dd>冲刺 / 跳跃</dd></div>
-        <div><dt>R / E / Esc</dt><dd>换弹 / 交互 / 暂停</dd></div>
+        <div><dt>R / E / Esc</dt><dd>提前换弹（空仓自动） / 交互 / 暂停</dd></div>
         <div id="crouch-help" hidden><dt>C</dt><dd>按住蹲伏</dd></div>
       </dl>
       <div id="summary" hidden></div>
@@ -326,6 +326,7 @@ export function createSoundClass({ CONFIG, seededRandom }) {
 </script>
 <script type="text/plain" data-level-module="@level-kit/beasts.mjs">
 import { SpatialHash } from '@level-kit/world.mjs';
+import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 
 export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
   const { projectileTint, ichor, spark, coreTint } = colors;
@@ -436,7 +437,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     listen(b, p, game) {
       const rules = game.encounter, step = game.footstep;
       const heardShot = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, (b.y - game.shotY) * 2, b.z - game.shotZ) < rules.shotHearing;
+        Math.hypot(b.x - game.shotX, (b.y - game.shotY) * 2, b.z - game.shotZ) < rules.shotHearing * game.shotHearingScale;
       const heardStep = game.time - step.at < 0.28 &&
         Math.hypot(b.x - step.x, (b.y - step.y) * 2, b.z - step.z) < step.radius;
       if (heardShot || heardStep) {
@@ -501,7 +502,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       const inSight = distance < settings.sight && (b.alert > 0 || distance < 4.5 || towardX * b.fx + towardZ * b.fz > settings.sightDot);
       const sees = inSight && this.level.visible(this.from, this.dir, lineDistance);
       const hearing = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, b.z - game.shotZ) < CONFIG.weapon.hearingRadius;
+        Math.hypot(b.x - game.shotX, b.z - game.shotZ) < CONFIG.weapon.hearingRadius * game.shotHearingScale;
       if (sees || hearing) b.alert = settings.memory;
       if (b.alert <= 0) { this.patrol(b); return; }
 
@@ -567,6 +568,23 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         game.ui.notify(TEXT.rage, 2.1);
       }
 
+      if (Math.abs(b.perkPushX) + Math.abs(b.perkPushZ) > .05) {
+        this.level.move(b, b.perkPushX * dt, b.perkPushZ * dt, .47);
+        const decay = Math.exp(-7 * dt);
+        b.perkPushX *= decay; b.perkPushZ *= decay;
+      }
+      if (b.perkMoveScale === 0) {
+        const hover = b.statusEffects.get('hover');
+        if (hover) {
+          hover.baseY ??= b.y;
+          const y = hover.baseY + .75 * Math.sin(Math.PI * Math.min(1, hover.until - game.time));
+          if (!this.level.blocked(b.x, b.z, y, b.radius, b.height)) b.y = y;
+        }
+        b.stride = 0;
+        return;
+      }
+      if (game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
+      const confusion = b.statusEffects.get('confused');
       let x = 0, z = 0;
       if (b.stun > 0) {
         x = b.knockX; z = b.knockZ;
@@ -577,7 +595,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         if (distance < type.reach && Math.abs(p.y - b.y) < 1.32 && !b.chargeHit) {
           this.from.set(b.x, b.y + 0.8, b.z);
           const gap = this.dir.set(p.x - b.x, p.y + 0.7 - this.from.y, p.z - b.z).length();
-          if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, gap)), gap)) {
+          if ((!confusion || b.fx * (p.x - b.x) + b.fz * (p.z - b.z) > distance * .85) &&
+              this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, gap)), gap)) {
             p.hurt(damage, game); b.chargeHit = true;
           }
         }
@@ -585,14 +604,23 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         if (b.phaseTime <= 0) {
           if (b.type === 1 && (!hearingOnly ? distance > 1.9 : Math.hypot(b.aim.x - b.x, b.aim.z - b.z) > 1.9)) {
             b.mode = 'charge'; b.phaseTime = type.chargeTime; b.chargeHit = false;
+            if (confusion) {
+              const angle = Math.atan2(b.fx, b.fz) + confusion.angle;
+              b.fx = Math.sin(angle); b.fz = Math.cos(angle);
+            }
             x = b.fx * type.chargeSpeed; z = b.fz * type.chargeSpeed;
           } else {
             if (b.type === 2) {
               if (!p.protected(game)) {
-                game.projectiles.launch(b, hearingOnly ? b.aim : p);
+                const aim = hearingOnly ? b.aim : p;
+                if (confusion) {
+                  const angle = Math.atan2(aim.x - b.x, aim.z - b.z) + confusion.angle;
+                  this.from.set(b.x + Math.sin(angle) * distance, aim.y, b.z + Math.cos(angle) * distance);
+                }
+                game.projectiles.launch(b, confusion ? this.from : aim);
                 if (distance < 17) game.sound.hiss(0.25, 2100, 490, 0.14);
               }
-            } else if (distance < type.reach + 0.2 && Math.abs(p.y - b.y) < (b.type === 3 ? 1.65 : 1.02)) {
+            } else if ((!confusion || Math.cos(confusion.angle) > .85) && distance < type.reach + 0.2 && Math.abs(p.y - b.y) < (b.type === 3 ? 1.65 : 1.02)) {
               this.from.set(b.x, b.y + b.height * 0.55, b.z);
               const length = this.dir.set(p.x - b.x, p.y + 0.8 - this.from.y, p.z - b.z).length();
               if (this.level.visible(this.from, this.dir.divideScalar(Math.max(0.001, length)), length)) p.hurt(b.rage ? damage * 1.24 : damage, game);
@@ -633,10 +661,12 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         x = 0; z = 0;
       }
       const terrain = this.level.movementScale(b.x, b.z, b.y, game) * (game.encounter?.beastSpeedScale ?? 1);
-      x *= terrain; z *= terrain;
+      x *= terrain * b.perkMoveScale; z *= terrain * b.perkMoveScale;
       const moved = this.level.move(b, x * dt, z * dt, 0.47);
       const floor = this.level.foot(b.x, b.z, b.y + 0.27, b.radius);
-      if (definition.beastSurface) definition.beastSurface(b, p, this.level, floor, dt, game);
+      if (b.statusEffects.has('grounded')) {
+        b.y = Math.max(floor, b.y - dt * 9); b.surfaceRoll *= Math.exp(-10 * dt);
+      } else if (definition.beastSurface) definition.beastSurface(b, p, this.level, floor, dt, game);
       else b.y = Math.max(floor, b.y - dt * 8);
       b.stride = Math.hypot(x, z);
       if (b.stride > 0.9 && moved < dt * b.stride * 0.22) {
@@ -712,6 +742,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
         surfaceRoll: 0, clinging: false, surfaceSide: 1,
         hearingOnly: false, heardAt: -Infinity, heardX: x, heardY: y, heardZ: z, reinforcement: false,
       });
+      resetTargetEffects(b);
       this.bodyBounds(b);
       this.live++;
       if (type === 3) this.boss = b;
@@ -761,24 +792,33 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
     eject(b, game) {
       return b.type !== 3 && this.retire(b, game);
     }
-    takeHit(b, damage, at, dir, game) {
+    dropHeight(b) { return definition.beastDropHeight?.(b, this.level) ?? b.y; }
+    takeHit(b, damage, at, dir, game, hit = null, source = hit?.electric ? 'electric' : hit ? 'weapon' : 'environment') {
       if (!b.active) return false;
       const type = b.type;
-      b.hp -= damage;
       b.flash = 0.115; b.stun = type === 3 ? 0.065 : 0.115;
       b.knockX = dir.x * (type === 3 ? 0.8 : 3.7); b.knockZ = dir.z * (type === 3 ? 0.8 : 3.7);
       if (!game.encounter?.hearingOnly) b.alert = CONFIG.beasts.memory;
       game.effects.spray(at, ichor, 7, 3.4, 0.094, 'mist');
       game.effects.spray(at, spark, 5, 4.6, 0.037, 'spark');
+      return this.damage(b, damage, game, source, hit);
+    }
+    damage(b, amount, game, source = 'environment', hit = null) {
+      if (game.phase !== 'play' || !b.active || !(amount > 0)) return false;
+      const type = b.type, combat = game.weapon.combat;
+      const applied = Math.min(b.hp, amount * combat.damageScale(b, source, game.time));
+      b.hp -= applied;
+      if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
       this.retire(b, game);
-      const dropY = definition.beastDropHeight?.(b, this.level) ?? b.y;
+      const dropY = this.dropHeight(b);
+      if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
       if (type === 3) {
         game.bossDead = true; this.boss = null;
         game.pickups.add('core', b.x, b.z, dropY + 0.18, TEXT.keyItem, 0);
         game.ui.notify(TEXT.bossDefeated, 2.6);
       }
-      if (!definition.onBeastDefeated?.(b, game)) {
+      if (!definition.onBeastDefeated?.(b, game, source)) {
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');
@@ -812,6 +852,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.refreshHash();
       let nearest = Infinity;
       for (const b of this.pool) {
+        if (!b.active) continue;
+        game.weapon.combat.updateTarget(b, game);
         if (!b.active) continue;
         this.ai.update(b, player, game, dt, this.frame);
         nearest = Math.min(nearest, Math.hypot(b.x - player.x, b.z - player.z));
@@ -859,9 +901,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.refreshHash();
       game.threat = nearest;
     }
-    fadeHitFlashes(dt) {
+    fadeHitFlashes(dt, game) {
       for (const b of this.pool) {
-        if (b.active && b.flash > 0) b.flash = Math.max(0, b.flash - dt);
+        if (!b.active) continue;
+        game.weapon.combat.updateTarget(b, game);
+        if (b.flash > 0) b.flash = Math.max(0, b.flash - dt);
       }
     }
     render(dt = 0, t = 0, disabled = false) {
@@ -1174,8 +1218,9 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       shot.gravity = projectileGravity;
       shot.slowScale = slowScale; shot.slowDuration = slowDuration;
     }
-    splat(p, markGround = true) {
+    splat(p, game, markGround = true) {
       this.effects.spray(p.pos, projectileTint, 13, 4.2, 0.073, 'mist');
+      definition.onProjectileImpact?.(p.pos, game);
       if (markGround && p.poolLife > 0) {
         const pool = this.puddles[this.puddleCursor++ % this.puddles.length];
         pool.pos.copy(p.pos);
@@ -1206,12 +1251,12 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
             if (p.slowDuration > 0) player.slow(p.slowScale, p.slowDuration, game.time);
             definition.onProjectileHit?.(game);
           }
-          this.splat(p);
+          this.splat(p, game);
         } else if (cover) {
           p.pos.copy(this.old).addScaledVector(this.dir, Math.max(0, coverDistance - 0.06));
-          this.splat(p, cover.y0 < p.pos.y - 0.3);
+          this.splat(p, game, cover.y0 < p.pos.y - 0.3);
         } else if (p.pos.y <= this.level.base(p.pos.x, p.pos.z)) {
-          this.splat(p);
+          this.splat(p, game);
         } else {
           const size = 0.089 + 0.022 * Math.sin(p.life * 34);
           const yaw = this.directional ? Math.atan2(p.vel.x, p.vel.z) : 0;
@@ -1266,7 +1311,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
       let object = this.objects.find(p => !p.active);
       if (!object) {
         for (const p of this.objects) {
-          if ((p.kind === 'ammo' || p.kind === 'health') && !p.permanent && (!object || p.born < object.born)) object = p;
+          if (!p.permanent && ['ammo', 'health', 'sample'].includes(p.kind) && (!object || p.born < object.born)) object = p;
         }
       }
       if (!object) return;
@@ -1281,6 +1326,9 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
         else if (item.kind === 'rare') {
           game.loot.push({ name: item.name, value: item.value }); game.value += item.value;
           game.ui.notify('已拾取 ' + item.name + ' / 价值 ' + item.value, 1.7);
+        } else if (item.kind === 'sample') {
+          game.weapon.combat.samplePending = true;
+          game.ui.notify('已回收样本 / 下次换弹伤害提升 30%', 1.7);
         } else if (item.kind === 'health') {
           const restored = Math.min(CONFIG.player.health - player.hp, item.value);
           if (restored <= 0) continue;
@@ -1304,7 +1352,7 @@ export function createPickupClass({ CONFIG, THREE, V3, shapes, workColor, dynami
       for (const item of this.objects) {
         if (!item.active) continue;
         const core = item.kind === 'core', rare = item.kind === 'rare';
-        const color = core ? coreTint : rare ? rareTint : item.kind === 'health' ? healthTint : ammoTint;
+        const color = core ? coreTint : rare ? rareTint : item.kind === 'health' || item.kind === 'sample' ? healthTint : ammoTint;
         const a = t * 1.7 + item.x * 0.11;
         const offset = core ? 0.68 : rare ? 0.47 : 0.35;
         const float = Math.sin(a * 1.8) * 0.070;
@@ -1398,7 +1446,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const x = this.forward.x / norm, z = this.forward.z / norm;
       const stride = this.sprinting ? p.sprint : p.walk * (forward < 0 ? p.backward : 1) * (this.crouched ? p.crouch.speed : 1);
       const exposure = game.encounter?.moveScale ?? 1;
-      const terrain = this.level.movementScale(this.x, this.z, this.y, game);
+      const terrain = game.weapon.combat.terrainScale(this.level.movementScale(this.x, this.z, this.y, game)) * game.weapon.combat.moveSpeed;
       const scale = dt * stride * exposure * impairment * terrain / Math.max(1, Math.hypot(forward, strafe));
       const floorBefore = this.level.foot(this.x, this.z, this.y + 0.052, this.radius);
       this.grounded = this.y <= floorBefore + 0.07 && this.vy <= 0;
@@ -1576,12 +1624,12 @@ export function createRendering({ CONFIG, definition, canvas }) {
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
-import { rifleFinish, rifleFrost, rifleRandom, rifleWood } from '@level-kit/rifle-textures.mjs';
+import { rifleFinish, rifleFrost, rifleRandom, rifleTexture, rifleWood } from '@level-kit/rifle-textures.mjs';
 
 const tau = Math.PI * 2;
 
 // 模型以 X 轴向前，展示台直接使用，第一人称旋转后沿相机的 -Z 轴。
-export function createRifle(id) {
+export function createRifle(id, { firstPerson = false } = {}) {
   id = resolveRifleSkin(id);
   const skin = rifleSkins[id];
   const root = new THREE.Group();
@@ -1668,9 +1716,19 @@ export function createRifle(id) {
   const surface = { ...finish, metalness: skin.metalness, roughness: skin.roughness };
   if (finish.normalMap) surface.normalScale = new THREE.Vector2(-.68, -.68);
   if (finish.emissiveMap) Object.assign(surface, { emissive: 0xffffff, emissiveIntensity: 1.4 });
-  const enamel = id === 'jungle-temple'
-    ? physical(0xffffff, { ...surface, transmission: .3, thickness: .05, clearcoat: .6, clearcoatRoughness: .2 })
-    : standard(0xffffff, surface);
+  let enamel;
+  if (id === 'jungle-temple') {
+    // 第一人称武器独立清深度，折射缓冲里没有战场。用玉色透光和清漆反射表现玉质，
+    // 避免战斗时为这一把枪额外绘制并生成透射纹理；收藏台保留真实透射。
+    const optics = firstPerson
+      ? { emissive: '#315d49', emissiveIntensity: .16, envMapIntensity: 1.08 }
+      : { transmission: .3, thickness: .05 };
+    enamel = physical(0xffffff, { ...surface, ...optics, clearcoat: .6, clearcoatRoughness: .2 });
+  } else if (id === 'sakura-night-town') {
+    enamel = physical(0xffffff, { ...surface, clearcoat: .8 });
+  } else {
+    enamel = standard(0xffffff, surface);
+  }
   const accent = standard(skin.trim, { metalness: id === 'buried-tomb' ? 1 : .58, roughness: id === 'buried-tomb' ? .2 : .36 });
   const dark = standard(skin.dark, { roughness: .67, metalness: .25 });
   const hardware = standard('#353b43', { metalness: .65, roughness: .36 });
@@ -1692,7 +1750,7 @@ export function createRifle(id) {
     line(body, hardware, .043, -.126, .067, -.073, z, .015, .012);
   }
 
-  const wood = ['shanhai-secret-realm', 'jungle-temple'].includes(id)
+  const wood = ['shanhai-secret-realm', 'jungle-temple', 'haunted-midway'].includes(id)
     ? standard(0xffffff, { map: rifleWood(THREE, skin.dark), roughness: .77 }) : null;
   const frost = id === 'polar-station'
     ? standard(0xffffff, { map: rifleFrost(THREE, '#54768b'), roughness: .69 }) : null;
@@ -1757,7 +1815,177 @@ export function createRifle(id) {
     for (const x of [-.223, .302]) tube(body, hardware, x, .008, z, .011, .010, 'z', .01, 8);
   }
 
+  function pivot(parent, name, x, y, z) {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(x, y, z);
+    parent.add(group);
+    return group;
+  }
+
+  // 小型粒子只分配一次，展示台与第一人称共用同一个动画。
+  function motes(parent, mat, geo, count, position) {
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const particle = new THREE.Object3D();
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    parent.add(mesh);
+    animations.push(time => {
+      for (let i = 0; i < count; i++) {
+        position(particle, i, time);
+        particle.updateMatrix();
+        mesh.setMatrixAt(i, particle.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    });
+  }
+
   switch (id) {
+    case 'sakura-night-town': {
+      standardMagazine(accent);
+      const cord = standard('#f4e3b8', { roughness: .89 });
+      const petal = standard('#f7adbc', { roughness: .79, side: THREE.DoubleSide });
+      for (let i = 0; i < 8; i++) {
+        add(guard, cord, new THREE.TorusGeometry(.086, .009, 5, 14), .395 + i * .037, .008, 0, .14, Math.PI / 2, .16);
+      }
+      for (const x of [.41, .52, .63]) {
+        box(guard, cord, x, -.058, .072, .022, .047, .004, -.42);
+        box(guard, cord, x + .012, -.088, .072, .019, .031, .004, .36);
+      }
+      const talisman = standard('white', { map: rifleTexture(THREE, 64, 128, ctx => {
+        ctx.fillStyle = '#e7c668'; ctx.fillRect(0, 0, 64, 128);
+        ctx.strokeStyle = '#a22b21'; ctx.lineWidth = 3; ctx.strokeRect(5, 5, 54, 118);
+        ctx.fillStyle = '#9a271d'; ctx.textAlign = 'center'; ctx.font = 'bold 35px serif';
+        ctx.fillText('封', 32, 51); ctx.fillText('印', 32, 94);
+      }) });
+      for (const z of [-.087, .087]) {
+        box(body, talisman, -.09, .025, z, .061, .132, .006, -.19);
+        box(body, talisman, .16, .019, z, .056, .12, .006, .15);
+        add(body, petal, new THREE.SphereGeometry(.014, 7, 4), .243, .063, z);
+      }
+      for (let i = -3; i <= 3; i++) {
+        const angle = i * .24;
+        box(sight, i % 2 ? accent : enamel, .047 + Math.sin(angle) * .06, .18 + Math.cos(angle) * .06, .015, .022, .116, .009, -angle);
+      }
+      const bell = pivot(stock, '青铜铃', -.56, -.073, 0);
+      add(bell, accent, new THREE.TorusGeometry(.02, .004, 5, 12), 0, -.017, 0);
+      add(bell, accent, new THREE.SphereGeometry(.037, 12, 8), 0, -.065, 0);
+      box(bell, dark, 0, -.079, .032, .037, .005, .007);
+      for (const z of [-.063, .063]) {
+        add(magazine, indicator, new THREE.SphereGeometry(.041, 12, 8), .124, -.144, z);
+        for (const y of [-.179, -.112]) box(magazine, dark, .124, y, z, .059, .008, .05);
+      }
+      motes(barrel, petal, new THREE.SphereGeometry(.009, 5, 3), 18, (p, i, t) => {
+        const angle = i * 2.4 + t * .8;
+        if (i < 9) p.position.set(1.075, .046 + Math.cos(angle) * .062, Math.sin(angle) * .062);
+        else p.position.set(-.38 + (i % 8) * .14, .27 - ((t * .1 + i * .137) % .34), Math.sin(angle) * .12);
+        p.rotation.set(t + i, angle, angle); p.scale.set(1.2, .35, .76);
+      });
+      animations.push(t => {
+        bell.rotation.z = .13 * Math.sin(2.1 * t);
+        indicator.emissiveIntensity = 1.1 + .35 * Math.sin(5.3 * t);
+      });
+      break;
+    }
+    case 'brass-factory': {
+      standardMagazine(rail);
+      const copper = standard('#ad7045', { metalness: .86, roughness: .43 });
+      const steam = standard('#d6d5cc', { transparent: true, opacity: .23, depthWrite: false });
+      for (const z of [-.091, .091]) {
+        for (const y of [-.028, .012, .052]) tube(guard, copper, .537, y, z, .014, .314);
+        for (const x of [.39, .68]) for (const y of [-.033, .05]) {
+          add(guard, accent, new THREE.SphereGeometry(.014, 7, 5), x, y, z);
+        }
+      }
+      const valve = pivot(guard, '蒸汽阀', .625, .113, 0);
+      add(valve, copper, new THREE.TorusGeometry(.043, .009, 7, 16), 0, .023, 0, Math.PI / 2);
+      for (const angle of [0, Math.PI / 2]) add(valve, accent, new THREE.BoxGeometry(.084, .008, .01), 0, .023, 0, 0, angle);
+      function gear(parent, x, y, z, radius, teeth, rate) {
+        const cog = pivot(parent, '齿轮', x, y, z);
+        tube(cog, accent, 0, 0, 0, radius, .018, 'z');
+        tube(cog, hardware, 0, 0, .012, radius * .34, .014, 'z');
+        for (let i = 0; i < teeth; i++) {
+          const angle = tau * i / teeth;
+          box(cog, copper, radius * Math.cos(angle), radius * Math.sin(angle), 0, radius * .42, radius * .26, .019, angle);
+        }
+        animations.push(t => { cog.rotation.z = t * rate; });
+      }
+      gear(body, -.11, .029, .091, .052, 12, .73);
+      gear(body, -.025, .029, .091, .031, 8, -1.1);
+      const dial = standard('white', { map: rifleTexture(THREE, 128, 128, ctx => {
+        ctx.fillStyle = '#dfcea2'; ctx.fillRect(0, 0, 128, 128);
+        ctx.translate(64, 64); ctx.lineWidth = 4;
+        for (let i = 0; i <= 10; i++) {
+          const a = 2.4 + i * .46;
+          ctx.strokeStyle = i > 7 ? '#a03429' : '#493a2a'; ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 39, Math.sin(a) * 39); ctx.lineTo(Math.cos(a) * 52, Math.sin(a) * 52); ctx.stroke();
+        }
+        ctx.fillStyle = '#4d4236'; ctx.font = '18px serif'; ctx.fillText('BAR', -17, 27);
+      }) });
+      tube(sight, copper, .07, .217, .036, .072, .063, 'z');
+      add(sight, dial, new THREE.CircleGeometry(.063, 32), .07, .217, .07);
+      const needle = pivot(sight, '压力指针', .07, .217, .072);
+      box(needle, dark, 0, .021, 0, .006, .048, .004);
+      const key = pivot(magazine, '上弦钥匙', .124, -.157, .063);
+      tube(key, copper, 0, 0, .017, .011, .041, 'z');
+      for (const x of [-.019, .019]) add(key, accent, new THREE.TorusGeometry(.019, .005, 6, 12), x, 0, .041);
+      motes(barrel, steam, new THREE.IcosahedronGeometry(.019, 0), 12, (p, i, t) => {
+        const phase = (t * .88 + i / 6) % 1, nozzle = i < 6;
+        p.position.set((nozzle ? 1.055 : .625) + (nozzle ? .12 : .02) * phase, (nozzle ? .046 : .15) + phase * .19, Math.sin(i + t) * .018);
+        p.scale.setScalar(Math.sin(phase * Math.PI) * (1 + phase));
+      });
+      animations.push((t, e) => {
+        key.rotation.z = -.55 * t;
+        needle.rotation.z = 2.16 - 4.32 * (e.pressure ?? 0) + .13 * (e.shot ?? 0);
+      });
+      break;
+    }
+    case 'haunted-midway': {
+      standardMagazine(accent);
+      const bands = ['#ef679d', '#53cccc', '#f5cc69'].map(color => glow(color, .6));
+      const ticket = standard('white', { map: rifleTexture(THREE, 256, 100, ctx => {
+        ctx.fillStyle = '#d1b787'; ctx.fillRect(0, 0, 256, 100);
+        ctx.strokeStyle = '#845038'; ctx.lineWidth = 4; ctx.setLineDash([4, 4]); ctx.strokeRect(7, 8, 242, 84);
+        ctx.fillStyle = '#57382e'; ctx.font = 'bold 22px serif'; ctx.fillText('MIDNIGHT FAIR', 30, 45);
+        ctx.font = '17px monospace'; ctx.fillText('ADMIT ONE   014', 43, 72);
+      }) });
+      for (const z of [-.09, .09]) box(body, ticket, -.027, .026, z, .186, .079, .004, -.11);
+      const ribbons = bands.map((color, i) => {
+        const loop = pivot(guard, '彩带', .42 + i * .095, -.035, .079);
+        add(guard, color, new THREE.TorusGeometry(.088, .007, 5, 16), .42 + i * .095, .005, 0, .2, 1.34);
+        plate(loop, color, [[0,0],[.025,0],[.052,-.039],[.032,-.077],[.047,-.11],[.018,-.079],[.031,-.043]], .003);
+        return loop;
+      });
+      const balloon = pivot(sight, '气球', .044, .177, 0);
+      for (const [i, color] of bands.entries()) {
+        const x = (i - 1) * .045;
+        line(balloon, dark, 0, 0, x, .065, 0, .004);
+        add(balloon, color, new THREE.SphereGeometry(.034, 12, 8), x, .09 + (i % 2) * .028, 0);
+      }
+      box(magazine, wood, .126, -.148, 0, .172, .113, .139);
+      const crank = pivot(magazine, '八音盒曲柄', .131, -.148, .084);
+      box(crank, accent, .023, 0, 0, .056, .012, .012);
+      tube(crank, dark, .046, 0, .013, .012, .032, 'z');
+      const doll = pivot(stock, '旧玩偶', -.547, -.064, .014);
+      line(doll, dark, 0, 0, 0, -.039, 0, .005);
+      add(doll, wood, new THREE.SphereGeometry(.021, 10, 6), 0, -.058, 0);
+      box(doll, bands[0], 0, -.096, 0, .039, .052, .024, .08);
+      for (const sign of [-1, 1]) {
+        line(doll, wood, sign * .015, -.082, sign * .031, -.103, .001, .009);
+        line(doll, wood, sign * .011, -.115, sign * .017, -.147, .001, .011);
+      }
+      for (let i = 0; i < 10; i++) tube(guard, bands[i % 3], .384 + i * .031, .051, .093, .008, .008, 'z');
+      let lastCycle = 0, crankAngle = 0;
+      animations.push((t, e) => {
+        const dt = Math.max(0, Math.min(.05, t - lastCycle)); lastCycle = t;
+        crankAngle += dt * (e.shot ?? 0) * 20; crank.rotation.z = crankAngle;
+        balloon.position.y = .177 + Math.sin(t * 1.8) * .009;
+        doll.rotation.z = Math.sin(t * 2.3) * .15;
+        ribbons.forEach((r, i) => { r.rotation.x = Math.sin(t * 3 + i) * .24; });
+        bands.forEach((m, i) => { m.emissiveIntensity = .5 + .85 * Math.sin(t * 2.1 + i) ** 2; });
+      });
+      break;
+    }
     case 'underground-lab': {
       canister(skin.light, hardware);
       const alarm = glow('#ff252f', 2);
@@ -1929,7 +2157,10 @@ export function createRifle(id) {
     update(time, signals = {}) { for (const animate of animations) animate(time, signals); },
     dispose() {
       root.removeFromParent();
-      root.traverse(object => { if (object.isMesh) object.geometry.dispose(); });
+      root.traverse(object => {
+        if (object.isInstancedMesh) object.dispose();
+        if (object.isMesh) object.geometry.dispose();
+      });
       materials.forEach(mat => mat.dispose());
       textures.forEach(texture => texture.dispose());
     },
@@ -1959,59 +2190,74 @@ export function createRifleEnvironment() {
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
   'underground-lab': {
-    name: '生化防护型', detail: '白灰防护漆、黄黑警示纹和荧光绿样本管。',
+    name: '生化防护型', detail: '白灰防护漆、黄黑警示纹和荧光绿样本管。腐蚀弹逐层削弱护甲，回收样本管可强化下一弹匣。红色警报期间射速提升。',
     base: '#c9cac1', trim: '#f7bc38', dark: '#343d3a', light: '#a7ff44',
     backdrop: '#1b2825', key: '#f3fff4', fill: '#7bad92', metalness: .22, roughness: .6,
   },
   'shanhai-secret-realm': {
-    name: '青铜雷火型', detail: '斑驳青铜饕餮纹、云雷纹和血月增亮的雷火符文。',
+    name: '青铜雷火型', detail: '斑驳青铜饕餮纹、云雷纹和血月增亮的雷火符文。三层雷印引发范围雷击。对凶兽伤害提高，血月期间符文增亮，叠印加快。',
     base: '#8d7045', trim: '#c4a46b', dark: '#463025', light: '#ff641e',
     backdrop: '#2d2118', key: '#ffe1b8', fill: '#659e83', metalness: .7, roughness: .55,
   },
   'rain-city': {
-    name: '锈蚀街头型', detail: '锈钢、脱漆涂鸦、缠带和雨水留下的湿痕。',
+    name: '锈蚀街头型', detail: '锈钢、脱漆涂鸦、缠带和雨水留下的湿痕。命中使目标潮湿，更易受到电伤。重击可击退敌人，幸运射击造成双倍伤害并掉落补给。',
     base: '#6c777b', trim: '#de9056', dark: '#313c41', light: '#8ad7ed',
     backdrop: '#162534', key: '#b3dcff', fill: '#628ebc', metalness: .55, roughness: .79,
   },
   'buried-tomb': {
-    name: '太阳金沙型', detail: '象形石刻、荷鲁斯之眼、金箔和青金石镶嵌。',
+    name: '太阳金沙型', detail: '象形石刻、荷鲁斯之眼、金箔和青金石镶嵌。流沙使敌人减速，连续命中可定身。爆头有机会造成双倍伤害并标记，蹲伏射击时枪声传播较近。',
     base: '#ccab74', trim: '#ffd364', dark: '#67533c', light: '#83d8ff',
     backdrop: '#38281c', key: '#ffbf74', fill: '#e5c69e', metalness: .12, roughness: .82,
   },
   'polar-station': {
-    name: '极地科考型', detail: '橙色科考编号、结霜的保温套和冰蓝弹匣。',
+    name: '极地科考型', detail: '橙色科考编号、结霜的保温套和冰蓝弹匣。寒霜逐层减速，第五层冻结普通敌人。冰封期间爆头伤害更高，在冰站击杀还能回温。',
     base: '#85a5b6', trim: '#ff8544', dark: '#3a4a5b', light: '#91e4ff',
     backdrop: '#1a2c3a', key: '#e3f7ff', fill: '#80b8ee', metalness: .24, roughness: .62,
   },
   'drowned-city': {
-    name: '深海珍珠型', detail: '珊瑚白与海蓝渐变、变彩珍珠护木和青色电弧。',
+    name: '深海珍珠型', detail: '珊瑚白与海蓝渐变、变彩珍珠护木和青色电弧。电弧可连锁附近两名敌人并造成麻痹。命中有机会击退，在进水区域也能保持移动速度。',
     base: '#aed6d6', trim: '#83b4d9', dark: '#16455a', light: '#60ffeb',
     backdrop: '#122b35', key: '#b6fff5', fill: '#4689c4', metalness: .33, roughness: .36,
   },
   'ember-fortress': {
-    name: '黑曜熔铸型', detail: '黑曜石熔纹、铆接铸铁和随潮汐明暗变化的熔浆。',
+    name: '黑曜熔铸型', detail: '黑曜石熔纹、铆接铸铁和随潮汐明暗变化的熔浆。子弹使目标持续灼烧，再次命中有机会石化并提高所受伤害。岩浆潮汐期间灼烧加倍。',
     base: '#303039', trim: '#987866', dark: '#311f1c', light: '#ff5321',
     backdrop: '#291c1b', key: '#ffbb91', fill: '#b54b35', metalness: .4, roughness: .2,
   },
   'derelict-station': {
-    name: '太空工业型', detail: '舱段编号、微陨石划痕、能量观察窗和全息瞄具。',
+    name: '太空工业型', detail: '舱段编号、微陨石划痕、能量观察窗和全息瞄具。反重力弹可将目标击退并悬浮。进入失压舱段时伤害提高，命中壁上的异形可将其击落。',
     base: '#cad3db', trim: '#749bae', dark: '#354a5a', light: '#51bbff',
     backdrop: '#151e32', key: '#ecf7ff', fill: '#658fc0', metalness: .35, roughness: .52,
   },
   'neon-undercity': {
-    name: '赛博义体型', detail: '碳纤维编织、青紫光带和随 EMP 熄灭再启动的霓虹。',
+    name: '赛博义体型', detail: '碳纤维编织、青紫光带和随 EMP 熄灭再启动的霓虹。命中标记目标，使其受到更多伤害，机械敌人还会短暂停机。触发过载后下一发可以穿透。',
     base: '#292a36', trim: '#af527e', dark: '#222335', light: '#28fde9',
     backdrop: '#241732', key: '#c5b8ff', fill: '#d43a91', metalness: .42, roughness: .38,
   },
   'jungle-temple': {
-    name: '玛雅玉石型', detail: '翡翠羽蛇刻纹、热带木、藤编羽饰和金色太阳图腾。',
+    name: '玛雅玉石型', detail: '翡翠羽蛇刻纹、热带木、藤编羽饰和金色太阳图腾。毒素可叠三层。累计命中十二次后下一发可石化目标，击杀给予短时移速加成。',
     base: '#378966', trim: '#ebc258', dark: '#463b28', light: '#acff9c',
     backdrop: '#1a2e26', key: '#ecffd0', fill: '#5da786', metalness: .14, roughness: .34,
   },
   'bloodmoon-castle': {
-    name: '哥特猩红型', detail: '银色尖拱和蔷薇窗、暗红绒面与微光圣露瓶。',
+    name: '哥特猩红型', detail: '银色尖拱和蔷薇窗、暗红绒面与微光圣露瓶。按实际伤害吸血，血月期间回复翻倍。对古堡亡灵有加成，献祭射击击杀可掉落圣露。',
     base: '#34323c', trim: '#d7c7cb', dark: '#5b1528', light: '#ff3653',
     backdrop: '#321922', key: '#ff8d9b', fill: '#ac688c', metalness: .79, roughness: .28,
+  },
+  'sakura-night-town': {
+    name: '朱漆百鬼型', detail: '朱漆描金、白色注连绳与青铜铃。连续命中会用符咒封印目标。',
+    base: '#a63227', trim: '#f1bb60', dark: '#371f27', light: '#ffbb44',
+    backdrop: '#111d38', key: '#ffc474', fill: '#bd9ec8', metalness: .2, roughness: .3,
+  },
+  'brass-factory': {
+    name: '蒸汽齿轮型', detail: '铆接铜管、裸露齿轮与压力表。连续命中积攒蒸汽，满压后下一发释放冲击。',
+    base: '#a77c45', trim: '#d9b66c', dark: '#3c3530', light: '#ffc679',
+    backdrop: '#272019', key: '#ffbf71', fill: '#85acae', metalness: .9, roughness: .4,
+  },
+  'haunted-midway': {
+    name: '马戏狂欢型', detail: '褪色门票、八音盒与浮空气球。持续命中同一目标会收紧彩带。',
+    base: '#a24c52', trim: '#f6d8af', dark: '#45333a', light: '#ff72a2',
+    backdrop: '#22152f', key: '#ffc2ab', fill: '#6bd8de', metalness: .18, roughness: .74,
   },
 };
 
@@ -2288,6 +2534,38 @@ export function rifleFinish(THREE, id, skin) {
       case 'bloodmoon-castle':
         gothicMark(ctx);
         break;
+      case 'sakura-night-town':
+        for (const y of [10, 109]) {
+          stroke(ctx, [[2, y], [118, y], [132, y + 8], [372, y + 8], [387, y], [510, y]], '#edb55a', 3);
+        }
+        for (let i = 0; i < 21; i++) {
+          ctx.save(); ctx.translate(rand() * width, 24 + rand() * 74); ctx.rotate(rand() * tau);
+          for (let petal = 0; petal < 5; petal++) {
+            ctx.rotate(tau / 5); ctx.beginPath(); ctx.ellipse(0, -5, 3, 5, 0, 0, tau);
+            ctx.fillStyle = '#e7b075ad'; ctx.fill();
+          }
+          ctx.restore();
+        }
+        break;
+      case 'brass-factory':
+        stains(ctx, rand, ['#70402ce0', '#402e28d0', '#26292c9f'], 78, 19);
+        flecks(ctx, rand, ['#e6c68c', '#493f38', '#75513a'], 890, 4);
+        for (let i = 0; i < 42; i++) {
+          const x = rand() * width, y = rand() * height;
+          stroke(ctx, [[x, y], [x + 8 + rand() * 30, y - 3]], '#f6dca985', 1);
+        }
+        type(ctx, 'BOILER WORKS', 143, 78, '#382f22', 27);
+        break;
+      case 'haunted-midway':
+        for (let x = -60; x < width; x += 68) {
+          stroke(ctx, [[x, height], [x + 64, 0]], '#d8c298', 32);
+        }
+        flecks(ctx, rand, ['#583e31c0', '#866040d0', '#443a31a8'], 1370, 8);
+        for (let i = 0; i < 40; i++) {
+          const y = rand() * height, x = rand() * width;
+          stroke(ctx, [[x, y], [x + 18, y - 2], [x + 49, y]], '#402d287c', 1);
+        }
+        break;
     }
     flecks(ctx, rand, ['#fff8e03d', '#10151d30'], 330, 4);
     stroke(ctx, [[0, 4], [width, 4]], '#eee0c290', 2);
@@ -2409,7 +2687,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const game = {
     level, player, beasts, pickups, weapon, effects, sound, projectiles, ui, encounter,
     phase: 'ready', time: 0, kills: 0, core: false, bossDead: false, loot: [], value: 0,
-    hitStop: 0, shotAt: -Infinity, shotX: 0, shotY: 0, shotZ: 0,
+    hitStop: 0, shotAt: -Infinity, shotX: 0, shotY: 0, shotZ: 0, shotHearingScale: 1,
     footstep: { at: -Infinity, x: 0, y: 0, z: 0, radius: 0 }, blast: 0, blastClock: 0,
     threat: Infinity, threatDelay: 0,
     reset() {
@@ -2455,6 +2733,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       const frozen = Math.min(dt, this.hitStop);
       this.hitStop -= frozen;
       if (!this.blast) {
+        weapon.combat.passive(dt, this);
         player.update(dt - frozen, input, this);
         if (input.interact) {
           input.interact = false;
@@ -2468,7 +2747,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
         if (!this.blast) {
           player.positionCamera(0);
           weapon.update(dt, input, this);
-          if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt);
+          if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt, this);
           else beasts.update(dt - frozen, player, this);
           projectiles.update(dt - frozen, player, this);
           if (this.phase !== 'play') return;
@@ -2647,6 +2926,145 @@ function makeText(definition) {
   };
 }
 </script>
+<script type="text/plain" data-level-module="@level-kit/stage-craft.mjs">
+// 供街町与机坊共用的造景工具。尺寸统一用米，实体地形与可见网格由同一参数生成。
+export function stageBuilder(context, palette, texture) {
+  const { THREE, scene, level, GRID, StaticBatches, shapes } = context;
+  const materials = Object.fromEntries(
+    Object.entries(palette).map(([name, color]) => [name, new THREE.MeshLambertMaterial({ color })]),
+  );
+  materials.light = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  if (texture) materials.surface = new THREE.MeshLambertMaterial({ map: texture });
+  const geometry = {
+    ...shapes,
+    roof: new THREE.CylinderGeometry(0.28, 0.72, 1, 4, 1, false, Math.PI / 4),
+    cone: new THREE.ConeGeometry(0.5, 1, 10),
+    orb: new THREE.IcosahedronGeometry(0.55, 1),
+    ring: new THREE.TorusGeometry(0.5, 0.065, 6, 22),
+  };
+  const batch = new StaticBatches(materials, geometry);
+  const part = (...args) => batch.add(...args);
+  function block(material, x, z, w, d, y0, y1, solid = false, climb = false) {
+    part('box', material, x, (y1 + y0) / 2, z, w, y1 - y0, d);
+    if (solid) level.box(x, z, w, d, y0, y1, climb);
+  }
+  function column(material, x, z, diameter, y0, y1, solid = false) {
+    part('cylinder', material, x, (y1 + y0) / 2, z, diameter, y1 - y0, diameter);
+    if (solid) level.box(x, z, diameter * 0.84, diameter * 0.84, y0, y1);
+  }
+  function beam(material, start, end, width, shape = 'box') {
+    const a = new THREE.Vector3(...start),
+      delta = new THREE.Vector3(...end).sub(a);
+    const center = a.addScaledVector(delta, 0.5),
+      length = delta.length();
+    const e = new THREE.Euler().setFromQuaternion(
+      new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), delta.normalize()),
+    );
+    part(shape, material, center.x, center.y, center.z, width, length, width, 0xffffff, e.y, e.x, e.z);
+  }
+  function floor(material) {
+    block(material, 0, 0, GRID.halfX * 2, GRID.halfZ * 2, -0.24, -0.015);
+  }
+  function lighting(sky, ground, rim, locations) {
+    scene.add(new THREE.HemisphereLight(sky, ground, 1.65));
+    const moon = new THREE.DirectionalLight(rim, 1.7);
+    moon.position.set(-26, 48, -35);
+    scene.add(moon);
+    for (const [x, y, z, color, intensity, range] of locations) {
+      const light = new THREE.PointLight(color, intensity, range, 1.45);
+      light.position.set(x, y, z);
+      scene.add(light);
+    }
+  }
+  return { part, block, column, beam, floor, lighting, flush: () => batch.flush() };
+}
+
+// 三段式平台可由两端上下。视觉踏步与基础地形采用相同阶高，寻路和拾取可直接使用地表高度。
+export function stairDeck(x, z, width, length, run, rise, axis = 'z') {
+  const steps = Math.ceil(rise / 0.24);
+  function coordinates(distance, lateral = 0) {
+    return axis === 'z' ? [x + lateral, z + distance] : [x + distance, z + lateral];
+  }
+  function height(px, pz) {
+    const along = Math.abs(axis === 'z' ? pz - z : px - x);
+    const across = Math.abs(axis === 'z' ? px - x : pz - z);
+    if (across > width / 2 || along >= length / 2 + run) return 0;
+    if (along <= length / 2) return rise;
+    return (rise * Math.ceil((1 - (along - length / 2) / run) * steps)) / steps;
+  }
+  function draw(builder, material) {
+    const segment = (s, l, h) => {
+      const [cx, cz] = coordinates(s);
+      builder.block(material, cx, cz, axis === 'z' ? width : l, axis === 'z' ? l : width, -0.02, h, true, true);
+    };
+    segment(0, length, rise);
+    for (const sign of [-1, 1])
+      for (let i = 0; i < steps; i++) {
+        segment(
+          sign * (length / 2 + ((i + 0.5) * run) / steps),
+          run / steps + 0.002,
+          (rise * (steps - i)) / steps,
+        );
+      }
+  }
+  return { height, draw };
+}
+
+// 每种轮廓仅合并一次，普通与发光部件沿用共享实例化凶兽对象池。
+export function creatureParts({ THREE, shapes, mergeGeometries }) {
+  const body = [],
+    light = [];
+  const gem = new THREE.IcosahedronGeometry(0.55, 0),
+    horn = new THREE.ConeGeometry(0.5, 1, 6);
+  const source = { ...shapes, gem, horn };
+  const stamp = new THREE.Object3D();
+  function add(shape, color, x, y, z, w, h, d, pitch = 0, roll = 0, yaw = 0, luminous = false) {
+    const base = source[shape];
+    const geometry = base.index ? base.toNonIndexed() : base.clone();
+    stamp.position.set(x, y, z);
+    stamp.scale.set(w, h, d);
+    stamp.rotation.set(pitch, yaw, roll);
+    stamp.updateMatrix();
+    geometry.applyMatrix4(stamp.matrix);
+    const rgb = new THREE.Color(color),
+      values = new Float32Array(geometry.attributes.position.count * 3);
+    for (let i = 0; i < values.length; i += 3) rgb.toArray(values, i);
+    geometry.setAttribute('color', new THREE.BufferAttribute(values, 3));
+    (luminous ? light : body).push(geometry);
+  }
+  function finish() {
+    const result = [mergeGeometries(body), mergeGeometries(light)];
+    for (const geo of [...body, ...light, gem, horn]) geo.dispose();
+    return result;
+  }
+  return { add, finish };
+}
+
+export function skySpecks({ THREE, scene, seededRandom }, count, span, color, size, seed) {
+  const random = seededRandom(seed),
+    positions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = (random() - 0.5) * span;
+    positions[i * 3 + 1] = 2 + random() * 13;
+    positions[i * 3 + 2] = (random() - 0.5) * span;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const points = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({
+      size,
+      color,
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+      sizeAttenuation: true,
+    }),
+  );
+  scene.add(points);
+  return points;
+}
+</script>
 <script type="text/plain" data-level-module="@level-kit/ui.mjs">
 export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
   class UI {
@@ -2706,6 +3124,9 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         if (!b.active) continue;
         ctx.fillStyle = b.type === 3 ? '#ff9a71' : '#f45f76';
         ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), b.type === 3 ? 3.2 : 1.5, 0, TAU); ctx.fill();
+        if (b.statusEffects.has('marked')) {
+          ctx.strokeStyle = '#ffd780'; ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), 4.4, 0, TAU); ctx.stroke();
+        }
       }
       if (game.bossDead && !game.core) {
         const core = game.pickups.objects.find(item => item.active && item.kind === 'core');
@@ -2755,7 +3176,8 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.tick -= dt;
       if (this.tick > 0) return;
       this.tick = 0.062;
-      const condition = game.encounter?.status;
+      const status = w.combat.status(game);
+      const condition = game.encounter?.status ?? (status ? { title: '武器特性', detail: '' } : null);
       this.nodes.condition.hidden = !condition;
       if (condition) {
         this.text('condition-title', condition.title);
@@ -2764,7 +3186,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         if (!meter.hidden) meter.value = condition.value;
         const readout = condition.readout ?? (Number.isFinite(condition.remaining) ? Math.max(0, Math.ceil(condition.remaining)) + ' 秒' : '');
         this.text('condition-time', readout);
-        this.text('condition-detail', condition.detail);
+        this.text('condition-detail', [condition.detail, status].filter(Boolean).join(' / '));
       }
       const offline = game.encounter?.hudOffline === true;
       this.nodes.hud.toggleAttribute('data-offline', offline);
@@ -2776,7 +3198,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.health.value = p.hp; this.nodes.stamina.value = p.energy;
       this.text('ammo', String(w.ammo).padStart(2, '0'));
       this.text('reserve', '/ ' + w.reserve);
-      this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 ? (w.reserve ? '按 R 换弹' : '弹药耗尽') : '');
+      this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 && w.reserve === 0 ? '弹药耗尽' : '');
       this.nodes.cross.style.setProperty('--gap', (7 + w.heat * 12 + (p.sprinting ? 5 : 0)).toFixed(1) + 'px');
       this.text('loot', game.loot.length + ' / ' + (definition.loot?.length ?? 0));
       this.text('kills', game.kills + ' / ' + CONFIG.beasts.killsToWin);
@@ -2821,8 +3243,513 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
   return UI;
 }
 </script>
+<script type="text/plain" data-level-module="@level-kit/weapon-perks.mjs">
+// 特性按实际佩戴的步枪选择；事件与敌人阵营始终读取当前战场。
+const effectTitles = {
+  corrosion: '∴ 酸蚀',
+  thunder: 'ϟ 雷印',
+  wet: '≈ 潮湿',
+  sand: '≋ 流沙',
+  frost: '✳ 寒霜',
+  burn: '△ 灼烧',
+  rooted: '⊠ 定身',
+  frozen: '✳ 冻结',
+  stunned: 'ϟ 麻痹',
+  hover: '↑ 悬浮',
+  stone: '◆ 石化',
+  stopped: '∥ 停机',
+  confused: '⟳ 混乱',
+  slowed: '↓ 减速',
+  bossSlow: '↓ 抗性减速',
+  marked: '◎ 标记',
+  poison: '∴ 中毒',
+  seal: '◇ 符咒',
+  scald: '△ 烫伤',
+  gear: '⊗ 齿轮卡滞',
+  ribbon: '∞ 彩带',
+  grounded: '↓ 击落',
+};
+const controlKinds = new Set(['rooted', 'frozen', 'stunned', 'hover', 'stone', 'stopped']);
+const machineStages = new Set(['neon-undercity', 'brass-factory']);
+const beastStages = new Set([
+  'shanhai-secret-realm',
+  'rain-city',
+  'buried-tomb',
+  'polar-station',
+  'drowned-city',
+  'ember-fortress',
+  'jungle-temple',
+]);
+const waterStages = new Set(['drowned-city', 'jungle-temple']);
+const coefficients = new Map();
+
+// 连续未触发时线性增加机会；求出系数，使长期平均触发率仍等于配置值。
+function chanceCoefficient(rate) {
+  if (coefficients.has(rate)) return coefficients.get(rate);
+  let low = 0,
+    high = rate;
+  for (let i = 0; i < 32; i++) {
+    const c = (low + high) / 2;
+    let survival = 1,
+      average = 0;
+    for (let k = 1; survival > 1e-10; k++) {
+      average += survival;
+      survival *= Math.max(0, 1 - c * k);
+    }
+    if (1 / average < rate) low = c;
+    else high = c;
+  }
+  coefficients.set(rate, high);
+  return high;
+}
+
+function put(target, kind, time, seconds, limit = 1, amount = 1) {
+  let effect = target.statusEffects.get(kind);
+  if (!effect || effect.until <= time) {
+    effect = { type: kind, stacks: 0, until: 0, tickAt: time + 0.5 };
+    target.statusEffects.set(kind, effect);
+  }
+  effect.stacks = Math.min(limit, effect.stacks + amount);
+  effect.until = time + seconds;
+  return effect;
+}
+
+function active(target, kind, now) {
+  const effect = target.statusEffects.get(kind);
+  return effect?.until > now ? effect : null;
+}
+
+function push(target, origin, speed) {
+  const x = target.x - origin.x,
+    z = target.z - origin.z;
+  const distance = Math.hypot(x, z) || 1;
+  const strength = target.type === 3 ? speed * 0.4 : speed;
+  target.perkPushX += (x / distance) * strength;
+  target.perkPushZ += (z / distance) * strength;
+}
+
+function drop(target, game, kind, name, value) {
+  const y = game.beasts.dropHeight(target);
+  game.pickups.add(kind, target.x - 0.19, target.z + 0.23, y, name, value);
+}
+
+function bloodMoon(combat, game) {
+  return (
+    (combat.stage === 'bloodmoon-castle' || combat.stage === 'shanhai-secret-realm') &&
+    game.encounter?.phase === 'active'
+  );
+}
+
+function inVacuum(combat, game) {
+  const sector = game.encounter?.panel?.data;
+  const p = game.player;
+  return (
+    combat.stage === 'derelict-station' &&
+    game.encounter.phase === 'open' &&
+    sector &&
+    p.x >= sector.x0 &&
+    p.x <= sector.x1 &&
+    p.z >= sector.z0 &&
+    p.z <= sector.z1
+  );
+}
+
+function timedControl(c, target, kind, duration, game) {
+  if (target.controlReady > game.time) return false;
+  target.controlReady = game.time + 5;
+  const effect = put(target, target.type === 3 ? 'bossSlow' : kind, game.time, duration);
+  if (target.type === 3) effect.scale = 0.6;
+  else {
+    if (kind === 'confused') {
+      effect.angle = (c.random() * 0.75 + 0.125) * Math.PI * (c.random() < 0.5 ? -1 : 1);
+    } else {
+      target.mode = 'move';
+      target.cooldown = Math.max(target.cooldown, duration);
+    }
+  }
+  c.visual(target, game, kind === 'stone' ? 'stone' : 'ice');
+  return true;
+}
+
+function slow(target, time, duration, scale) {
+  const previous = active(target, 'slowed', time);
+  const effect = put(target, 'slowed', time, duration);
+  effect.scale = Math.min(previous?.scale ?? 1, scale);
+}
+
+function area(c, center, radius, game, visitor, maximum = Infinity) {
+  // 在同一帧内，死亡特效可能再次调用空间查询。保持各次查询的候选列表独立。
+  const nearby = game.beasts.hash.query(
+    center.x - radius,
+    center.z - radius,
+    center.x + radius,
+    center.z + radius,
+    [],
+  );
+  nearby.sort(
+    (a, b) => (a.x - center.x) ** 2 + (a.z - center.z) ** 2 - (b.x - center.x) ** 2 - (b.z - center.z) ** 2,
+  );
+  for (const other of nearby) {
+    if (
+      other === center ||
+      !other.active ||
+      Math.hypot(other.x - center.x, other.y - center.y, other.z - center.z) > radius
+    )
+      continue;
+    if (!c.visible(center, other, game)) continue;
+    visitor(other);
+    if (--maximum === 0) break;
+  }
+}
+
+const NONE = () => {};
+function perk(onHit = NONE, onKill = NONE, passive = NONE) {
+  return {
+    onHit(target, hitInfo, game) {
+      onHit(this, target, hitInfo, game);
+    },
+    onKill(target, hitInfo, game) {
+      onKill(this, target, hitInfo, game);
+    },
+    passive(dt, game) {
+      passive(this, dt, game);
+    },
+  };
+}
+
+export const weaponPerks = {
+  'underground-lab': perk(
+    (c, b, h, g) => {
+      put(b, 'corrosion', g.time, 6, 5);
+    },
+    (c, b, h, g) => {
+      if (c.roll('sample', 0.01)) drop(b, g, 'sample', '样本管', 1);
+    },
+    (c, dt, g) => {
+      if (c.stage === 'underground-lab' && g.encounter?.active) c.fireRate = 1.15;
+    },
+  ),
+  'shanhai-secret-realm': perk((c, b, h, g) => {
+    if (beastStages.has(c.stage)) h.damage *= 1.1;
+    if (put(b, 'thunder', g.time, 6, 3, bloodMoon(c, g) ? 2 : 1).stacks < 3) return;
+    b.statusEffects.delete('thunder');
+    c.visual(b, g, 'arc');
+    timedControl(c, b, 'stunned', 1, g);
+    h.electric = true;
+    h.damage += c.baseDamage * 0.4;
+    area(c, b, 5, g, (other) => {
+      timedControl(c, other, 'stunned', 1, g);
+      g.beasts.damage(other, c.baseDamage * 0.6, g, 'electric');
+    });
+  }),
+  'rain-city': perk((c, b, h, g) => {
+    put(b, 'wet', g.time, 5);
+    if (c.roll('heavy', 0.05)) push(b, g.player, b.type === 1 ? 4 : 8);
+    if (c.roll('luck', 0.01)) {
+      h.damage *= 2;
+      drop(b, g, 'ammo', '街头补给', 14);
+    }
+  }),
+  'buried-tomb': perk((c, b, h, g) => {
+    slow(b, g.time, 2, 0.7);
+    if (c.consecutive >= 4) {
+      timedControl(c, b, 'rooted', 1.5, g);
+      c.consecutive = 0;
+    }
+    if (h.headshot && c.roll('eye', 0.01)) {
+      h.damage *= 2;
+      put(b, 'marked', g.time, 5);
+    }
+  }),
+  'polar-station': perk(
+    (c, b, h, g) => {
+      if (h.headshot && active(b, 'frozen', g.time)) h.damage *= 1.5;
+      if (put(b, 'frost', g.time, 4, 5).stacks === 5) {
+        b.statusEffects.delete('frost');
+        timedControl(c, b, 'frozen', 1.5, g);
+      }
+    },
+    (c, b, h, g) => {
+      if (c.stage === 'polar-station' && g.encounter)
+        g.encounter.temperature = Math.min(100, g.encounter.temperature + 4);
+    },
+  ),
+  'drowned-city': perk((c, b, h, g) => {
+    if (c.roll('tidePush', 0.1)) push(b, g.player, 7);
+    area(
+      c,
+      b,
+      6,
+      g,
+      (other) => {
+        c.arc(b, other, g);
+        timedControl(c, other, 'stunned', 0.5, g);
+        g.beasts.damage(other, c.baseDamage * 0.4, g, 'electric');
+      },
+      2,
+    );
+  }),
+  'ember-fortress': perk((c, b, h, g) => {
+    if (
+      active(b, 'burn', g.time) &&
+      c.roll('obsidian', 0.03) &&
+      timedControl(c, b, 'stone', 2, g) &&
+      b.type !== 3
+    ) {
+      b.statusEffects.get('stone').damageBonus = 0.3;
+    }
+    put(b, 'burn', g.time, 4);
+    c.visual(b, g, 'fire');
+  }),
+  'derelict-station': perk((c, b, h, g) => {
+    if (inVacuum(c, g)) h.damage *= 1.2;
+    if (b.clinging) {
+      h.damage *= 1.35;
+      b.clinging = false;
+      put(b, 'grounded', g.time, 1.25);
+    }
+    if (c.roll('zeroG', 0.08)) {
+      push(b, g.player, 8);
+      timedControl(c, b, 'hover', 1, g);
+    }
+  }),
+  'neon-undercity': perk((c, b, h, g) => {
+    if (machineStages.has(c.stage) && b.empReady <= g.time && timedControl(c, b, 'stopped', 1, g))
+      b.empReady = g.time + 8;
+    put(b, 'marked', g.time, 5).damageBonus = 0.1;
+    if (c.roll('overload', 0.01)) {
+      h.damage *= 2;
+      c.penetration = true;
+    }
+  }),
+  'jungle-temple': perk(
+    (c, b, h, g) => {
+      if (c.chargedShot) timedControl(c, b, 'stone', 1.5, g);
+      put(b, 'poison', g.time, 4, 3);
+      c.charge = Math.min(12, c.charge + 1);
+    },
+    (c, b, h, g) => {
+      c.speedUntil = g.time + 4;
+    },
+    (c, dt, g) => {
+      if (g.time < c.speedUntil) c.moveSpeed = 1.15;
+    },
+  ),
+  'bloodmoon-castle': perk(
+    (c, b, h, g) => {
+      if (c.stage === 'bloodmoon-castle') {
+        h.damage *= 1.15;
+        if (c.roll('holy', 0.05)) push(b, g.player, 8);
+      }
+      h.lifeSteal = bloodMoon(c, g) ? 0.06 : 0.03;
+      if (c.roll('sacrifice', 0.01)) {
+        h.damage *= 2;
+        h.dew = true;
+      }
+    },
+    (c, b, h, g) => {
+      if (h?.dew) drop(b, g, 'health', '圣露', 9);
+    },
+  ),
+  'sakura-night-town': perk(
+    (c, b, h, g) => {
+      if (c.stage === 'sakura-night-town') h.damage *= 1.1;
+      if (put(b, 'seal', g.time, 5, 3).stacks === 3) {
+        b.statusEffects.delete('seal');
+        timedControl(c, b, 'rooted', 1.5, g);
+      }
+      if (c.roll('bell', 0.05)) {
+        g.sound.tone(840, 510, 0.24, 0.16, 'sine');
+        const interrupt = (target) => {
+          push(target, g.player, 7);
+          if (target.type !== 3) {
+            target.mode = 'move';
+            target.cooldown = Math.max(0.45, target.cooldown);
+          }
+        };
+        area(c, g.player, 6, g, interrupt);
+      }
+      if (c.roll('blossom', 0.01)) {
+        h.damage *= 2;
+        c.visual(b, g, 'petal');
+        area(c, b, 5, g, (other) => slow(other, g.time, 2, 0.8));
+      }
+    },
+    (c, b, h, g) => {
+      if (!g.encounter?.isLantern?.(b)) return;
+      drop(b, g, 'ammo', '灯笼回响', 14);
+      if (c.roll('lantern', 0.01)) drop(b, g, 'health', '灯火圣露', 9);
+    },
+  ),
+  'brass-factory': perk(
+    (c, b, h, g) => {
+      put(b, 'scald', g.time, 3);
+      if (machineStages.has(c.stage) && put(b, 'gear', g.time, 5, 4).stacks === 4) {
+        b.statusEffects.delete('gear');
+        timedControl(c, b, 'stopped', 1.5, g);
+      }
+      if (c.chargedShot) {
+        push(b, g.player, 10);
+        c.visual(b, g, 'steam');
+        area(c, b, 5, g, (other) => g.beasts.damage(other, c.baseDamage * 0.65, g, 'weapon'));
+      }
+      if (c.roll('piston', 0.01)) h.damage *= 2;
+      c.charge = Math.min(15, c.charge + 1);
+    },
+    (c, b, h, g) => {
+      c.fireUntil = g.time + 4;
+    },
+    (c, dt, g) => {
+      if (g.time < c.fireUntil) c.fireRate = 1.15;
+    },
+  ),
+  'haunted-midway': perk((c, b, h, g) => {
+    slow(b, g.time, 2, 0.75);
+    if (c.consecutive >= 5) {
+      timedControl(c, b, 'rooted', 1.5, g);
+      c.consecutive = 0;
+    }
+    if (c.stage === 'haunted-midway' && b.type === 2) h.damage *= 1.3;
+    if (c.roll('music', 0.08)) timedControl(c, b, 'confused', 1, g);
+    if (c.roll('ticket', 0.01)) {
+      h.damage *= 2;
+      drop(b, g, 'ammo', '幸运门票', 14);
+    }
+    if (c.roll('ridePush', g.encounter?.rideActive ? 0.1 : 0.05)) push(b, g.player, 7);
+  }),
+};
+
+export function resetTargetEffects(target) {
+  target.statusEffects ??= new Map();
+  target.statusEffects.clear();
+  target.controlReady = target.empReady = -Infinity;
+  target.perkPushX = target.perkPushZ = 0;
+  target.perkMoveScale = 1;
+  target.spawnGeneration = (target.spawnGeneration ?? 0) + 1;
+}
+
+export class WeaponCombat {
+  constructor(skin, stage, baseDamage, random = Math.random) {
+    this.skin = skin;
+    this.stage = stage;
+    this.baseDamage = baseDamage;
+    this.random = random;
+    this.hooks = weaponPerks[skin] ?? perk();
+    this.reset();
+  }
+  reset() {
+    this.misses = new Map();
+    this.charge = this.consecutive = 0;
+    this.tracked = null;
+    this.chargedShot = this.penetration = false;
+    this.samplePending = this.sampleActive = false;
+    this.speedUntil = this.fireUntil = -Infinity;
+    this.fireRate = this.moveSpeed = 1;
+  }
+  roll(kind, rate) {
+    const failures = this.misses.get(kind) ?? 0;
+    const hit = this.random() < chanceCoefficient(rate) * (failures + 1);
+    this.misses.set(kind, hit ? 0 : failures + 1);
+    return hit;
+  }
+  beginShot() {
+    const threshold = this.skin === 'brass-factory' ? 15 : this.skin === 'jungle-temple' ? 12 : Infinity;
+    this.chargedShot = this.charge >= threshold;
+    if (this.chargedShot) this.charge = 0;
+    const penetrate = this.penetration;
+    this.penetration = false;
+    return penetrate;
+  }
+  reloaded() {
+    this.sampleActive = this.samplePending;
+    this.samplePending = false;
+  }
+  passive(dt, game) {
+    this.moveSpeed = this.fireRate = 1;
+    this.hooks.passive.call(this, dt, game);
+  }
+  hearingScale(player) {
+    return this.skin === 'buried-tomb' && player.crouched ? 0.6 : 1;
+  }
+  terrainScale(scale) {
+    return this.skin === 'drowned-city' && waterStages.has(this.stage) ? 1 : scale;
+  }
+  miss() {
+    this.consecutive = 0;
+  }
+  hit(target, info, game) {
+    const same = this.tracked === target && this.generation === target.spawnGeneration;
+    this.consecutive = same ? this.consecutive + 1 : 1;
+    this.tracked = target;
+    this.generation = target.spawnGeneration;
+    if (this.sampleActive) info.damage *= 1.3;
+    this.hooks.onHit.call(this, target, info, game);
+  }
+  onKill(target, hit, game) {
+    this.hooks.onKill.call(this, target, hit, game);
+  }
+  damageScale(target, source, time) {
+    const corrosion = active(target, 'corrosion', time);
+    // 敌人原有耐久已包含护甲。以原有效伤害为 1，仅计算被削掉的护甲带来的增量。
+    const armor = target.type === 1 ? 0.4 : target.type === 3 ? 0.25 : 0;
+    const erosion = (armor / (1 - armor)) * 0.05 * (corrosion?.stacks ?? 0);
+    const mark = active(target, 'marked', time)?.damageBonus ?? 0;
+    const stone = active(target, 'stone', time)?.damageBonus ?? 0;
+    const electric = source === 'electric' || source === 'electric-environment';
+    const wet = electric && active(target, 'wet', time) ? 0.25 : 0;
+    return (1 + erosion) * (1 + mark) * (1 + stone) * (1 + wet);
+  }
+  updateTarget(b, game) {
+    const time = game.time;
+    b.perkMoveScale = 1;
+    if (!b.statusEffects.size) return false;
+    let controlled = false;
+    for (const [kind, effect] of b.statusEffects) {
+      if (kind === 'burn' || kind === 'poison' || kind === 'scald') {
+        const tide =
+          this.stage === 'ember-fortress' && ['rise', 'high', 'retreat'].includes(game.encounter?.phase);
+        const steam = kind === 'scald' && game.encounter?.inSteam?.(b.x, b.z, b.y, game);
+        const perSecond =
+          kind === 'burn'
+            ? 0.08 * (tide ? 2 : 1)
+            : kind === 'poison'
+              ? 0.08 * effect.stacks
+              : 0.12 * (steam ? 2 : 1);
+        while (effect.tickAt <= Math.min(effect.until, time)) {
+          effect.tickAt += 0.5;
+          game.beasts.damage(b, this.baseDamage * perSecond * 0.5, game, 'weapon');
+          if (!b.active) return true;
+        }
+      }
+      if (effect.until <= time) {
+        b.statusEffects.delete(kind);
+        continue;
+      }
+      if (controlKinds.has(kind)) controlled = true;
+      if (kind === 'slowed' || kind === 'bossSlow') b.perkMoveScale = Math.min(b.perkMoveScale, effect.scale);
+      if (kind === 'frost') b.perkMoveScale = Math.min(b.perkMoveScale, 1 - 0.08 * effect.stacks);
+    }
+    if (controlled) b.perkMoveScale = 0;
+    return controlled;
+  }
+  status(game) {
+    const b = this.tracked;
+    if (!b?.active || b.spawnGeneration !== this.generation || !b.statusEffects.size) return '';
+    const labels = [];
+    for (const effect of b.statusEffects.values()) {
+      const name = effectTitles[effect.type];
+      if (!name || effect.until <= game.time) continue;
+      labels.push(
+        name + (effect.stacks > 1 ? '×' + effect.stacks : '') + ' ' + Math.ceil(effect.until - game.time) + '秒',
+      );
+    }
+    return labels.slice(-2).join(' / ');
+  }
+}
+</script>
 <script type="text/plain" data-level-module="@level-kit/weapon.mjs">
 import { createRifle } from '@level-kit/rifle-model.mjs';
+import { WeaponCombat } from '@level-kit/weapon-perks.mjs';
 
 export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene, definition, shapes, brighter, lerp, randomRange, colors }) {
   const { spark } = colors;
@@ -2831,9 +3758,28 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
 
   class WeaponSystem {
     constructor(skinId) {
+      this.skinId = skinId;
+      this.combat = new WeaponCombat(skinId, nativeSkin, CONFIG.weapon.damage);
+      const from = new V3(), to = new V3(), sight = new V3();
+      const tints = Object.fromEntries(Object.entries({
+        stone: 0xb1a886, ice: 0x91eaff, arc: 0x8cffff, fire: 0xff792e, petal: 0xffabc9, steam: 0xe7e0d5,
+      }).map(([name, tint]) => [name, brighter(tint, 1.8)]));
+      const center = (out, b) => out.set(b.x, b.y + (b.height ?? 1.7) * .52, b.z);
+      this.combat.visual = (b, game, kind) => {
+        game.effects.spray(center(to, b), tints[kind], 8, 2.8, .07, kind === 'steam' || kind === 'petal' ? 'mist' : 'spark');
+      };
+      this.combat.arc = (a, b, game) => {
+        game.effects.streak(center(from, a), center(to, b));
+        this.combat.visual(b, game, 'arc');
+      };
+      this.combat.visible = (a, b, game) => {
+        center(from, a); center(to, b);
+        const length = sight.subVectors(to, from).length();
+        return length < .01 || game.level.visible(from, sight.divideScalar(length), length);
+      };
       this.group = new THREE.Group();
       weaponScene.add(this.group);
-      this.rifle = createRifle(skinId);
+      this.rifle = createRifle(skinId, { firstPerson: true });
       this.rifle.root.rotation.y = Math.PI / 2;
       this.group.add(this.rifle.root);
       this.signals = {};
@@ -2871,6 +3817,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.ammo = CONFIG.weapon.magazine; this.reserve = CONFIG.weapon.reserve;
       this.heat = 0; this.cooldown = 0; this.reloadLeft = 0; this.kick = 0; this.flash = 0;
       this.emptyAt = -5;
+      this.combat.reset();
       this.empRecovery = 0;
       this.signals.emp = false;
       this.flashGroup.visible = false;
@@ -2888,6 +3835,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       p.recoil = Math.min(0.085, p.recoil + w.recoil * (1 + 1.1 * this.heat));
       p.recoilRoll += randomRange(-0.004, 0.004) * (1 + this.heat);
       game.shotAt = game.time; game.shotX = p.x; game.shotY = p.y; game.shotZ = p.z;
+      game.shotHearingScale = this.combat.hearingScale(p);
+      const penetrate = this.combat.beginShot();
       game.sound.shoot();
       const spread = lerp(w.baseSpread, w.maxSpread, this.heat ** 1.25) * (p.sprinting ? 1.45 : 1);
       const a = randomRange(0, TAU), s = Math.sqrt(Math.random()) * spread;
@@ -2910,13 +3859,27 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       const streakLength = this.muzzle.distanceTo(this.end);
       if (streakLength > 0.28) game.effects.streak(this.muzzle, this.end);
       if (hit) {
-        const dead = game.beasts.takeHit(hit, w.damage, this.end, this.dir, game);
+        let dead = this.hitTarget(hit, game);
+        if (penetrate) {
+          const next = game.beasts.hash.ray(this.origin, this.dir, limit, hit);
+          if (next) {
+            this.end.copy(this.origin).addScaledVector(this.dir, game.beasts.hash.depth);
+            game.effects.streak(this.muzzle, this.end);
+            dead = this.hitTarget(next, game) || dead;
+          }
+        }
         game.sound.hit(dead);
         game.ui.hit(dead ? 'kill' : 'hit');
         game.hitStop = w.hitStop;
-      } else if (cover || limit < w.range) {
-        game.effects.spray(this.end, spark, 5, 3.2, 0.025, 'spark');
+      } else {
+        this.combat.miss();
+        if (cover || limit < w.range) game.effects.spray(this.end, spark, 5, 3.2, 0.025, 'spark');
       }
+    }
+    hitTarget(target, game) {
+      const hit = { damage: CONFIG.weapon.damage, headshot: this.end.y >= target.y + target.height * .75 };
+      this.combat.hit(target, hit, game);
+      return game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
     }
     update(dt, input, game) {
       this.cooldown = Math.max(-dt, this.cooldown - dt);
@@ -2927,18 +3890,21 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
         if (this.reloadLeft === 0) {
           const fill = Math.min(CONFIG.weapon.magazine - this.ammo, this.reserve);
           this.ammo += fill; this.reserve -= fill; game.sound.reload(true);
+          this.combat.reloaded();
           this.cooldown = Math.max(0.08, this.cooldown);
         }
       }
       if (!input.fire) this.cooldown = Math.max(0, this.cooldown);
       if (input.fire && this.reloadLeft <= 0 && this.cooldown <= 0) {
         if (this.ammo > 0) {
-          this.cooldown += 1 / CONFIG.weapon.fireRate;
+          this.cooldown += 1 / (CONFIG.weapon.fireRate * this.combat.fireRate);
           this.shoot(game);
-        } else if (game.time - this.emptyAt > 0.45) {
+        } else if (this.reserve <= 0 && game.time - this.emptyAt > 0.45) {
           this.emptyAt = game.time; game.sound.tone(182, 100, 0.045, 0.095, 'square');
         }
       }
+      // 打出最后一发即开始换弹；空仓时捡到备弹也走相同入口。
+      if (this.ammo === 0 && this.reloadLeft === 0) this.reload(game);
     }
     render(dt, player, game) {
       const emp = Boolean(game.level.empActive);
@@ -2947,6 +3913,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.signals.bloodMoon = bloodMoonLevel && game.encounter?.phase === 'active';
       this.signals.tide = game.level.tide?.rifleTide;
       this.signals.emp = emp;
+      this.signals.shot = this.flash > 0 ? 1 : 0;
+      this.signals.pressure = this.combat.charge / 15;
       this.signals.empRecovery = this.empRecovery;
       this.rifle.update(game.time, this.signals);
       this.kick *= Math.exp(-dt * 17);
@@ -3010,7 +3978,7 @@ export class SpatialHash {
     }
     return out;
   }
-  ray(origin, direction, limit) {
+  ray(origin, direction, limit, ignore = null) {
     const s = this.size;
     let x = Math.floor(origin.x / s), z = Math.floor(origin.z / s);
     const sx = Math.sign(direction.x), sz = Math.sign(direction.z);
@@ -3024,7 +3992,7 @@ export class SpatialHash {
       const list = this.buckets.get(this.key(x, z));
       if (list) {
         for (const item of list) {
-          if (item.mark === mark || item.active === false) continue;
+          if (item === ignore || item.mark === mark || item.active === false) continue;
           item.mark = mark;
           const distance = rayBox(origin, direction, item);
           if (distance < depth) { depth = distance; hit = item; }
@@ -3174,7 +4142,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         const x = this.x(i), z = this.z(i);
         const y = level.surface(x, z, level.base(x, z) + 0.50);
         this.walkable[i] = !level.blocked(x, z, y, 0.52, 1.64);
-        if (this.walkable[i] && i % 7 === 2) level.sites.push(i);
+        if (this.walkable[i] && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
       }
       this.target = -1;
       this.terrainRevision = -1;

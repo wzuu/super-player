@@ -168,8 +168,9 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       shot.gravity = projectileGravity;
       shot.slowScale = slowScale; shot.slowDuration = slowDuration;
     }
-    splat(p, markGround = true) {
+    splat(p, game, markGround = true) {
       this.effects.spray(p.pos, projectileTint, 13, 4.2, 0.073, 'mist');
+      definition.onProjectileImpact?.(p.pos, game);
       if (markGround && p.poolLife > 0) {
         const pool = this.puddles[this.puddleCursor++ % this.puddles.length];
         pool.pos.copy(p.pos);
@@ -200,12 +201,12 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
             if (p.slowDuration > 0) player.slow(p.slowScale, p.slowDuration, game.time);
             definition.onProjectileHit?.(game);
           }
-          this.splat(p);
+          this.splat(p, game);
         } else if (cover) {
           p.pos.copy(this.old).addScaledVector(this.dir, Math.max(0, coverDistance - 0.06));
-          this.splat(p, cover.y0 < p.pos.y - 0.3);
+          this.splat(p, game, cover.y0 < p.pos.y - 0.3);
         } else if (p.pos.y <= this.level.base(p.pos.x, p.pos.z)) {
-          this.splat(p);
+          this.splat(p, game);
         } else {
           const size = 0.089 + 0.022 * Math.sin(p.life * 34);
           const yaw = this.directional ? Math.atan2(p.vel.x, p.vel.z) : 0;

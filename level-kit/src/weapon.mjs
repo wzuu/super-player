@@ -1,4 +1,5 @@
 import { createRifle } from '@level-kit/rifle-model.mjs';
+import { WeaponCombat } from '@level-kit/weapon-perks.mjs';
 
 export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene, definition, shapes, brighter, lerp, randomRange, colors }) {
   const { spark } = colors;
@@ -7,9 +8,28 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
 
   class WeaponSystem {
     constructor(skinId) {
+      this.skinId = skinId;
+      this.combat = new WeaponCombat(skinId, nativeSkin, CONFIG.weapon.damage);
+      const from = new V3(), to = new V3(), sight = new V3();
+      const tints = Object.fromEntries(Object.entries({
+        stone: 0xb1a886, ice: 0x91eaff, arc: 0x8cffff, fire: 0xff792e, petal: 0xffabc9, steam: 0xe7e0d5,
+      }).map(([name, tint]) => [name, brighter(tint, 1.8)]));
+      const center = (out, b) => out.set(b.x, b.y + (b.height ?? 1.7) * .52, b.z);
+      this.combat.visual = (b, game, kind) => {
+        game.effects.spray(center(to, b), tints[kind], 8, 2.8, .07, kind === 'steam' || kind === 'petal' ? 'mist' : 'spark');
+      };
+      this.combat.arc = (a, b, game) => {
+        game.effects.streak(center(from, a), center(to, b));
+        this.combat.visual(b, game, 'arc');
+      };
+      this.combat.visible = (a, b, game) => {
+        center(from, a); center(to, b);
+        const length = sight.subVectors(to, from).length();
+        return length < .01 || game.level.visible(from, sight.divideScalar(length), length);
+      };
       this.group = new THREE.Group();
       weaponScene.add(this.group);
-      this.rifle = createRifle(skinId);
+      this.rifle = createRifle(skinId, { firstPerson: true });
       this.rifle.root.rotation.y = Math.PI / 2;
       this.group.add(this.rifle.root);
       this.signals = {};
@@ -47,6 +67,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.ammo = CONFIG.weapon.magazine; this.reserve = CONFIG.weapon.reserve;
       this.heat = 0; this.cooldown = 0; this.reloadLeft = 0; this.kick = 0; this.flash = 0;
       this.emptyAt = -5;
+      this.combat.reset();
       this.empRecovery = 0;
       this.signals.emp = false;
       this.flashGroup.visible = false;
@@ -64,6 +85,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       p.recoil = Math.min(0.085, p.recoil + w.recoil * (1 + 1.1 * this.heat));
       p.recoilRoll += randomRange(-0.004, 0.004) * (1 + this.heat);
       game.shotAt = game.time; game.shotX = p.x; game.shotY = p.y; game.shotZ = p.z;
+      game.shotHearingScale = this.combat.hearingScale(p);
+      const penetrate = this.combat.beginShot();
       game.sound.shoot();
       const spread = lerp(w.baseSpread, w.maxSpread, this.heat ** 1.25) * (p.sprinting ? 1.45 : 1);
       const a = randomRange(0, TAU), s = Math.sqrt(Math.random()) * spread;
@@ -86,13 +109,27 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       const streakLength = this.muzzle.distanceTo(this.end);
       if (streakLength > 0.28) game.effects.streak(this.muzzle, this.end);
       if (hit) {
-        const dead = game.beasts.takeHit(hit, w.damage, this.end, this.dir, game);
+        let dead = this.hitTarget(hit, game);
+        if (penetrate) {
+          const next = game.beasts.hash.ray(this.origin, this.dir, limit, hit);
+          if (next) {
+            this.end.copy(this.origin).addScaledVector(this.dir, game.beasts.hash.depth);
+            game.effects.streak(this.muzzle, this.end);
+            dead = this.hitTarget(next, game) || dead;
+          }
+        }
         game.sound.hit(dead);
         game.ui.hit(dead ? 'kill' : 'hit');
         game.hitStop = w.hitStop;
-      } else if (cover || limit < w.range) {
-        game.effects.spray(this.end, spark, 5, 3.2, 0.025, 'spark');
+      } else {
+        this.combat.miss();
+        if (cover || limit < w.range) game.effects.spray(this.end, spark, 5, 3.2, 0.025, 'spark');
       }
+    }
+    hitTarget(target, game) {
+      const hit = { damage: CONFIG.weapon.damage, headshot: this.end.y >= target.y + target.height * .75 };
+      this.combat.hit(target, hit, game);
+      return game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
     }
     update(dt, input, game) {
       this.cooldown = Math.max(-dt, this.cooldown - dt);
@@ -103,18 +140,21 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
         if (this.reloadLeft === 0) {
           const fill = Math.min(CONFIG.weapon.magazine - this.ammo, this.reserve);
           this.ammo += fill; this.reserve -= fill; game.sound.reload(true);
+          this.combat.reloaded();
           this.cooldown = Math.max(0.08, this.cooldown);
         }
       }
       if (!input.fire) this.cooldown = Math.max(0, this.cooldown);
       if (input.fire && this.reloadLeft <= 0 && this.cooldown <= 0) {
         if (this.ammo > 0) {
-          this.cooldown += 1 / CONFIG.weapon.fireRate;
+          this.cooldown += 1 / (CONFIG.weapon.fireRate * this.combat.fireRate);
           this.shoot(game);
-        } else if (game.time - this.emptyAt > 0.45) {
+        } else if (this.reserve <= 0 && game.time - this.emptyAt > 0.45) {
           this.emptyAt = game.time; game.sound.tone(182, 100, 0.045, 0.095, 'square');
         }
       }
+      // 打出最后一发即开始换弹；空仓时捡到备弹也走相同入口。
+      if (this.ammo === 0 && this.reloadLeft === 0) this.reload(game);
     }
     render(dt, player, game) {
       const emp = Boolean(game.level.empActive);
@@ -123,6 +163,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.signals.bloodMoon = bloodMoonLevel && game.encounter?.phase === 'active';
       this.signals.tide = game.level.tide?.rifleTide;
       this.signals.emp = emp;
+      this.signals.shot = this.flash > 0 ? 1 : 0;
+      this.signals.pressure = this.combat.charge / 15;
       this.signals.empRecovery = this.empRecovery;
       this.rifle.update(game.time, this.signals);
       this.kick *= Math.exp(-dt * 17);
