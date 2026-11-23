@@ -28,7 +28,7 @@ python3 server.py
 | `W` `A` `S` `D` | 移动 |
 | `Shift` | 冲刺，消耗体力 |
 | 空格 | 跳跃 |
-| `R` | 换弹 |
+| `R` | 提前换弹。打空弹匣且仍有备弹时会自动换弹 |
 | `E` | 交互：开门、拾取关键物、引爆传送门 |
 | `C` | 蹲伏（部分关卡用于压低声响） |
 | `Esc` | 释放鼠标并暂停，点击画面可重新进入 |
@@ -50,6 +50,11 @@ python3 server.py
 | 9 | 霓雨下城 | EMP 中断照明与 HUD、瘫痪机械敌人、无人机坠落爆炸 |
 | 10 | 雨蚀天阶 | 雷雨涨水与伏击、毒镖中毒、解毒草定时重生 |
 | 11 | 血月古堡 | 血月提升凶兽移速与伤害、圣露掉落、伯爵化蝠 |
+| 12 | 樱落夜町 | 灯笼长街的百鬼队列、增援提速、灯笼妖补给 |
+| 13 | 黄铜机坊 | 管道爆裂蒸汽、传送带、锅炉车间诱敌 |
+| 14 | 永夜游园 | 失控旋转木马和过山车、气球爆炸、镜屋窄道 |
+
+成功撤离后，可以在个人收藏中旋转查看并佩戴该关的步枪。外观与战斗特性一同装备，可带去其他关卡。与血月、蒸汽等场景事件联动的能力在对应环境中触发。
 
 每关目标都是累计击杀 150 只、击败本关首领、拿到关键物后到指定位置按 `E` 引爆撤离。凶兽数量与移速按 `campaign/levels.json` 的登记顺序自动递增，规则见 [level-kit/README.md](level-kit/README.md)。
 
@@ -76,7 +81,11 @@ python3 server.py
   <tr>
     <td align="center"><a href="campaign/images/jungle-temple.webp"><img src="campaign/images/jungle-temple.webp" width="280" alt="雨蚀天阶"></a><br>雨蚀天阶</td>
     <td align="center"><a href="campaign/images/bloodmoon-castle.webp"><img src="campaign/images/bloodmoon-castle.webp" width="280" alt="血月古堡"></a><br>血月古堡</td>
-    <td align="center"></td>
+    <td align="center"><a href="campaign/images/sakura-night-town.webp"><img src="campaign/images/sakura-night-town.webp" width="280" alt="樱落夜町"></a><br>樱落夜町</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="campaign/images/brass-factory.webp"><img src="campaign/images/brass-factory.webp" width="280" alt="黄铜机坊"></a><br>黄铜机坊</td>
+    <td align="center"><a href="campaign/images/haunted-midway.webp"><img src="campaign/images/haunted-midway.webp" width="280" alt="永夜游园"></a><br>永夜游园</td>
   </tr>
 </table>
 

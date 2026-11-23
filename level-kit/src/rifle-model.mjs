@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
-import { rifleFinish, rifleFrost, rifleRandom, rifleWood } from '@level-kit/rifle-textures.mjs';
+import { rifleFinish, rifleFrost, rifleRandom, rifleTexture, rifleWood } from '@level-kit/rifle-textures.mjs';
 
 const tau = Math.PI * 2;
 
 // 模型以 X 轴向前，展示台直接使用，第一人称旋转后沿相机的 -Z 轴。
-export function createRifle(id) {
+export function createRifle(id, { firstPerson = false } = {}) {
   id = resolveRifleSkin(id);
   const skin = rifleSkins[id];
   const root = new THREE.Group();
@@ -93,9 +93,19 @@ export function createRifle(id) {
   const surface = { ...finish, metalness: skin.metalness, roughness: skin.roughness };
   if (finish.normalMap) surface.normalScale = new THREE.Vector2(-.68, -.68);
   if (finish.emissiveMap) Object.assign(surface, { emissive: 0xffffff, emissiveIntensity: 1.4 });
-  const enamel = id === 'jungle-temple'
-    ? physical(0xffffff, { ...surface, transmission: .3, thickness: .05, clearcoat: .6, clearcoatRoughness: .2 })
-    : standard(0xffffff, surface);
+  let enamel;
+  if (id === 'jungle-temple') {
+    // 第一人称武器独立清深度，折射缓冲里没有战场。用玉色透光和清漆反射表现玉质，
+    // 避免战斗时为这一把枪额外绘制并生成透射纹理；收藏台保留真实透射。
+    const optics = firstPerson
+      ? { emissive: '#315d49', emissiveIntensity: .16, envMapIntensity: 1.08 }
+      : { transmission: .3, thickness: .05 };
+    enamel = physical(0xffffff, { ...surface, ...optics, clearcoat: .6, clearcoatRoughness: .2 });
+  } else if (id === 'sakura-night-town') {
+    enamel = physical(0xffffff, { ...surface, clearcoat: .8 });
+  } else {
+    enamel = standard(0xffffff, surface);
+  }
   const accent = standard(skin.trim, { metalness: id === 'buried-tomb' ? 1 : .58, roughness: id === 'buried-tomb' ? .2 : .36 });
   const dark = standard(skin.dark, { roughness: .67, metalness: .25 });
   const hardware = standard('#353b43', { metalness: .65, roughness: .36 });
@@ -117,7 +127,7 @@ export function createRifle(id) {
     line(body, hardware, .043, -.126, .067, -.073, z, .015, .012);
   }
 
-  const wood = ['shanhai-secret-realm', 'jungle-temple'].includes(id)
+  const wood = ['shanhai-secret-realm', 'jungle-temple', 'haunted-midway'].includes(id)
     ? standard(0xffffff, { map: rifleWood(THREE, skin.dark), roughness: .77 }) : null;
   const frost = id === 'polar-station'
     ? standard(0xffffff, { map: rifleFrost(THREE, '#54768b'), roughness: .69 }) : null;
@@ -182,7 +192,177 @@ export function createRifle(id) {
     for (const x of [-.223, .302]) tube(body, hardware, x, .008, z, .011, .010, 'z', .01, 8);
   }
 
+  function pivot(parent, name, x, y, z) {
+    const group = new THREE.Group();
+    group.name = name;
+    group.position.set(x, y, z);
+    parent.add(group);
+    return group;
+  }
+
+  // 小型粒子只分配一次，展示台与第一人称共用同一个动画。
+  function motes(parent, mat, geo, count, position) {
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const particle = new THREE.Object3D();
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    mesh.frustumCulled = false;
+    parent.add(mesh);
+    animations.push(time => {
+      for (let i = 0; i < count; i++) {
+        position(particle, i, time);
+        particle.updateMatrix();
+        mesh.setMatrixAt(i, particle.matrix);
+      }
+      mesh.instanceMatrix.needsUpdate = true;
+    });
+  }
+
   switch (id) {
+    case 'sakura-night-town': {
+      standardMagazine(accent);
+      const cord = standard('#f4e3b8', { roughness: .89 });
+      const petal = standard('#f7adbc', { roughness: .79, side: THREE.DoubleSide });
+      for (let i = 0; i < 8; i++) {
+        add(guard, cord, new THREE.TorusGeometry(.086, .009, 5, 14), .395 + i * .037, .008, 0, .14, Math.PI / 2, .16);
+      }
+      for (const x of [.41, .52, .63]) {
+        box(guard, cord, x, -.058, .072, .022, .047, .004, -.42);
+        box(guard, cord, x + .012, -.088, .072, .019, .031, .004, .36);
+      }
+      const talisman = standard('white', { map: rifleTexture(THREE, 64, 128, ctx => {
+        ctx.fillStyle = '#e7c668'; ctx.fillRect(0, 0, 64, 128);
+        ctx.strokeStyle = '#a22b21'; ctx.lineWidth = 3; ctx.strokeRect(5, 5, 54, 118);
+        ctx.fillStyle = '#9a271d'; ctx.textAlign = 'center'; ctx.font = 'bold 35px serif';
+        ctx.fillText('封', 32, 51); ctx.fillText('印', 32, 94);
+      }) });
+      for (const z of [-.087, .087]) {
+        box(body, talisman, -.09, .025, z, .061, .132, .006, -.19);
+        box(body, talisman, .16, .019, z, .056, .12, .006, .15);
+        add(body, petal, new THREE.SphereGeometry(.014, 7, 4), .243, .063, z);
+      }
+      for (let i = -3; i <= 3; i++) {
+        const angle = i * .24;
+        box(sight, i % 2 ? accent : enamel, .047 + Math.sin(angle) * .06, .18 + Math.cos(angle) * .06, .015, .022, .116, .009, -angle);
+      }
+      const bell = pivot(stock, '青铜铃', -.56, -.073, 0);
+      add(bell, accent, new THREE.TorusGeometry(.02, .004, 5, 12), 0, -.017, 0);
+      add(bell, accent, new THREE.SphereGeometry(.037, 12, 8), 0, -.065, 0);
+      box(bell, dark, 0, -.079, .032, .037, .005, .007);
+      for (const z of [-.063, .063]) {
+        add(magazine, indicator, new THREE.SphereGeometry(.041, 12, 8), .124, -.144, z);
+        for (const y of [-.179, -.112]) box(magazine, dark, .124, y, z, .059, .008, .05);
+      }
+      motes(barrel, petal, new THREE.SphereGeometry(.009, 5, 3), 18, (p, i, t) => {
+        const angle = i * 2.4 + t * .8;
+        if (i < 9) p.position.set(1.075, .046 + Math.cos(angle) * .062, Math.sin(angle) * .062);
+        else p.position.set(-.38 + (i % 8) * .14, .27 - ((t * .1 + i * .137) % .34), Math.sin(angle) * .12);
+        p.rotation.set(t + i, angle, angle); p.scale.set(1.2, .35, .76);
+      });
+      animations.push(t => {
+        bell.rotation.z = .13 * Math.sin(2.1 * t);
+        indicator.emissiveIntensity = 1.1 + .35 * Math.sin(5.3 * t);
+      });
+      break;
+    }
+    case 'brass-factory': {
+      standardMagazine(rail);
+      const copper = standard('#ad7045', { metalness: .86, roughness: .43 });
+      const steam = standard('#d6d5cc', { transparent: true, opacity: .23, depthWrite: false });
+      for (const z of [-.091, .091]) {
+        for (const y of [-.028, .012, .052]) tube(guard, copper, .537, y, z, .014, .314);
+        for (const x of [.39, .68]) for (const y of [-.033, .05]) {
+          add(guard, accent, new THREE.SphereGeometry(.014, 7, 5), x, y, z);
+        }
+      }
+      const valve = pivot(guard, '蒸汽阀', .625, .113, 0);
+      add(valve, copper, new THREE.TorusGeometry(.043, .009, 7, 16), 0, .023, 0, Math.PI / 2);
+      for (const angle of [0, Math.PI / 2]) add(valve, accent, new THREE.BoxGeometry(.084, .008, .01), 0, .023, 0, 0, angle);
+      function gear(parent, x, y, z, radius, teeth, rate) {
+        const cog = pivot(parent, '齿轮', x, y, z);
+        tube(cog, accent, 0, 0, 0, radius, .018, 'z');
+        tube(cog, hardware, 0, 0, .012, radius * .34, .014, 'z');
+        for (let i = 0; i < teeth; i++) {
+          const angle = tau * i / teeth;
+          box(cog, copper, radius * Math.cos(angle), radius * Math.sin(angle), 0, radius * .42, radius * .26, .019, angle);
+        }
+        animations.push(t => { cog.rotation.z = t * rate; });
+      }
+      gear(body, -.11, .029, .091, .052, 12, .73);
+      gear(body, -.025, .029, .091, .031, 8, -1.1);
+      const dial = standard('white', { map: rifleTexture(THREE, 128, 128, ctx => {
+        ctx.fillStyle = '#dfcea2'; ctx.fillRect(0, 0, 128, 128);
+        ctx.translate(64, 64); ctx.lineWidth = 4;
+        for (let i = 0; i <= 10; i++) {
+          const a = 2.4 + i * .46;
+          ctx.strokeStyle = i > 7 ? '#a03429' : '#493a2a'; ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 39, Math.sin(a) * 39); ctx.lineTo(Math.cos(a) * 52, Math.sin(a) * 52); ctx.stroke();
+        }
+        ctx.fillStyle = '#4d4236'; ctx.font = '18px serif'; ctx.fillText('BAR', -17, 27);
+      }) });
+      tube(sight, copper, .07, .217, .036, .072, .063, 'z');
+      add(sight, dial, new THREE.CircleGeometry(.063, 32), .07, .217, .07);
+      const needle = pivot(sight, '压力指针', .07, .217, .072);
+      box(needle, dark, 0, .021, 0, .006, .048, .004);
+      const key = pivot(magazine, '上弦钥匙', .124, -.157, .063);
+      tube(key, copper, 0, 0, .017, .011, .041, 'z');
+      for (const x of [-.019, .019]) add(key, accent, new THREE.TorusGeometry(.019, .005, 6, 12), x, 0, .041);
+      motes(barrel, steam, new THREE.IcosahedronGeometry(.019, 0), 12, (p, i, t) => {
+        const phase = (t * .88 + i / 6) % 1, nozzle = i < 6;
+        p.position.set((nozzle ? 1.055 : .625) + (nozzle ? .12 : .02) * phase, (nozzle ? .046 : .15) + phase * .19, Math.sin(i + t) * .018);
+        p.scale.setScalar(Math.sin(phase * Math.PI) * (1 + phase));
+      });
+      animations.push((t, e) => {
+        key.rotation.z = -.55 * t;
+        needle.rotation.z = 2.16 - 4.32 * (e.pressure ?? 0) + .13 * (e.shot ?? 0);
+      });
+      break;
+    }
+    case 'haunted-midway': {
+      standardMagazine(accent);
+      const bands = ['#ef679d', '#53cccc', '#f5cc69'].map(color => glow(color, .6));
+      const ticket = standard('white', { map: rifleTexture(THREE, 256, 100, ctx => {
+        ctx.fillStyle = '#d1b787'; ctx.fillRect(0, 0, 256, 100);
+        ctx.strokeStyle = '#845038'; ctx.lineWidth = 4; ctx.setLineDash([4, 4]); ctx.strokeRect(7, 8, 242, 84);
+        ctx.fillStyle = '#57382e'; ctx.font = 'bold 22px serif'; ctx.fillText('MIDNIGHT FAIR', 30, 45);
+        ctx.font = '17px monospace'; ctx.fillText('ADMIT ONE   014', 43, 72);
+      }) });
+      for (const z of [-.09, .09]) box(body, ticket, -.027, .026, z, .186, .079, .004, -.11);
+      const ribbons = bands.map((color, i) => {
+        const loop = pivot(guard, '彩带', .42 + i * .095, -.035, .079);
+        add(guard, color, new THREE.TorusGeometry(.088, .007, 5, 16), .42 + i * .095, .005, 0, .2, 1.34);
+        plate(loop, color, [[0,0],[.025,0],[.052,-.039],[.032,-.077],[.047,-.11],[.018,-.079],[.031,-.043]], .003);
+        return loop;
+      });
+      const balloon = pivot(sight, '气球', .044, .177, 0);
+      for (const [i, color] of bands.entries()) {
+        const x = (i - 1) * .045;
+        line(balloon, dark, 0, 0, x, .065, 0, .004);
+        add(balloon, color, new THREE.SphereGeometry(.034, 12, 8), x, .09 + (i % 2) * .028, 0);
+      }
+      box(magazine, wood, .126, -.148, 0, .172, .113, .139);
+      const crank = pivot(magazine, '八音盒曲柄', .131, -.148, .084);
+      box(crank, accent, .023, 0, 0, .056, .012, .012);
+      tube(crank, dark, .046, 0, .013, .012, .032, 'z');
+      const doll = pivot(stock, '旧玩偶', -.547, -.064, .014);
+      line(doll, dark, 0, 0, 0, -.039, 0, .005);
+      add(doll, wood, new THREE.SphereGeometry(.021, 10, 6), 0, -.058, 0);
+      box(doll, bands[0], 0, -.096, 0, .039, .052, .024, .08);
+      for (const sign of [-1, 1]) {
+        line(doll, wood, sign * .015, -.082, sign * .031, -.103, .001, .009);
+        line(doll, wood, sign * .011, -.115, sign * .017, -.147, .001, .011);
+      }
+      for (let i = 0; i < 10; i++) tube(guard, bands[i % 3], .384 + i * .031, .051, .093, .008, .008, 'z');
+      let lastCycle = 0, crankAngle = 0;
+      animations.push((t, e) => {
+        const dt = Math.max(0, Math.min(.05, t - lastCycle)); lastCycle = t;
+        crankAngle += dt * (e.shot ?? 0) * 20; crank.rotation.z = crankAngle;
+        balloon.position.y = .177 + Math.sin(t * 1.8) * .009;
+        doll.rotation.z = Math.sin(t * 2.3) * .15;
+        ribbons.forEach((r, i) => { r.rotation.x = Math.sin(t * 3 + i) * .24; });
+        bands.forEach((m, i) => { m.emissiveIntensity = .5 + .85 * Math.sin(t * 2.1 + i) ** 2; });
+      });
+      break;
+    }
     case 'underground-lab': {
       canister(skin.light, hardware);
       const alarm = glow('#ff252f', 2);
@@ -354,7 +534,10 @@ export function createRifle(id) {
     update(time, signals = {}) { for (const animate of animations) animate(time, signals); },
     dispose() {
       root.removeFromParent();
-      root.traverse(object => { if (object.isMesh) object.geometry.dispose(); });
+      root.traverse(object => {
+        if (object.isInstancedMesh) object.dispose();
+        if (object.isMesh) object.geometry.dispose();
+      });
       materials.forEach(mat => mat.dispose());
       textures.forEach(texture => texture.dispose());
     },

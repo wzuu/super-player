@@ -5,14 +5,14 @@
 
 ## 当前状态
 
-项目处于开发阶段。走位射击关卡以 `LEVEL_BIBLE.md` 为固定提示词，使用 `level-kit/` 和以第三关为基准的 `level-kit/UI_LAYOUT.md`。第一至第十一关使用共享 HUD、菜单、公共运行时和本地 Three.js。
+项目处于开发阶段。走位射击关卡以 `LEVEL_BIBLE.md` 为固定提示词，使用 `level-kit/` 和以第三关为基准的 `level-kit/UI_LAYOUT.md`。所有关卡使用共享 HUD、菜单、公共运行时和本地 Three.js。
 
 代码已作为 GitHub 公开项目发布在 <https://github.com/wzuu/super-player>（分支 `main`），对外说明见根目录 `README.md`。GitHub Pages 未开启，战役存档仍需本机 `server.py`。
 
 | 游戏 | 已完成 | 下一步 |
 | --- | --- | --- |
 | 战役首页 | 根目录 `index.html` 展示关卡、对战记录和个人收藏。SQLite 保存进度和武器外观佩戴设置 | 其他桌面浏览器待实测 |
-| 武器外观 | 十一关默认外观、个人收藏三维预览、解锁与持久化佩戴已接入 | 其他桌面浏览器和完整战役自然推进待实测 |
+| 武器外观 | 十四关默认外观与跨关战斗特性、个人收藏三维预览、解锁与持久化佩戴已接入 | 其他桌面浏览器和完整战役自然推进待实测 |
 | 地下实验室 | 场景为 `underground-lab/scene.mjs`，游玩入口为 `underground-lab/index.html` | 其他桌面浏览器、设备和自然推进的完整 150 击杀流程待实测 |
 | 上古秘境 | 新版由 `shanhai-secret-realm/scene.mjs` 和共享组件生成，Chromium 通过血月、地图和胜负验收 | 其他浏览器或设备待实测 |
 | 雨夜废城 | `rain-city/scene.mjs` 和公共组件生成 `rain-city/index.html`，通过 Chromium 回归验收 | 其他浏览器或设备上的表现待实测 |
@@ -24,9 +24,17 @@
 | 霓雨下城 | `neon-undercity/index.html` 已生成，完成 Chromium 环路、EMP、无人机坠毁、胜负和性能验收 | 其他浏览器和设备待测 |
 | 雨蚀天阶 | `jungle-temple/index.html` 已生成，完成 Chromium 环路、雷雨涨水、毒镖解毒、首领、胜负和性能验收 | 其他浏览器和设备待测 |
 | 血月古堡 | `bloodmoon-castle/index.html` 已生成，完成 Chromium 环路、血月、暗影弹、首领、胜负和性能验收 | 其他浏览器和设备待测 |
+| 樱落夜町 | 灯笼队列、神社和五重塔，朱漆百鬼型可跨关佩戴 | 补充完整自然游玩 |
+| 黄铜机坊 | 蒸汽、装配线与主机房，蒸汽齿轮型可跨关佩戴 | 补充完整自然游玩 |
+| 永夜游园 | 旋转木马、过山车、镜屋与大帐篷，马戏狂欢型可跨关佩戴 | 补充完整自然游玩 |
 | 后续关卡标准 | 固定提示词、共享 UI、公共模块、可玩模板、模块预览和单 HTML 打包已就位 | 新关卡填入主题并按圣经与 UI 规范验收 |
 
 ## 已完成与验证结果
+
+- 2026-11-23，新关以樱落夜町、黄铜机坊、永夜游园的顺序加入战役。Chrome 158 实测各关三条环路、机关与首领。用临时 SQLite 建立旧战役通关记录，在三个新关分别设置击杀进度，击败首领、拾取宝物和关键道具、按 E 撤离，核对保存、解锁、跨关佩戴与最终通关。完整自然推进待补测。
+- 共享换弹实测覆盖最后一发、持键恢复射击、提前换弹、换弹中再按 R、无备弹提示、空仓拾取备弹、停火冷却、暂停继续及重开。三款新枪均在收藏页验证旋转、缩放、重置与实际渲染。
+- Chrome 158、Intel UHD 630、DPR 1 下，樱落夜町与黄铜机坊在 1280×720 受控压力场景分别保持 101、96 只在视锥内，各采样 403 帧，平均 60.0 fps、帧间隔 P95 16.9 ms。永夜游园在 1440×900、96 只活跃凶兽下，广场和镜屋分别为 60.09、60.05 fps。
+- 第十关以相同设备在 1440×900 验证 96 只的毒伤与连射，平均 59.4 fps、P95 16.9 ms，96 个状态同时到期的一帧为 16.6 ms。第一人称玉石材质采用清漆和环境反射；收藏展示保留物理透射。`node --test level-kit/tests/weapon-perks.test.mjs` 的 17 项回归通过。十四个打包入口在断网状态下均能开始、开火及暂停。
 
 - [x] 2026-11-23 初始化 Git 仓库（分支 `main`），提交 67 个文件共 65492 行，用 `gh repo create super-player --public --source . --push` 创建 GitHub 公开仓库 `https://github.com/wzuu/super-player`。验证：不带凭据的 `GET https://api.github.com/repos/wzuu/super-player` 返回 `private=false`，仓库页 `HTTP 200`，`raw.githubusercontent.com` 可取到 `README.md`（4971 字节）和 `rain-city/index.html`（193166 字节），`git ls-remote --heads origin` 与本地 `42dc175` 一致。`.data/` 与 `.DS_Store` 经 `git status --porcelain --ignored` 确认未被跟踪。GitHub Pages 按用户选择暂未开启。
 - [x] 2026-11-23 新增面向外部玩家的 `README.md`（运行方式、战役与单关离线两种玩法、按键表、十一关一览、目录结构、自建关卡步骤、Three.js MIT 声明与已知限制）。核对文中相对链接指向仓库实际存在的文件，路径引用与 `level-kit/README.md` 的打包命令一致。

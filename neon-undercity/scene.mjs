@@ -396,7 +396,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound}){
     for(const b of game.beasts.pool){
       if(!b.active||!unobstructed(b.x,b.y+.24,b.z,drone.crashRadius))continue;
       target.set(b.x,b.y+.45,b.z);
-      game.beasts.takeHit(b,drone.beastDamage,target,dir,game);
+      game.beasts.takeHit(b,drone.beastDamage,target,dir,game,null,'electric-environment');
     }
   }
   return {

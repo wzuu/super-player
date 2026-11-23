@@ -84,6 +84,8 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | `src/world.mjs` | 地图坐标、空间哈希、AABB、射线和寻路 |
 | `src/rendering.mjs` | Three.js 渲染、辉光、程序纹理和静态或动态实例批次 |
 | `src/player.mjs`、`src/weapon.mjs` | 玩家移动、体力、恢复、机关枪、换弹与命中 |
+| `src/weapon-perks.mjs` | 按佩戴的步枪调用命中、击杀、被动钩子，按当前场景判定阵营与环境，跟踪状态、控免及持续伤害 |
+| `src/stage-craft.mjs` | 街町和机坊共用的造景工具、双向阶梯和凶兽部件 |
 | `src/rifle-skins.mjs`、`src/rifle-model.mjs`、`src/rifle-textures.mjs` | 各关外观配置、六组基础几何造型和程序纹理 |
 | `src/beasts.mjs` | 四类凶兽的 AI、血条、对象池、实例渲染和远距降频 |
 | `src/effects.mjs`、`src/audio.mjs` | 弹丸、可选落地伤害区、传送门、粒子、曳光和合成音效 |
@@ -91,7 +93,7 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 
 ## 武器外观调节
 
-配色、金属度和粗糙度在 `src/rifle-skins.mjs`。按关卡 ID 在 `src/rifle-textures.mjs` 调整纹理，在 `src/rifle-model.mjs` 调整几何、发光和透明材质。展示灯光及环境粒子在 `campaign/weapon-preview.mjs`。改动共享模型或纹理后重新打包十一关。
+配色、金属度和粗糙度在 `src/rifle-skins.mjs`。按关卡 ID 在 `src/rifle-textures.mjs` 调整纹理，在 `src/rifle-model.mjs` 调整几何、发光和透明材质。展示灯光及环境粒子在 `campaign/weapon-preview.mjs`。改动共享模型或纹理后重新打包所有关卡。
 
 | 关卡与默认外观 | 调节位置 |
 | --- | --- |
@@ -106,3 +108,10 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | 霓雨下城 赛博义体型 | 对应纹理分支控制碳纤维编织，模型分支控制光带流动和 EMP 恢复闪烁 |
 | 雨蚀天阶 玛雅玉石型 | `jadePattern` 控制羽蛇和阶梯纹，模型分支控制玉石透射、藤蔓和羽饰 |
 | 血月古堡 哥特猩红型 | `gothicMark` 控制蔷薇窗与尖拱纹，模型分支控制血露瓶及银色浮雕 |
+| 樱落夜町 朱漆百鬼型 | 描金花纹、符纸、注连绳、摆铃、灯笼与花瓣动画 |
+| 黄铜机坊 蒸汽齿轮型 | 铜管、咬合齿轮、跟随命中蓄压的指针与双喷口蒸汽 |
+| 永夜游园 马戏狂欢型 | 门票、气球、飘带、射击驱动的曲柄和悬挂玩偶 |
+
+新关在各自的 `scene.mjs` 调整布局。樱町的 `parade`、机坊的 `pipes` / `conveyor` 和游园的 `rides` 分别控制主题事件。武器回归命令为 `node --test level-kit/tests/weapon-perks.test.mjs`。
+
+有 Chrome 与 Python Playwright 的开发机可运行 `python level-kit/tests/campaign_browser.py`。该测试自行启动本地服务并使用临时存档，检查打包后的三关、持续开火换弹、暂停继续、E 键撤离、收藏解锁和跨关佩戴。

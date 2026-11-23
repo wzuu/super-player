@@ -40,7 +40,7 @@ export class SpatialHash {
     }
     return out;
   }
-  ray(origin, direction, limit) {
+  ray(origin, direction, limit, ignore = null) {
     const s = this.size;
     let x = Math.floor(origin.x / s), z = Math.floor(origin.z / s);
     const sx = Math.sign(direction.x), sz = Math.sign(direction.z);
@@ -54,7 +54,7 @@ export class SpatialHash {
       const list = this.buckets.get(this.key(x, z));
       if (list) {
         for (const item of list) {
-          if (item.mark === mark || item.active === false) continue;
+          if (item === ignore || item.mark === mark || item.active === false) continue;
           item.mark = mark;
           const distance = rayBox(origin, direction, item);
           if (distance < depth) { depth = distance; hit = item; }
@@ -204,7 +204,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         const x = this.x(i), z = this.z(i);
         const y = level.surface(x, z, level.base(x, z) + 0.50);
         this.walkable[i] = !level.blocked(x, z, y, 0.52, 1.64);
-        if (this.walkable[i] && i % 7 === 2) level.sites.push(i);
+        if (this.walkable[i] && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
       }
       this.target = -1;
       this.terrainRevision = -1;

@@ -82,7 +82,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const game = {
     level, player, beasts, pickups, weapon, effects, sound, projectiles, ui, encounter,
     phase: 'ready', time: 0, kills: 0, core: false, bossDead: false, loot: [], value: 0,
-    hitStop: 0, shotAt: -Infinity, shotX: 0, shotY: 0, shotZ: 0,
+    hitStop: 0, shotAt: -Infinity, shotX: 0, shotY: 0, shotZ: 0, shotHearingScale: 1,
     footstep: { at: -Infinity, x: 0, y: 0, z: 0, radius: 0 }, blast: 0, blastClock: 0,
     threat: Infinity, threatDelay: 0,
     reset() {
@@ -128,6 +128,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       const frozen = Math.min(dt, this.hitStop);
       this.hitStop -= frozen;
       if (!this.blast) {
+        weapon.combat.passive(dt, this);
         player.update(dt - frozen, input, this);
         if (input.interact) {
           input.interact = false;
@@ -141,7 +142,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
         if (!this.blast) {
           player.positionCamera(0);
           weapon.update(dt, input, this);
-          if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt);
+          if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt, this);
           else beasts.update(dt - frozen, player, this);
           projectiles.update(dt - frozen, player, this);
           if (this.phase !== 'play') return;

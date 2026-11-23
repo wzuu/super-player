@@ -72,7 +72,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const x = this.forward.x / norm, z = this.forward.z / norm;
       const stride = this.sprinting ? p.sprint : p.walk * (forward < 0 ? p.backward : 1) * (this.crouched ? p.crouch.speed : 1);
       const exposure = game.encounter?.moveScale ?? 1;
-      const terrain = this.level.movementScale(this.x, this.z, this.y, game);
+      const terrain = game.weapon.combat.terrainScale(this.level.movementScale(this.x, this.z, this.y, game)) * game.weapon.combat.moveSpeed;
       const scale = dt * stride * exposure * impairment * terrain / Math.max(1, Math.hypot(forward, strafe));
       const floorBefore = this.level.foot(this.x, this.z, this.y + 0.052, this.radius);
       this.grounded = this.y <= floorBefore + 0.07 && this.vy <= 0;
