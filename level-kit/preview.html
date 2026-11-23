@@ -186,7 +186,7 @@
 #preparation {margin:8px 0;max-width:100%;font:14px/1.6 system-ui}
 #preparation select {max-width:100%;font:inherit}
 #menu .screen {max-height:95dvh;overflow:auto}
-#equipment-hud {position:fixed;left:1em;bottom:7em;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
+#equipment-hud {position:absolute;left:0;bottom:calc(100% + 8px);width:max-content;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
 </style>
 </head>
 <body>
@@ -222,6 +222,7 @@
   <div id="cross" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
   <div id="message" hidden></div>
   <section class="bottom-left instrument" aria-label="玩家状态">
+    <output id="equipment-hud" hidden></output>
     <div class="meter-label"><span>生命</span><output id="hp">100</output></div>
     <progress id="health" aria-label="生命" max="100" value="100"></progress>
     <div class="meter-label"><span>体力</span><span id="posture" hidden>蹲伏</span><output id="energy">100</output></div>
@@ -233,7 +234,6 @@
     <div id="weapon-state"></div>
   </section>
 </div>
-<output id="equipment-hud" hidden></output>
 <output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
 <dialog id="menu" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
   <div class="screen">

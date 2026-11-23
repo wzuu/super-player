@@ -80,6 +80,13 @@ def field(page, url):
     assert page.evaluate("Math.abs(run.config.weapon.reloadTime - 1.8*.92) < .0001 && Math.abs(run.config.weapon.heatRecovery - 1.1*1.1) < .0001")
     assert page.evaluate("run.config.graphics.particleScale") == .3
     assert page.evaluate("[run.config.feedback.hitShake, run.config.feedback.directionIndicators]") == [.4, False]
+    for width, height in [(1024,650),(768,520)]:
+        page.set_viewport_size({"width":width,"height":height})
+        assert page.evaluate("""() => {
+            const kit=document.querySelector('#equipment-hud').getBoundingClientRect();
+            return kit.height>0 && kit.bottom<document.querySelector('#hp').getBoundingClientRect().top;
+        }"""), "装备栏遮挡生命读数"
+    page.set_viewport_size({"width":1920,"height":1080})
     result = page.evaluate("""() => {
       const g=run.game, r=g.player.look.rotation;
       r.x=-Math.PI/2+.04; const x=r.x, y=r.y;
