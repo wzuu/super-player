@@ -91,6 +91,21 @@ def dashboard(browser, url):
     direct.wait_for_function("document.querySelector('#rifle-canvas').width>300 && !document.querySelector('#rifle-canvas').hidden")
     assert len(cold)==1
     direct.close()
+    returning = context.new_page()
+    def advanced_save(route):
+        response = route.fetch()
+        snapshot = response.json()
+        for i, level in enumerate(snapshot["levels"]):
+            level.update(unlocked=True, cleared=i < len(LEVELS) - 1)
+        route.fulfill(response=response, json=snapshot)
+    returning.route("**/api/progress", advanced_save)
+    returning.goto(url)
+    returning.get_by_role("link",name="继续战役").wait_for()
+    assert returning.locator("#continue").get_attribute("href") == "./" + LEVELS[-1]["id"] + "/"
+    assert returning.locator(".mission-card").last.evaluate("card=>card.parentNode.scrollTop>0 && card.getBoundingClientRect().bottom<=card.parentNode.getBoundingClientRect().bottom+1")
+    returning.locator(".mission-card").first.focus()
+    assert returning.get_by_role("link",name="再次挑战",exact=True).get_attribute("href") == "./" + LEVELS[0]["id"] + "/"
+    returning.close()
     print("PASS 1280/1920 independent wheel, keyboard preview, 320/390/768 navigation and first-use Three.js", flush=True)
     return page
 

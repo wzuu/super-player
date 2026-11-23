@@ -32,8 +32,65 @@ def sample_volley(page):
     }""")
 
 
+def compare_ammo_branches(page):
+    return page.evaluate("""async () => {
+      const {applyBranches}=await import('/level-kit/src/gear.mjs');
+      const g=run.game,p=g.player,b=g.beasts,w=g.weapon,cfg=run.config.weapon,base={...cfg};
+      Object.assign(p,{x:-20,y:45,z:0,thirdPerson:false});p.look.rotation.set(0,0,0,'YXZ');p.positionCamera(0);
+      function shot(branch,formation) {
+        b.pool.forEach(x=>{x.active=false;});b.live=0;b.hash.clear();
+        const positions=formation==='column'?[[0,-5],[0,-10],[0,-14]]:[[0,-5],[-1.4,-5],[1.4,-5],[2.3,-6]];
+        const targets=positions.map(([x,z])=>{
+          const t=b.spawn(0,p.x+x,z,p.y);t.hp=1000;t.height=2.4;return t;
+        });
+        b.refreshHash();applyBranches(cfg,base,{[branch]:true});w.heat=0;w.shoot(g);
+        return targets.map(t=>Math.round(1000-t.hp));
+      }
+      const scores={};
+      for (const f of ['column','group']) for (const branch of ['pierce','split']) scores[f+branch]=shot(branch,f);
+      Object.assign(cfg,base);
+      return scores;
+    }""")
+
+
+def live_shake(page,url):
+    peer=page.context.new_page()
+    peer.goto(url)
+    def setting(attack,hit,steady):
+        prefs={"attackShake":attack,"hitShake":hit,"steady":steady}
+        peer.evaluate("""async fields=>{
+          const {preferences,storePreferences}=await import('/level-kit/src/preferences.mjs');
+          storePreferences({...preferences(),...fields});
+        }""",prefs)
+        page.wait_for_function("""p=>run.config.feedback.attackShake===p.attackShake &&
+          run.config.feedback.hitShake===p.hitShake && run.config.player.steady===p.steady""",arg=prefs)
+        return page.evaluate("""()=>{
+          const g=run.game,p=g.player,c=run.config;
+          Object.assign(p,{recoil:0,recoilRoll:0,sway:0,shake:0,attackKick:0,ads:0,aiming:false,impactLeft:0});
+          g.weapon.lastImpact=-Infinity;g.weapon.impact(4,g);
+          const random=Math.random;
+          try {
+            Math.random=()=>.8;p.positionCamera(0);
+            const attack=Math.abs(p.visual.y);
+            p.impactLeft=c.feedback.impactDuration;p.impactStrength=1;p.positionCamera(0);
+            return [attack,p.baseFov-run.camera.fov];
+          } finally { Math.random=random; }
+        }""")
+    full=setting(1,1,False)
+    quarter=setting(.25,0,False)
+    disabled=setting(0,1,False)
+    steady=setting(1,1,True)
+    restored=setting(1,1,False)
+    assert full[0]>0 and full[1]>0 and restored==full
+    assert abs(quarter[0]/full[0]-.25)<.001 and quarter[1]==0
+    assert disabled==[0,full[1]] and steady==[0,0]
+    peer.close()
+    print("PASS live camera preferences: attack 100% / 25% / off, independent damage, steady off/on",flush=True)
+
+
 def run(browser,url):
-    page=browser.new_page(viewport={"width":1024,"height":720})
+    context=browser.new_context(viewport={"width":1024,"height":720})
+    page=context.new_page()
     errors=[]
     page.on("pageerror",lambda error:errors.append(str(error)))
     page.goto(url+"/")
@@ -74,11 +131,21 @@ def run(browser,url):
     assert "扩容弹匣" in page.locator("#weapon-build").inner_text()
     page.click("#start")
     page.wait_for_function("run?.game.phase==='play'")
-    page.keyboard.press("v")
+    page.keyboard.down("v")
     page.wait_for_function("run.game.player.thirdPerson && !run.game.weapon.group.visible")
+    page.keyboard.down("v")
+    page.keyboard.up("v")
+    assert page.evaluate("run.game.player.thirdPerson")
     page.mouse.down(button="right")
     page.wait_for_function("run.game.player.ads>.9 && !document.querySelector('#aim-dot').hidden && run.game.weapon.group.visible")
     assert page.evaluate("run.camera.fov<run.game.player.baseFov")
+    fov=page.evaluate("""()=>{
+      const p=run.game.player; p.positionCamera(.3);
+      const aimed=run.camera.fov;p.impactLeft=run.config.feedback.impactDuration;p.impactStrength=1;
+      p.positionCamera(0);const hurt=run.camera.fov;p.impactLeft=0;p.positionCamera(0);
+      return {aimed,hurt,recovered:run.camera.fov};
+    }""")
+    assert fov["hurt"]+0.1<fov["aimed"] and abs(fov["recovered"]-fov["aimed"])<.001,fov
     page.mouse.up(button="right")
     page.wait_for_function("!run.game.weapon.group.visible")
     page.evaluate("Object.assign(run.game.weapon,{ammo:1,reserve:4})")
@@ -181,11 +248,31 @@ def run(browser,url):
     page.goto(url+path)
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
+    # 这把步枪继承旧档快换分支。空仓自动换弹，重复按 R 不延长圆环。
+    page.mouse.down(button="right")
+    page.wait_for_function("run.game.player.ads>.9 && !document.querySelector('#aim-dot').hidden")
+    timer=page.evaluate("""()=>{const g=run.game,w=g.weapon,ring=document.querySelector('#reload-ring');
+      Object.assign(w,{ammo:0,reserve:6,cooldown:0,reloadLeft:0});g.step(.016);g.step(.2);
+      const before=w.reloadLeft;
+      document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyR',bubbles:true}));
+      g.step(.016);document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyR',bubbles:true}));
+      return {duration:w.reloadTotal,before,after:w.reloadLeft,visible:!ring.hidden&&!document.querySelector('#aim-dot').hidden,
+        ratio:parseFloat(ring.style.getPropertyValue('--remaining')),actual:w.reloadLeft/w.reloadTotal};
+    }""")
+    assert abs(timer["duration"]-1.8*.78)<.001 and timer["visible"],timer
+    assert timer["after"]<timer["before"] and abs(timer["ratio"]-timer["actual"])<.001,timer
+    page.wait_for_function("run.game.weapon.ammo===6 && document.querySelector('#reload-ring').hidden")
+    page.mouse.up(button="right")
     rifle=sample_volley(page)
     assert len(rifle["high"]["lengths"])==1 and rifle["high"]["lengths"][0]>15,rifle
     assert set(rifle["high"]["sparks"])=={"spark"} and rifle["high"]["tint"]!=pellet["high"]["tint"],rifle
     print("PASS native meshes and impacts, high/low shotgun rays 3/2, rifle single full-length ray",flush=True)
+    branches=compare_ammo_branches(page)
+    assert branches["columnpierce"][1]>0 and branches["columnpierce"][2]==branches["columnsplit"][1]==0,branches
+    assert all(damage>0 for damage in branches["groupsplit"]) and not any(branches["grouppierce"][1:]),branches
+    print("PASS exclusive ammunition branches against a column and a cluster, damage per target",branches,flush=True)
     page.evaluate("document.exitPointerLock()")
+    live_shake(page,url)
     for mode in ["range","tutorial"]:
         page.goto(url+"/practice/?mode="+mode+"&weapon=shotgun-pump")
         page.wait_for_function("document.querySelector('#practice-weapon').value==='shotgun-pump'")
@@ -195,7 +282,7 @@ def run(browser,url):
         page.evaluate("document.exitPointerLock()")
     assert not errors,errors
     print("PASS SQLite / IndexedDB legacy purchases, free per-gun switch, ADS, reload and camera obstruction",result,flush=True)
-    page.close()
+    context.close()
 
 
 if __name__=="__main__":

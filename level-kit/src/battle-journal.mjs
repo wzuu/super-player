@@ -7,7 +7,7 @@ export class BattleJournal {
     this.lastCompleted = null;
     this.seen = new Set();
     this.samples = prefs.recordReplay ? [] : null;
-    this.interval = .5;
+    this.interval = 0.5;
     this.nextSample = 0;
     this.mark(game, '出发');
     this.sample(game);
@@ -17,16 +17,16 @@ export class BattleJournal {
     this.seen.add(label);
     this.events.push({ time: Math.round(game.time * 1000), label });
   }
-  complete(game,label) {
-    if(!label) return;
-    this.lastCompleted=label;
-    this.mark(game,'完成 · '+label);
+  complete(game, label) {
+    if (!label) return;
+    this.lastCompleted = label;
+    this.mark(game, '完成 · ' + label);
   }
   sample(game, force = false) {
-    if (!this.samples || !force && game.time < this.nextSample) return;
-    const {x, y, z, look, hp} = game.player;
+    if (!this.samples || (!force && game.time < this.nextSample)) return;
+    const { x, y, z, look, hp } = game.player;
     const t = Math.round(game.time * 1000);
-    const round = n => Math.round(n * 100) / 100;
+    const round = (n) => Math.round(n * 100) / 100;
     const value = [t, round(x), round(y), round(z), round(look.rotation.y), round(hp)];
     if (this.samples.at(-1)?.[0] === t) this.samples.pop();
     this.samples.push(value);
@@ -51,14 +51,28 @@ export class BattleJournal {
     this.sample(g, true);
     return {
       report: {
-        mode: g.objective.mode, difficulty: this.difficulty, weapon: g.weapon.skinId,
-        loadout: this.loadout, reason: end, lastStage, events: this.events,
-        pickedCount: g.loot.length, pickedValue: g.value, variation: g.variation?.name ?? null,
-        vaultValue: won ? g.loot.filter(item=>item.origin==='vault').reduce((sum,item)=>sum+item.value,0) : 0,
-        mainValue: won ? g.loot.filter(item=>!item.origin||item.origin==='main').reduce((sum,item)=>sum+item.value,0) : 0,
-        scores: g.objective.result?.(g) ?? {}, ...g.performance?.result?.(g, won),
+        mode: g.objective.mode,
+        difficulty: this.difficulty,
+        weapon: g.weapon.skinId,
+        loadout: this.loadout,
+        reason: end,
+        lastStage,
+        events: this.events,
+        pickedCount: g.loot.length,
+        pickedValue: g.value,
+        variation: g.variation?.name ?? null,
+        vaultValue: won
+          ? g.loot.filter((item) => item.origin === 'vault').reduce((sum, item) => sum + item.value, 0)
+          : 0,
+        mainValue: won
+          ? g.loot
+              .filter((item) => !item.origin || item.origin === 'main')
+              .reduce((sum, item) => sum + item.value, 0)
+          : 0,
+        scores: g.objective.result?.(g) ?? {},
+        ...g.performance?.result?.(g, won),
       },
-      replay: this.samples ? {samples: this.samples, events: this.events} : null,
+      replay: this.samples ? { samples: this.samples, events: this.events } : null,
     };
   }
 }

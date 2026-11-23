@@ -43,7 +43,7 @@ function buildMap(context) {
         const far=[...b1]; far[axis]*=-1;
         b.beam('iron',a,far,.14);
       }
-      b.beam('brass',b1,[-sx*r1,y1,sz*r1*.86],.15);
+      if (sx>0) b.beam('brass',b1,[-sx*r1,y1,sz*r1*.86],.15);
     }
   }
   b.column('brass',0,0,.3,35,41);
@@ -110,7 +110,7 @@ function buildMap(context) {
 }
 
 function createEnvironment(context) {
-  const {THREE,scene,shapes,dynamicMesh,updateMesh,setInstance}=context;
+  const {THREE,scene,shapes,setInstance}=context;
   const helicopter=new THREE.Group(), rotor=new THREE.Group();
   function piece(group,shape,color,x,y,z,w,h,d) {
     const part=new THREE.Mesh(shape,new THREE.MeshLambertMaterial({color}));
@@ -138,7 +138,24 @@ function createEnvironment(context) {
   // 群影批次只需位置与法线，与近处真实攀爬凶兽分开计数。
   for(const g of [body,head,leg]) g.deleteAttribute('uv');
   const silhouette=context.mergeGeometries([body,head,...[-1,1].flatMap(s=>[-1,1].map(f=>leg.clone().translate(.23*s,-.38,.32*f)))]);
-  const silhouettes=dynamicMesh(silhouette,new THREE.MeshBasicMaterial({color:0x373448}),96);
+  // 每只群影保留独立步相。轨道整体旋转，静态实例矩阵只上传一次。
+  const crowdSize=96, phases=Float32Array.from({length:crowdSize},(_,i)=>i);
+  silhouette.setAttribute('gaitPhase',new THREE.InstancedBufferAttribute(phases,1));
+  const stride={value:0}, material=new THREE.MeshBasicMaterial({color:0x373448});
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.gaitTick=stride;
+    shader.vertexShader='attribute float gaitPhase;\nuniform float gaitTick;\n'+shader.vertexShader
+      .replace('#include <begin_vertex>','#include <begin_vertex>\ntransformed.y += .125 * sin(gaitTick + gaitPhase);');
+  };
+  const silhouettes=new THREE.InstancedMesh(silhouette,material,crowdSize);
+  silhouettes.name='Paris distant horde';
+  for(let i=0;i<crowdSize;i++) {
+    const a=i*2.39996, r=28+(i%7)*1.8;
+    setInstance(silhouettes,i,Math.sin(a)*r,.4,Math.cos(a)*r,.9,.8,1.35,null,a);
+  }
+  silhouettes.computeBoundingSphere();
+  silhouettes.boundingSphere.radius+=.1;
+  scene.add(silhouettes);
   skySpecks(context,105,115,0xe9c59c,.065,15);
   let lastTick=-1,departure=null;
   return {update(t,playing,game) {
@@ -161,11 +178,8 @@ function createEnvironment(context) {
     const tick=Math.floor((game.phase==='ready'?t:clock)*8);
     if (lastTick===tick) return;
     lastTick=tick;
-    for(let i=0;i<96;i++) {
-      const a=i*2.39996+.006*tick, r=28+(i%7)*1.8;
-      setInstance(silhouettes,i,Math.sin(a)*r,.4+.1*Math.sin(tick+i),Math.cos(a)*r,.9,.8,1.35,null,a);
-    }
-    updateMesh(silhouettes,96);
+    silhouettes.rotation.y=.006*tick;
+    stride.value=tick;
   }};
 }
 

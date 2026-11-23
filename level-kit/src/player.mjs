@@ -22,7 +22,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.vy = 0; this.grounded = true; this.tired = false;
       this.sprinting = false; this.lastHurt = -Infinity; this.hurtDelay = 0;
       this.slowUntil = -Infinity; this.slowScale = 1;
-      this.damageVignette = 0; this.shake = 0; this.bob = 0; this.sway = 0;
+      this.damageVignette = 0; this.shake = this.attackKick = 0; this.bob = 0; this.sway = 0;
       this.hitDirections.fill(-Infinity);
       this.impactLeft = this.impactStrength = this.impactBearing = 0;
       this.recoil = 0; this.recoilRoll = 0; this.speedMix = 0;
@@ -135,6 +135,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
     positionCamera(dt) {
       this.damageVignette *= Math.exp(-dt * 4.8);
       this.shake *= Math.exp(-dt * 12);
+      this.attackKick *= Math.exp(-dt * 12);
       this.recoil *= Math.exp(-dt * 13.3);
       this.recoilRoll *= Math.exp(-dt * 10);
       const wobble = this.speedMix * Math.sin(this.bob * 2) * 0.028;
@@ -149,9 +150,10 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.eye = lerp(this.eye, targetEye, 1 - Math.exp(-dt * 17));
       camera.position.set(this.x, this.y + this.eye + wobble, this.z);
       camera.position.x += Math.sin(this.bob * 0.48) * this.speedMix * 0.012;
-      this.visual.set(this.recoil + randomRange(-0.028, 0.028) * this.shake,
-        randomRange(-0.021, 0.021) * this.shake,
-        this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * this.shake, 'YXZ');
+      const cameraShake = Math.max(this.shake, this.attackKick * feedback.attackShake);
+      this.visual.set(this.recoil + randomRange(-0.028, 0.028) * cameraShake,
+        randomRange(-0.021, 0.021) * cameraShake,
+        this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * cameraShake, 'YXZ');
       if (impact && Number.isFinite(this.impactBearing)) {
         const angle = this.impactBearing + this.look.rotation.y;
         this.visual.x -= Math.cos(angle) * feedback.impactAngle * impact;

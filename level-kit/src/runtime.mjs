@@ -191,7 +191,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     time: 0,
     kills: 0,
     performance: new BattlePerformance(),
-    attackShake: prefs.steady ? 0 : prefs.attackShake,
     journal: campaign ? new BattleJournal() : null,
     stageKillTarget: CONFIG.beasts.killsToWin,
     core: false,
@@ -448,8 +447,10 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     }
   });
   bindSoundControl($('sound'), (current, state) => {
-    CONFIG.feedback.attackShake=current.attackShake;
-    game.attackShake=current.steady ? 0 : current.attackShake;
+    CONFIG.player.steady = current.steady;
+    CONFIG.feedback.hitShake = current.hitShake;
+    CONFIG.feedback.attackShake = current.attackShake;
+    CONFIG.feedback.directionIndicators = current.directionIndicators;
     CONFIG.audio.volume = current.volume / 100;
     sound.enabled = !current.muted;
     if(!sound.enabled) sound.stopVoices();

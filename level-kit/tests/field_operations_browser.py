@@ -88,6 +88,7 @@ def verify(browser):
                 reset('hunt');const prey=f.prey,old={x:prey.x,z:prey.z};check(prey.type===0&&prey.hp===f.cfg.huntHP,'prey prototype');
                 move(prey);prey.hp--; for(let i=0;i<90;i++){g.time+=.05;f.huntStep(prey,g,.05);}
                 check(Math.hypot(old.x-prey.x,old.z-prey.z)>.3,'prey stuck');
+                move({x:prey.x+30,y:prey.y,z:prey.z});f.huntStep(prey,g,.025);
                 check(!f.guide(g).target,'hunter reveals exact location');
                 beat(prey);check(g.ready()&&g.loot.some(i=>i.origin==='hunt'),'hunt failed');
                 move(g.level.gate);g.trigger();check(g.blast>0,'hunt cannot evacuate');

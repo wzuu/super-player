@@ -56,6 +56,7 @@ function showView(moveFocus = false) {
     window.scrollTo(0, 0);
     $('view-' + view).querySelector('h1').focus({ preventScroll: true });
   }
+  if (view === 'missions' && progress) revealMission();
   updateWeaponPreview();
 }
 
@@ -106,6 +107,14 @@ function missionCard(level, index, active) {
 }
 
 let selectedIndex = 0;
+function revealMission() {
+  const list = $('mission-list'), card = list.children[selectedIndex];
+  // 仅移动桌面列表，读到中后段存档时也能直接看见当前关卡。
+  if (!card || !list.clientHeight || list.scrollHeight <= list.clientHeight) return;
+  const bound = list.getBoundingClientRect(), item = card.getBoundingClientRect();
+  if (item.top < bound.top) list.scrollTop += item.top - bound.top;
+  else if (item.bottom > bound.bottom) list.scrollTop += item.bottom - bound.bottom;
+}
 const accents = ['#82dfcb','#d9bd86','#9ed7ff','#e3c275','#aceaff','#78d4ed','#ffa88b','#bab7ff','#ffa1d8','#93ddb0','#f3a7b5','#f3b9e0','#e1c48e','#b8aff7'];
 function renderHero(index) {
   const level = progress.levels[index];
@@ -139,6 +148,7 @@ function renderMissions() {
   $('campaign-progress').value = cleared;
   $('mission-list').replaceChildren(...levels.map((level, index) => missionCard(level, index, level === current)));
   renderHero(levels.indexOf(featured));
+  revealMission();
   $('last-played').textContent = progress.battles.length ? '最近游玩 ' + date.format(progress.battles[0].endedAt) : '本机新存档';
 }
 

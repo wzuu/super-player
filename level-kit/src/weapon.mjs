@@ -195,8 +195,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       if (CONFIG.graphics.particleScale <= .3 && game.time - this.lastImpact < feedback.lowAttackInterval) return;
       this.lastImpact = game.time;
       game.attackPauseUntil=Math.max(game.attackPauseUntil,game.time+feedback.attackStop[rank]);
-      if (rank >= 3 && !CONFIG.player.steady)
-        game.player.shake = Math.max(game.player.shake, feedback.attackShake * (rank === 4 ? .28 : .15));
+      if (rank >= 3) game.player.attackKick = Math.max(game.player.attackKick, rank === 4 ? .28 : .15);
     }
     update(dt, input, game) {
       if (input.fire || input.padFire || input.reload || this.reloadLeft > 0 || game.player.aiming || game.player.sprinting)

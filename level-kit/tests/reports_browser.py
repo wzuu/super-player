@@ -10,7 +10,8 @@ from campaign_browser import ROOT, LEVELS, expose_game, sync_playwright
 
 
 def run(browser, url, static):
-    page = browser.new_page(viewport={"width": 920, "height": 680})
+    context = browser.new_context(viewport={"width": 920, "height": 680})
+    page = context.new_page()
     errors = []
     page.on("pageerror", lambda exc: errors.append(str(exc)))
     if static:
@@ -165,7 +166,7 @@ def run(browser, url, static):
         page.get_by_role("button",name="成就与统计").click()
         assert "未能读取战斗统计" in page.locator("#panel-body").inner_text()
     assert not errors, errors
-    page.close()
+    context.close()
 
 
 if __name__ == "__main__":

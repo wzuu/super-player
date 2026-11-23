@@ -74,7 +74,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       }
       for (const b of game.beasts.pool) {
         if (!b.active || b.hunted && (!b.playerVisible || Math.hypot(b.x-game.player.x,b.z-game.player.z)>14)) continue;
-        ctx.fillStyle = b.type === 3 ? '#ff9a71' : '#f45f76';
+        ctx.fillStyle = b.hunted ? '#ffce68' : b.type === 3 ? '#ff9a71' : '#f45f76';
         ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), b.type === 3 ? 3.2 : 1.5, 0, TAU); ctx.fill();
         if (b.statusEffects.has('marked')) {
           ctx.strokeStyle = '#ffd780'; ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), 4.4, 0, TAU); ctx.stroke();
