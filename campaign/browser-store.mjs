@@ -5,6 +5,26 @@ function result(request) {
   });
 }
 
+function battleRecord(battle) {
+  const { id, level, won, kills, durationMs, endedAt, loot } = battle;
+  const nonnegative = value => Number.isSafeInteger(value) && value >= 0;
+  if (typeof id !== 'string' || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id) ||
+      typeof won !== 'boolean' || !nonnegative(kills) || !nonnegative(durationMs) ||
+      !nonnegative(endedAt) || endedAt === 0 || endedAt > 8640000000000000 ||
+      !Array.isArray(loot) || loot.length > 10 || (!won && loot.length)) {
+    throw new Error('对战记录无效');
+  }
+  const names = new Set();
+  for (const item of loot) {
+    if (typeof item?.name !== 'string' || !item.name.trim() || item.name.length > 100 ||
+        names.has(item.name) || !nonnegative(item.value) || item.value > 1000000) {
+      throw new Error('战利品记录无效');
+    }
+    names.add(item.name);
+  }
+  return { id, level, won: Number(won), kills, durationMs, endedAt, loot };
+}
+
 function historyPage(rows, before) {
   rows.sort((a, b) => b.endedAt - a.endedAt || b.sequence - a.sequence);
   const start = before == null ? 0 : rows.findIndex(row => row.sequence === before) + 1;
@@ -54,12 +74,13 @@ export async function openBrowserStore(levels, path) {
     pendingPrefix: 'super-player-static:' + path + ':pending:',
     canEnter: id => transaction('battles', 'readonly', tx => unlocked(tx.objectStore('battles'), id)),
     async save(battle) {
+      const record = battleRecord(battle);
       return transaction('battles', 'readwrite', async tx => {
         const records = tx.objectStore('battles');
-        let row = await result(records.index('id').get(battle.id));
+        let row = await result(records.index('id').get(record.id));
         if (!row) {
-          if (!await unlocked(records, battle.level)) throw new Error('请先通关上一关');
-          row = { ...battle, won: Number(battle.won), loot: battle.won ? battle.loot : [] };
+          if (!await unlocked(records, record.level)) throw new Error('请先通关上一关');
+          row = record;
           await result(records.add(row));
         }
         const nextLevel = row.won ? levels[position(row.level) + 1] ?? null : null;

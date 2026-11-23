@@ -29,6 +29,24 @@ def verify(browser, root, site):
     page.on("request", lambda req: api_requests.append(req.url) if "/api/" in req.url else None)
     for level in LEVELS:
         page.route(root + level["id"] + "/", expose_game)
+    page.goto(root)
+    page.locator("#continue").wait_for()
+    page.evaluate("""async first => {
+        const store = await (await import('./campaign/store.mjs')).campaignStore();
+        const id = crypto.randomUUID();
+        localStorage.setItem(store.pendingPrefix + id, JSON.stringify({
+            id, level:first, won:true, kills:1, durationMs:3000, endedAt:Date.now()
+        }));
+    }""", LEVELS[0]["id"])
+    page.reload()
+    page.locator("#retry").wait_for()
+    assert page.locator("#continue").get_attribute("href") == "./" + LEVELS[0]["id"] + "/"
+    stored_count = page.evaluate("""async () => {
+        const { campaignStore } = await import('./campaign/store.mjs');
+        const store = await campaignStore();
+        return (await store.progress()).battleCount;
+    }""")
+    assert stored_count == 0
     page.goto(root + LEVELS[-1]["id"] + "/")
     page.wait_for_url("**/?locked=*")
     page.locator("#continue").click()
@@ -66,13 +84,20 @@ def verify(browser, root, site):
             assert page.locator("#next-level").is_hidden()
     page.goto(root + "#history")
     page.reload()
-    page.wait_for_function("document.querySelectorAll('#battle-list tr').length === 15")
+    total = len(LEVELS) + 1  # 每关一次胜利，另含第一关的一次失败。
+    page.wait_for_function("n => document.querySelector('#battle-count').textContent.includes(n + ' 局')", arg=total)
+    while page.locator("#more-battles").is_visible():
+        previous = page.locator("#battle-list tr").count()
+        page.locator("#more-battles").click()
+        page.wait_for_function("n => document.querySelectorAll('#battle-list tr').length > n", arg=previous)
+    assert page.locator("#battle-list tr").count() == total
+    assert page.locator("#battle-list .lost").count() == 1
     snapshot = page.evaluate("""async () => {
         const store = await (await import('./campaign/store.mjs')).campaignStore();
         return store.progress();
     }""")
     assert all(level["cleared"] for level in snapshot["levels"])
-    assert [b["won"] for b in snapshot["battles"]].count(0) == 1
+    assert snapshot["battleCount"] == total
     assert {(item["level"], item["name"]): item["count"] for item in snapshot["loot"]} == collected
     assert snapshot["equippedSkin"] == LEVELS[0]["id"]
     # 两个标签页同时补写同一局，在同一事务中按对战 ID 去重。
@@ -85,7 +110,7 @@ def verify(browser, root, site):
     second.evaluate(save, replay)
     page.evaluate("window.replaying")
     second.reload()
-    second.wait_for_function("document.querySelector('#battle-count').textContent.includes('16 局')")
+    second.wait_for_function("n => document.querySelector('#battle-count').textContent.includes(n + ' 局')", arg=total + 1)
     second.close()
     assert not api_requests, api_requests
     assert not errors, errors

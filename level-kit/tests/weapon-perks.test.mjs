@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { WeaponCombat, resetTargetEffects, weaponPerks } from '../src/weapon-perks.mjs';
 import { SpatialHash } from '../src/world.mjs';
@@ -349,8 +350,9 @@ test('穿透跳过第一个目标且仍受掩体射程限制', () => {
   assert.equal(hash.ray(origin, direction, 9, front), back);
 });
 
-test('十四组钩子齐全，低概率特性长时间模拟接近目标概率且连续失败有上限', () => {
-  assert.equal(Object.keys(weaponPerks).length, 14);
+test('登记关卡均有武器钩子，长期触发率与失败上限符合预期', () => {
+  const levels = JSON.parse(readFileSync(new URL('../../campaign/levels.json', import.meta.url), 'utf8'));
+  assert.deepEqual(Object.keys(weaponPerks).sort(), levels.map(level => level.id).sort());
   let seed = 7;
   const random = () => (seed = (Math.imul(1664525, seed) + 1013904223) >>> 0) / 4294967296;
   const c = new WeaponCombat('rain-city', 'rain-city', 20, random);
