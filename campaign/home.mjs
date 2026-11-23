@@ -13,6 +13,7 @@ const coverUrl = id => './campaign/images/' + id + '.webp';
 const option = $('collection-level');
 const more = $('more-battles');
 let progress;
+let loadoutRevision = 0;
 let before;
 let loading = false;
 let selectedRifle, previewPromise, savingRifle = false;
@@ -238,6 +239,7 @@ async function equipRifle(skin) {
     if (!response.ok) throw new Error(result.error);
     const restoreFocus = skin === null && document.activeElement === $('rifle-default');
     progress.equippedSkin = result.equippedSkin;
+    loadoutRevision++;
     if (restoreFocus) $('rifle-equip').focus({ preventScroll: true });
     status.textContent = skin ? '已佩戴 ' + rifleSkins[skin].name : '已恢复使用各关卡默认外观';
   } catch {
@@ -249,7 +251,12 @@ async function equipRifle(skin) {
 }
 
 async function refreshProgress() {
-  progress = await read('/api/progress');
+  const revision = loadoutRevision;
+  const updated = await read('/api/progress');
+  // 补存读取和佩戴写入可并行。保留读取期间已保存的最新选择。
+  if (revision !== loadoutRevision) updated.equippedSkin = progress.equippedSkin;
+  progress = updated;
+  $('history-error').hidden = true;
   renderMissions();
   $('battle-list').replaceChildren();
   appendBattles(progress);
@@ -300,10 +307,12 @@ more.addEventListener('click', async () => {
     const page = await read('/api/battles?before=' + before);
     if (snapshot !== progress) return;
     appendBattles(page);
-    feedback('');
+    $('history-error').hidden = true;
     if (!before) $('history-region').focus({ preventScroll: true });
   } catch {
-    feedback('暂时无法加载更多对战记录，请重试。');
+    if (snapshot !== progress) return;
+    $('history-error').textContent = '暂时无法加载更多对战记录，请重试。';
+    $('history-error').hidden = false;
   } finally {
     more.disabled = false;
   }

@@ -167,6 +167,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
 
   function pause() {
     if (game.phase !== 'play') return;
+    if (lastFrame !== null) pendingTime += Math.max(0, (performance.now() - lastFrame) / 1000);
     game.phase = 'pause';
     input.clear(); sound.active(false);
     ui.menu('pause', game);
@@ -194,10 +195,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   }
 
   controls.addEventListener('lock', () => {
-    if (game.phase !== 'pause') game.reset();
+    if (game.phase !== 'pause') {
+      game.reset();
+      pendingTime = 0;
+    }
     if (menus.open) menus.close();
     lastFrame = performance.now();
-    pendingTime = 0;
     game.phase = 'play';
     ui.nodes.hud.hidden = false;
     weapon.group.visible = game.blast === 0;
@@ -269,7 +272,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     requested = 0;
     if (document.hidden) return;
     const dt = lastFrame === null ? 0 : Math.max(0, (now - lastFrame) / 1000);
-    lastFrame = now;
+    lastFrame = Math.max(lastFrame ?? now, now);
     worldTime += dt;
     // 失焦时暂停模拟和 WebGL 绘制，重新进入页面不补算隐藏期间的时间。
     if (game.phase === 'play') {
@@ -292,8 +295,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       if (requested) cancelAnimationFrame(requested);
-      requested = 0; lastFrame = null;
       pause();
+      requested = 0; lastFrame = null;
       if (document.pointerLockElement === canvas) controls.unlock();
       if (sound.ctx?.state === 'running') sound.ctx.suspend().catch(() => {});
     } else if (!requested) {
