@@ -9,7 +9,7 @@ import { createPickupClass } from '@level-kit/pickups.mjs';
 import { createWeaponClass } from '@level-kit/weapon.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 import { createUIClass } from '@level-kit/ui.mjs';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { rotateLook } from '@level-kit/look.mjs';
 
 export function startLevel(definition, campaign = null, campaignStage = 0) {
   if (typeof definition?.buildMap !== 'function') throw new TypeError('关卡需要实现 buildMap()');
@@ -58,10 +58,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     gate.width ?? 4.05, gate.depth ?? 0.15, level.gate.y + 0.10, level.gate.y + (gate.height ?? 4.72));
   const nav = new Navigation(level);
   const look = new THREE.PerspectiveCamera();
-  const controls = new PointerLockControls(look, canvas);
-  controls.pointerSpeed = CONFIG.player.mouseSpeed;
-  controls.minPolarAngle = 0.04;
-  controls.maxPolarAngle = Math.PI - 0.04;
+  document.addEventListener('mousemove', event => {
+    if (document.pointerLockElement === canvas && game.phase === 'play') {
+      rotateLook(look.rotation, event.movementX, event.movementY, CONFIG.player.mouseSpeed);
+    }
+  });
 
   const input = {
     down: new Set(), fire: false, jump: false, reload: false, interact: false,
@@ -115,7 +116,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (!won) { this.loot.length = 0; this.value = 0; }
       input.clear();
       sound.active(false);
-      if (document.pointerLockElement === canvas) controls.unlock();
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
       ui.nodes.hud.hidden = true; weapon.group.visible = false;
       ui.menu(this.phase, this);
       campaign?.finish({ won, kills: this.kills, durationMs: Math.round(this.time * 1000), loot: this.loot });
@@ -194,7 +195,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     ui.text('menu-status', '鼠标锁定未成功。请聚焦此窗口，再点击进入游戏。');
   }
 
-  controls.addEventListener('lock', () => {
+  document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement !== canvas) { pause(); return; }
     if (game.phase !== 'pause') {
       game.reset();
       pendingTime = 0;
@@ -207,7 +209,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     sound.active(true);
     ui.update(0, game);
   });
-  controls.addEventListener('unlock', pause);
   document.addEventListener('pointerlockerror', lockError);
   menus.addEventListener('cancel', event => event.preventDefault());
   $('start').addEventListener('click', startGame);
@@ -222,7 +223,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('keydown', event => {
     if (game.phase !== 'play') return;
     if (event.code === 'Escape' && document.pointerLockElement === canvas) {
-      event.preventDefault(); controls.unlock(); return;
+      event.preventDefault(); document.exitPointerLock(); return;
     }
     if (!capturedKeys.has(event.code)) return;
     event.preventDefault();
@@ -297,7 +298,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (requested) cancelAnimationFrame(requested);
       pause();
       requested = 0; lastFrame = null;
-      if (document.pointerLockElement === canvas) controls.unlock();
+      if (document.pointerLockElement === canvas) document.exitPointerLock();
       if (sound.ctx?.state === 'running') sound.ctx.suspend().catch(() => {});
     } else if (!requested) {
       requested = requestAnimationFrame(animate);
