@@ -22,6 +22,7 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       data.a.copy(from); data.b.copy(to); data.life = 0.052;
     }
     spray(where, color, count, speed, size, style) {
+      count = Math.ceil(count * (CONFIG.graphics.particleScale ?? 1));
       for (let i = 0; i < count; i++) {
         const p = this.dots[this.nextDot++ % this.dots.length];
         const a = randomRange(0, TAU), v = randomRange(speed * 0.3, speed);

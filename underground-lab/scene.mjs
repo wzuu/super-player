@@ -511,7 +511,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
       if (!active) this.status = null;
     },
     interactionHint(game) {
-      return !this.hatchOpen && nearHatch(game.player) ? '按 E 解锁维修面板后的捷径' : null;
+      return !this.hatchOpen && nearHatch(game.player) ? '按 F 解锁维修面板后的捷径' : null;
     },
     interact(game) {
       if (!this.interactionHint(game)) return;

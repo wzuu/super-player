@@ -910,7 +910,7 @@ export default {
     portal:'湖心炎印',
     safe:'要塞吊桥安全区',
     objective:'清除凶兽，击败熔岩巨像并取得炎心',
-    exitObjective:'沿高桥抵达湖心，在红金光柱前按 E 引爆',
+    exitObjective:'沿高桥抵达湖心，在红金光柱前按 F 引爆',
     detonating:'黑曜石封印瓦解，岩浆冲击波扩散中',
     rage:'岩壳崩裂，熔岩巨像召唤蜥群',
   },

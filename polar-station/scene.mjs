@@ -866,7 +866,7 @@ export default {
     portal:'湖心光柱',
     safe:'装甲车残骸安全区',
     objective:'清除凶兽，击败冰封远古巨兽并取得冰核样本',
-    exitObjective:'返回开裂冰湖，在湖心光柱前按 E 引爆',
+    exitObjective:'返回开裂冰湖，在湖心光柱前按 F 引爆',
     detonating:'冰封崩解，冲击波扩散中',
     rage:'冰壳碎裂，远古巨兽召唤冰裂猎犬',
   },

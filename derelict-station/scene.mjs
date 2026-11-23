@@ -968,7 +968,7 @@ export default {
     portal:'跃迁裂隙',
     safe:'停靠舱入口安全区',
     objective:'清除异形，击败寄生母体并取得反应堆控制核心',
-    exitObjective:'上到反应堆平台，在跃迁裂隙前按 E 引爆',
+    exitObjective:'上到反应堆平台，在跃迁裂隙前按 F 引爆',
     detonating:'跃迁裂隙已解除封印，引爆中',
     rage:'寄生母体狂暴，卵囊将在附近孵化',
   },

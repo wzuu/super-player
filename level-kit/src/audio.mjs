@@ -1,13 +1,13 @@
 export function createSoundClass({ CONFIG, seededRandom }) {
   class Sound {
-    constructor() { this.enabled = true; }
+    constructor() { this.enabled = !CONFIG.audio.muted; }
     open() {
       if (!this.ctx) {
         const Audio = window.AudioContext || window.webkitAudioContext;
         if (!Audio) return;
         this.ctx = new Audio();
         this.main = this.ctx.createGain();
-        this.main.gain.value = this.enabled ? 0.52 : 0;
+        this.main.gain.value = this.enabled ? CONFIG.audio.volume * 0.65 : 0;
         this.main.connect(this.ctx.destination);
         this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate * 3, this.ctx.sampleRate);
         const samples = this.noise.getChannelData(0);
@@ -30,7 +30,7 @@ export function createSoundClass({ CONFIG, seededRandom }) {
     }
     toggle() {
       this.enabled = !this.enabled;
-      if (this.ctx) this.main.gain.setTargetAtTime(this.enabled ? 0.52 : 0, this.ctx.currentTime, 0.055);
+      if (this.ctx) this.main.gain.setTargetAtTime(this.enabled ? CONFIG.audio.volume * 0.65 : 0, this.ctx.currentTime, 0.055);
     }
     active(active) {
       if (!this.ambientVolume) return;

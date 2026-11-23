@@ -72,12 +72,31 @@ def finish_at_gate(page):
             Object.assign(g.player, {x:item.x, y:item.y, z:item.z});
             g.pickups.update(.05, g.player, g);
         }
-        g.kills = run.config.beasts.killsToWin;
-        const gate = g.level.gate;
-        Object.assign(g.player, {x:gate.x, y:gate.y, z:gate.z});
         return treasure.name;
     }""")
-    page.keyboard.press("e")
+    page.keyboard.press("f")
+    page.wait_for_function("run.game.core")
+    page.evaluate("""() => {
+        const g=run.game;
+        g.kills = run.config.beasts.killsToWin;
+        const gate = g.level.gate;
+        if (g.objective.mode === 'escort') {
+            const spawn = g.level.spawn;
+            for (let i=0; i<=200; i++) {
+                const t=i/200;
+                Object.assign(g.player,{x:spawn.x+(gate.x-spawn.x)*t,
+                    y:spawn.y+(gate.y-spawn.y)*t,z:spawn.z+(gate.z-spawn.z)*t});
+                g.objective.step(.2,g);
+            }
+        }
+        Object.assign(g.player, {x:gate.x, y:gate.y, z:gate.z});
+        if (g.objective.mode === 'hold') {
+            if (g.ready()) throw Error('坚守计时尚未开始');
+            for (let i=0;i<451;i++) g.objective.step(.1,g);
+        }
+        if (!g.ready()) throw Error('撤离条件尚未满足 '+g.objective.label(g));
+    }""")
+    page.keyboard.press("f")
     page.wait_for_function("run.game.phase === 'win'")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
     return name

@@ -1,7 +1,9 @@
+import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 
 export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT }) {
+  const tactic=stageTactic(definition?.weaponSkin);
   const { projectileTint, ichor, spark, coreTint } = colors;
 
   function beastModel(type) {
@@ -321,6 +323,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
           const speed = b.rage ? type.rageSpeed : type.speed;
           x = (b.dx + separateX * CONFIG.beasts.separation) * speed;
           z = (b.dz + separateZ * CONFIG.beasts.separation) * speed;
+          const turn = b.playerVisible && !hearingOnly ? tactic?.(b,game,distance) : 0;
+          if (turn) {
+            const oldX=x, cos=Math.cos(turn), sin=Math.sin(turn);
+            x=oldX*cos-z*sin; z=oldX*sin+z*cos;
+          }
           const magnitude = Math.hypot(x, z);
           if (magnitude > speed) { x *= speed / magnitude; z *= speed / magnitude; }
           if (magnitude > 0.24) {
@@ -534,7 +541,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, came
       this.spawnTime -= dt;
       if (this.spawnTime <= 0) {
         this.spawnTime = encounter?.spawnEvery ?? CONFIG.beasts.spawnEvery;
-        const target = Math.min(encounter?.population ?? CONFIG.beasts.population, this.pool.length);
+        const target = Math.min((encounter?.population ?? CONFIG.beasts.population) + (game.objective?.reinforcements ?? 0), this.pool.length);
         const burst = encounter?.spawnBurst ?? CONFIG.beasts.spawnBurst;
         camera.getWorldDirection(this.air);
         for (let i = 0; i < burst && this.live < target; i++) {

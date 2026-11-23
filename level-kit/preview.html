@@ -172,6 +172,13 @@
     .controls { margin-block: 13px; padding-block: 9px; }
     #map { max-width: 96px; max-height: 96px; }
   }
+#equipment-hud .kit-slot {display:inline-flex;gap:.35em;margin:.2em;padding:.2em;border:1px solid #668390;background:linear-gradient(0deg,#657082 var(--cooldown,0%),transparent var(--cooldown,0%))}
+.kit-slot kbd {color:#94e9db;font-weight:bold}
+#kit-slots {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+#preparation {margin:8px 0;max-width:100%;font:14px/1.6 system-ui}
+#preparation select {max-width:100%;font:inherit}
+#menu .screen {max-height:95dvh;overflow:auto}
+#equipment-hud {position:fixed;left:1em;bottom:7em;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
 </style>
 </head>
 <body>
@@ -217,6 +224,8 @@
     <div id="weapon-state"></div>
   </section>
 </div>
+<output id="equipment-hud" hidden></output>
+<output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
 <dialog id="menu" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
   <div class="screen">
     <section class="brief">
@@ -227,9 +236,16 @@
         <div><dt>WASD</dt><dd>移动</dd></div>
         <div><dt>鼠标 / 左键</dt><dd>瞄准 / 连射</dd></div>
         <div><dt>Shift / 空格</dt><dd>冲刺 / 跳跃</dd></div>
-        <div><dt>R / E / Esc</dt><dd>提前换弹（空仓自动） / 交互 / 暂停</dd></div>
+        <div><dt>R / F / Esc</dt><dd>提前换弹（空仓自动） / 交互 / 暂停</dd></div>
         <div id="crouch-help" hidden><dt>C</dt><dd>按住蹲伏</dd></div>
+        <div><dt>Q / E</dt><dd>主动技能</dd></div>
+        <div><dt>1 / 2</dt><dd>携带道具</dd></div>
       </dl>
+      <label>行动目标 <select id="mission-mode"></select></label>
+      <details id="preparation" hidden><summary>装备选择与补给站 · 默认沿用上次装备</summary>
+        <p>每局免费配给急救包和手雷各一件。携带物资撤离时入库，失败时丢失。</p>
+        <div id="kit-slots"></div><p><span id="credits"></span>　<select id="shop-item" aria-label="军需物品"></select> <button id="shop-buy">兑换</button></p>
+      </details>
       <div id="summary" hidden></div>
       <div class="actions">
         <a id="next-level" class="action-link" hidden>进入下一关</a>
@@ -279,8 +295,8 @@
     ]);
     const campaignId = document.body.dataset.campaignLevel;
     let campaign = null;
-    if (campaignId && ['http:', 'https:'].includes(location.protocol)) {
-      campaign = await import('../campaign/save.mjs').then(module => module.connectCampaign(campaignId));
+    if (campaignId && (location.protocol !== 'file:' || new URLSearchParams(location.search).has('campaign'))) {
+      campaign = await import(location.protocol==='file:'?'offline/campaign/save.mjs':'../campaign/save.mjs').then(module => module.connectCampaign(campaignId));
       if (!campaign) return;
     }
     startLevel(definition, campaign, campaignStage);

@@ -948,7 +948,7 @@ export default {
     portal:'议事厅漩涡',
     safe:'潜水舱入口安全区',
     objective:'清除凶兽，击败巨型深海魔鱼并取得深渊珍珠',
-    exitObjective:'登上圆形议事厅，在屋顶漩涡前按 E 引爆',
+    exitObjective:'登上圆形议事厅，在屋顶漩涡前按 F 引爆',
     detonating:'深海封印解除，水柱冲击波扩散中',
     rage:'深海魔鱼狂暴，鱼群向议事厅聚集',
   },

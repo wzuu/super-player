@@ -2,6 +2,7 @@ import { readFile, writeFile, rename, mkdir, rm } from 'node:fs/promises';
 import { dirname, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { init, parse as parseImports } from 'es-module-lexer';
+import { offlineScripts } from './standalone.mjs';
 import { randomUUID } from 'node:crypto';
 
 const kit = dirname(fileURLToPath(import.meta.url));
@@ -56,12 +57,13 @@ export async function pack(sceneArgument, outputArgument) {
   const campaignId = levels[campaignStage - 1]?.id;
   const registered = campaignId && output === join(root, campaignId, 'index.html');
 
+  const offline = registered ? await offlineScripts(false,levels) : '';
   const html = shell
     .replace('<!doctype html>', '<!doctype html>\n<!-- 由 level-kit/pack.mjs 从场景和公共模块生成 -->')
     .replace('src="./vendor/three-r160.js"', `src="${vendor}"`)
     .replace(", '@level-kit/': './src/'", '')
     .replace('<body>', registered ? `<body data-campaign-level="${campaignId}">` : '<body>')
-    .replace('<!-- LEVEL_SOURCES -->', () => embedded)
+    .replace('<!-- LEVEL_SOURCES -->', () => embedded + offline)
     .replace(/    \/\/ LEVEL_SCENE_START[\s\S]*?    \/\/ LEVEL_SCENE_END/,
       `    const sceneModule = '@level/scene.mjs';\n    const campaignStage = ${campaignStage};`);
   if (/LEVEL_SOURCES|LEVEL_SCENE_/.test(html)) throw new Error('预览模板的打包标记不完整');
