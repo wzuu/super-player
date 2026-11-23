@@ -1,4 +1,4 @@
-export function createSoundClass({ CONFIG, seededRandom }) {
+export function createSoundClass({ CONFIG, seededRandom,score }) {
   const impactTones = [
     [260, 86, .13, .28, 'sawtooth'], [112, 35, .23, .42, 'triangle'],
     [610, 150, .18, .21, 'square'], [84, 29, .32, .40, 'sawtooth'],
@@ -9,6 +9,17 @@ export function createSoundClass({ CONFIG, seededRandom }) {
       this.nextHeartbeat = this.nextCue = this.cueNumber = 0;
       this.lowHealth = false;
       this.nearby = [];
+      this.voices=new Set();
+      this.stagePlaying=new Map();
+      this.resetStage();
+    }
+    resetStage() { this.nextBed=0;this.dangerPhase='calm';this.storyPhase=null;this.stageCooldown=new Map();this.spatialCount=0;this.spatialTime=-1; }
+    stopVoices() { for(const node of this.voices) {try{node.stop();}catch{ /* 已结束 */ }} this.voices.clear();this.stagePlaying.clear(); }
+    track(node) {
+      if(!node.addEventListener) return;
+      this.voices.add(node);
+      this.stageNodes?.push(node);
+      node.addEventListener('ended',()=>this.voices.delete(node),{once:true});
     }
     open() {
       if (!this.ctx) {
@@ -20,6 +31,8 @@ export function createSoundClass({ CONFIG, seededRandom }) {
         this.main.connect(this.ctx.destination);
         this.combat = this.ctx.createGain();
         this.combat.connect(this.main);
+        this.gun = this.ctx.createGain();
+        this.gun.connect(this.combat);
         this.noise = this.ctx.createBuffer(1, this.ctx.sampleRate * 3, this.ctx.sampleRate);
         const samples = this.noise.getChannelData(0);
         const rng = seededRandom(71);
@@ -49,12 +62,13 @@ export function createSoundClass({ CONFIG, seededRandom }) {
     active(active) {
       if (this.combat) this.combat.gain.setTargetAtTime(Number(active), this.ctx.currentTime, .015);
       if (!active) {
+        this.stopVoices();
         this.setLowHealth(false);
         this.nextHeartbeat = this.nextCue = this.cueNumber = 0;
       }
       if (!this.ambientVolume) return;
       const ambient = CONFIG.audio.ambient;
-      this.ambientVolume.gain.setTargetAtTime(active ? ambient.activeGain ?? 0.24 : ambient.pauseGain ?? 0.14, this.ctx.currentTime, 0.18);
+      this.ambientVolume.gain.setTargetAtTime(active ? ambient.activeGain ?? .24 : 0, this.ctx.currentTime,.06);
     }
     tone(from, to, seconds, volume, type = 'sine', delay = 0, output = this.main) {
       if (!this.ctx || !this.enabled) return;
@@ -66,6 +80,7 @@ export function createSoundClass({ CONFIG, seededRandom }) {
       gain.gain.exponentialRampToValueAtTime(volume, at + Math.min(0.012, seconds / 3));
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
       osc.connect(gain).connect(output); osc.start(at); osc.stop(end);
+      this.track(osc);
       return osc;
     }
     hiss(seconds, from, to, volume, delay = 0, output = this.main) {
@@ -77,6 +92,7 @@ export function createSoundClass({ CONFIG, seededRandom }) {
       gain.gain.setValueAtTime(0.0001, at); gain.gain.exponentialRampToValueAtTime(volume, at + Math.min(seconds * 0.3, 0.013));
       gain.gain.exponentialRampToValueAtTime(0.0001, end);
       source.connect(filter).connect(gain).connect(output); source.start(at, Math.random() * 2); source.stop(end);
+      this.track(source);
       return source;
     }
     hurt(kind) {
@@ -100,16 +116,23 @@ export function createSoundClass({ CONFIG, seededRandom }) {
       panner.connect(this.combat);
       let voice;
       if (cue === 'charge') {
+        if(score?.id==='shanhai-secret-realm') this.hiss(.21,250,780,.27,0,panner);
         voice = this.tone(145, 470, .26, .5, 'sawtooth', 0, panner);
       } else if (cue === 'step') {
-        voice = this.tone(b.type === 0 ? 175 : 105, 46, .10, .32, 'triangle', 0, panner);
+        const surface=score?.id;
+        if(surface==='rain-city' || b.clinging || b.climbRoute)
+          voice=this.hiss(.14,b.clinging||b.climbRoute?2000:820,260,.23,0,panner);
+        else if(surface==='buried-tomb') voice=this.tone(530,190,.08,.20,'square',0,panner);
+        else voice = this.tone(b.type === 0 ? 175 : 105, 46, .10, .32, 'triangle', 0, panner);
       } else {
         voice = this.hiss(.22, 1250, 210, .26, 0, panner);
       }
       voice.onended = () => panner.disconnect();
     }
     updateThreats(game) {
-      if (!this.ctx || !this.enabled || game.phase !== 'play') return;
+      if (!this.ctx || game.phase !== 'play') return;
+      if(score) this.updateStage(game);
+      if(!this.enabled) return;
       const now = this.ctx.currentTime, p = game.player;
       this.setLowHealth(p.hp / CONFIG.player.health < CONFIG.feedback.criticalHealth);
       if (this.lowHealth && now >= this.nextHeartbeat) {
@@ -134,10 +157,85 @@ export function createSoundClass({ CONFIG, seededRandom }) {
         this.cueNumber++;
       }
     }
-    shoot() { this.hiss(0.097, 3700, 270, 0.58); this.tone(112, 39, 0.10, 0.36, 'triangle'); }
-    hit(killed) {
-      this.tone(killed ? 615 : 990, killed ? 1010 : 570, killed ? 0.20 : 0.063, 0.19, 'triangle');
-      if (killed) this.tone(410, 675, 0.23, 0.14, 'sine', 0.07);
+    stageEvent(kind,game,pos) {
+      if(!score || !this.ctx || !this.enabled || game.phase!=='play') return;
+      const active=this.stagePlaying.get(kind) ?? new Set();
+      if(active.size >= (kind==='warning' ? 3 : 2)) return;
+      const batch=kind==='warning' && pos;
+      if(batch && this.spatialTime!==game.time){this.spatialTime=game.time;this.spatialCount=0;}
+      if(batch && this.spatialCount>=3) return;
+      const key=batch?kind+':'+Math.round(pos.x)+':'+Math.round(pos.z):kind;
+      if((this.stageCooldown.get(key) ?? -1)>game.time) return;
+      this.stageCooldown.set(key,game.time+(kind==='rotor' ? .48 : kind==='impact' ? .35 : .12));
+      if(batch)this.spatialCount++;
+      let output=this.combat;
+      if(pos && Number.isFinite(pos.x) && Number.isFinite(pos.z)) {
+        const p=game.player, dx=pos.x-p.x,dz=pos.z-p.z,yaw=p.look.rotation.y;
+        output=this.ctx.createPanner();output.panningModel='HRTF';output.refDistance=9;
+        output.setPosition(Math.cos(yaw)*dx-Math.sin(yaw)*dz,(pos.y ?? p.y+1)-p.y-p.eye,Math.sin(yaw)*dx+Math.cos(yaw)*dz);
+        output.connect(this.combat);
+      }
+      if(kind!=='ambient' && this.gun) {
+        const gain=this.gun.gain,now=this.ctx.currentTime;
+        gain.cancelScheduledValues(now);
+        gain.setTargetAtTime(.38,now,.018);
+        gain.setTargetAtTime(1,now+.30,.10);
+      }
+      this.stageNodes=[];
+      score.play(this,kind,output);
+      const nodes=this.stageNodes;
+      this.stageNodes=null;
+      if(nodes.length) {
+        active.add(nodes);this.stagePlaying.set(kind,active);
+        let remaining=nodes.length;
+        for(const node of nodes) node.addEventListener('ended',()=>{
+          if(--remaining) return;
+          active.delete(nodes);
+          if(output!==this.combat) output.disconnect();
+        },{once:true});
+      }
+    }
+    updateStage(game) {
+      const enc=game.encounter ?? {}, id=score.id, t=game.time, p=game.player;
+      if(t>=this.nextBed) {
+        this.nextBed=t+score.interval;
+        if(this.stageCooldown.size>48) for(const [key,end] of this.stageCooldown) if(end<=t) this.stageCooldown.delete(key);
+        const indoor=enc.shelter || (id==='rain-city' && /室|商铺|地铁|隧道/.test(game.level.area(p.x,p.z,p.y)));
+        if(this.ambientVolume) this.ambientVolume.gain.setTargetAtTime((CONFIG.audio.ambient.activeGain ?? .24)*(enc.hudOffline ? .04 : indoor ? .35 : 1),this.ctx.currentTime,.16);
+        if(!enc.hudOffline) this.stageEvent('ambient',game);
+      }
+      const state=enc.phase ?? (id==='polar-station' ? enc.temperature<68?'warning':'calm' :
+        id==='buried-tomb' ? enc.hearingOnly?'active':enc.status?'warning':'calm' :
+        enc.active===true?'active':enc.warned?'warning':'calm');
+      if(state!==this.dangerPhase) {
+        this.dangerPhase=state;
+        const region=enc.region, panel=enc.panel?.collider;
+        const rect=region ?? panel;
+        const source=region?.wall ? {x:region.wall[0],y:region.wall[1],z:region.wall[2]} :
+          rect ? {x:(rect.x0+rect.x1)/2,z:(rect.z0+rect.z1)/2}:undefined;
+        const kind=state==='warning'?'warning':['active','open','flood','rise','rain','off'].includes(state)?'danger':state==='calm'?'clear':null;
+        if(kind) {
+          if(id==='underground-lab' && kind==='danger') this.stageEvent('warning',game);
+          this.stageEvent(kind,game,source);
+        }
+      }
+      const story=game.story?.stage;
+      if(story!==this.storyPhase) {
+        if(this.storyPhase && story && game.story.managed) this.stageEvent(story==='defend'||story==='hold'?'warning':'clear',game,game.level.gate);
+        this.storyPhase=story;
+      }
+    }
+    shoot(pellets) {
+      this.hiss(pellets ? .16 : .097, pellets ? 1800 : 3700, 270, .58,0,this.gun);
+      this.tone(pellets ? 92 : 112, 39, pellets ? .18 : .10, .36, 'triangle',0,this.gun);
+    }
+    hit(rank, combo = 0) {
+      const killed = rank >= 3, weak = rank === 2 || rank === 4;
+      const pitch = 1 + Math.min(12, combo) * .018;
+      this.tone((weak ? 1360 : killed ? 615 : 990) * pitch, (killed ? 1010 : 570) * pitch,
+        weak ? .10 : .063, .19, weak ? 'sine' : 'triangle');
+      if (killed) this.tone(410 * pitch, 675 * pitch, .20, .14, 'sine', .045);
+      if (weak) this.tone(1830, 1420, .055, .10, 'sine', .025);
     }
     reload(finished = false) {
       this.hiss(0.096, 2200, 690, 0.18);

@@ -119,6 +119,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.spawnPitch = definition.spawnPitch ?? -0.012;
       this.sites = [];
       this.terrainRevision = 0;
+      this.barrierChanges = new Map();
     }
     box(x, z, width, depth, low, high, climb = false) {
       const b = { x0: x - width / 2, x1: x + width / 2, z0: z - depth / 2, z1: z + depth / 2,
@@ -127,7 +128,18 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.hash.insert(b);
       return b;
     }
-    base(x, z) { return definition.terrain?.ground?.(x, z) ?? 0; }
+    setBarrier(barrier, mesh, closed) {
+      if (mesh) mesh.visible = closed;
+      if ((barrier.active !== false) === closed) return;
+      barrier.active = closed;
+      this.terrainRevision++;
+      this.barrierChanges.set(barrier,this.terrainRevision);
+    }
+    base(x, z) {
+      const base=definition.terrain?.ground?.(x,z)??0;
+      const extra=this.extraGround?.(x,z);
+      return extra>0 ? Math.max(base,extra) : base;
+    }
     ramp(x, z) { return definition.terrain?.ramp?.(x, z) ?? 0; }
     movementScale(x, z, y, game) { return definition.terrain?.moveScale?.(x, z, y, game) ?? 1; }
     inSafeZone(x, z, margin = 0) {
@@ -153,6 +165,27 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
             y + height > b.y0 + 0.025 && y < b.y1 - 0.025) return true;
       }
       return false;
+    }
+    pickupSite(x,z,y,player,nav) {
+      nav.rebuild(player.x,player.z);
+      for (let i=0;i<113;i++) {
+        const r=.48*Math.sqrt(i),a=i*2.399963;
+        const px=x+r*Math.cos(a),pz=z+r*Math.sin(a),top=this.surface(px,pz,y+.48);
+        const ground=this.surface(px,pz,this.base(px,pz)+.5);
+        // 双层通道的二维路径场只证明地面连通。高台先检查玩家能否沿当前层直接走到落点。
+        if(top>ground+.5 && Math.abs(top-player.y)<.65) {
+          const n=Math.max(1,Math.ceil(Math.hypot(px-player.x,pz-player.z)/.45));
+          let accessible=true;
+          for(let j=1;j<=n;j++) {
+            const tx=player.x+(px-player.x)*j/n,tz=player.z+(pz-player.z)*j/n;
+            if(Math.abs(this.surface(tx,tz,top+.46)-top)>.46 || this.blocked(tx,tz,top,CONFIG.player.radius,CONFIG.player.height)) {accessible=false;break;}
+          }
+          if(accessible)return {x:px,y:top,z:pz};
+        }
+        if(nav.dist[nav.index(px,pz)]>=0 && !this.blocked(px,pz,ground,CONFIG.player.radius,CONFIG.player.height))
+          return {x:px,y:ground,z:pz};
+      }
+      return {x:player.x,y:this.surface(player.x,player.z,player.y+.48),z:player.z};
     }
     foot(x, z, ceiling, radius) {
       let floor = this.surface(x, z, ceiling);
@@ -193,6 +226,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
   class RouteField {
     constructor(level, body, collectSites) {
       this.level = level;
+      this.body = body;
       this.cell = CONFIG.map.navCell;
       this.width = Math.ceil(GRID.halfX * 2 / this.cell);
       this.height = Math.ceil(GRID.halfZ * 2 / this.cell);
@@ -219,10 +253,21 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     }
     rebuild(x, z) {
       const routes = this.routes;
-      if (routes !== this.walkable && this.terrainRevision !== this.level.terrainRevision) {
-        this.terrainRevision = this.level.terrainRevision;
+      if (this.terrainRevision !== this.level.terrainRevision) {
+        // 门体可能在寻路场创建之后加入。只重新采样门体周边各体型能通过的格子。
+        for (const [box, revision] of this.level.barrierChanges) {
+          if (revision <= this.terrainRevision) continue;
+          const {radius,height}=this.body, a=this.index(box.x0-radius,box.z0-radius), b=this.index(box.x1+radius,box.z1+radius);
+          const width=b%this.width-a%this.width;
+          for(let row=a;row<=b;row+=this.width) for(let col=0;col<=width;col++) {
+            const i=row+col, x=this.x(i), z=this.z(i);
+            const y=this.level.surface(x,z,this.level.base(x,z)+.5);
+            this.walkable[i]=!this.level.blocked(x,z,y,radius,height);
+          }
+        }
         this.target = -1;
-        for (let i = 0; i < routes.length; i++) {
+        this.terrainRevision = this.level.terrainRevision;
+        if (routes !== this.walkable) for (let i = 0; i < routes.length; i++) {
           routes[i] = this.walkable[i] && definition.terrain.routeOpen(this.x(i), this.z(i), this.level);
         }
       }
@@ -270,6 +315,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
 
   // 每种体型共享自己的目标距离场。同一格内移动不会重复计算路径。
   class Navigation extends RouteField {
+    routeFor(type) { return new RouteField(this.level,CONFIG.beasts.types[type],false); }
     constructor(level) {
       const types = CONFIG.beasts.types;
       super(level, types[0], true);

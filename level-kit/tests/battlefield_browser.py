@@ -18,6 +18,9 @@ def probe(page, url):
     page.route(path, expose_game)
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
+    # 固定普通弹药倍率，避免本测试的精确数量断言随战役变奏变化。
+    page.add_init_script("""localStorage.setItem('super-player:first-entry:v1','skip');
+        localStorage.setItem('super-player:variation:1',JSON.stringify({pending:'quiet'}));""")
     page.goto(path)
     page.click("#start")
     page.wait_for_function("window.run && run.game.phase==='play'")
@@ -143,6 +146,7 @@ def audit(browser, url):
     # 每关用独立页面释放 WebGL 资源，以相同角度把四种原型绘成纯色剪影。
     for index, level in enumerate(LEVELS):
         page=browser.new_page()
+        page.add_init_script("localStorage.setItem('super-player:first-entry:v1','skip')")
         path=url+"/"+level["id"]+"/"
         page.route(path,expose_game)
         page.goto(path)

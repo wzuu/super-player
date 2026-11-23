@@ -10,10 +10,32 @@ export const supplies = {
   mine: { name: '地雷', price: 90, limit: 2, stage: 8, detail: '放置后由靠近的凶兽触发' },
 };
 export const modifications = {
-  magazine: { name: '扩容弹匣', price: 240, detail: '弹匣容量 +6' },
-  reload: { name: '快换组件', price: 260, detail: '换弹时间 −8%' },
-  recovery: { name: '稳定组件', price: 230, detail: '散布恢复 +10%' },
+  pierce: {slot:'弹药',name:'穿透弹',price:250,detail:'每枚弹丸可再命中后方一个目标，适合走廊，无溅射'},
+  split: {slot:'弹药',name:'分裂弹',price:250,detail:'每次开火首次命中向周围最多三敌溅射，适合密集敌群，覆盖武器自带穿透'},
+  recovery: {slot:'枪管',name:'长枪管',price:230,detail:'射程 +25%，散布 −22%，射速 −12%，适合远距'},
+  short: {slot:'枪管',name:'短枪管',price:230,detail:'射速 +12%，移动 +6%，射程 −25%，适合突围'},
+  magazine: {slot:'供弹',name:'扩容弹匣',price:240,detail:'弹匣增加 25%，装填慢 16%，适合持续射击'},
+  reload: {slot:'供弹',name:'快换弹匣',price:260,detail:'装填时间 −22%，弹容不变，适合短促交火'},
 };
+export function selectedBranches(state,weapon) {
+  return {...state.builds?.['*'],...state.builds?.[weapon]};
+}
+export function chooseBranch(state,weapon,id) {
+  const branch=modifications[id];
+  if (!branch || !state.mods[id]) throw Error('请先兑换此分支');
+  state.builds[weapon]={...state.builds[weapon],[branch.slot]:id};
+}
+export function applyBranches(weapon,base,mods) {
+  Object.assign(weapon,base);
+  weapon.pierce=Boolean(mods.pierce); weapon.split=Boolean(mods.split);
+  weapon.magazine = mods.magazine ? Math.ceil(base.magazine*1.25) : base.magazine;
+  weapon.reloadTime = base.reloadTime * (mods.magazine ? 1.16 : mods.reload ? .78 : 1);
+  weapon.range = base.range * (mods.recovery ? 1.25 : mods.short ? .75 : 1);
+  weapon.baseSpread = base.baseSpread * (mods.recovery ? .78 : 1);
+  weapon.maxSpread = base.maxSpread * (mods.recovery ? .78 : 1);
+  weapon.fireRate = base.fireRate * (mods.recovery ? .88 : mods.short ? 1.12 : 1);
+  weapon.mobility=mods.short?1.06:1;
+}
 export function catalog(levels) {
   const items = { ...supplies };
   levels.forEach((level, i) => {
@@ -28,21 +50,30 @@ export function catalog(levels) {
   return items;
 }
 export function defaultGear(state = {}) {
-  return { spent: 0, stock: {}, mods: {}, skills: ['roll', null], items: ['medkit', 'grenade'], ...state };
+  const gear={ spent: 0, stock: {}, mods: {}, skills: ['roll', null], items: ['medkit', 'grenade'], ...state };
+  if (!gear.builds) {
+    const inherited={};
+    for (const id of ['magazine','reload','recovery']) if (gear.mods[id]) inherited[modifications[id].slot]=id;
+    gear.builds={'*':inherited};
+  }
+  return gear;
 }
 export function isUnlocked(item, levels, cleared) {
   return item.stage === 0 || cleared.includes(levels[item.stage - 1]?.id);
 }
-export function requisition(state, id, earned, items) {
+export function requisition(state, id, earned, items, weapon='*') {
   const item = items[id] ?? modifications[id];
   if (!item?.price) throw Error('请选择可兑换的物品');
   if (modifications[id] && state.mods[id]) throw Error('已安装此组件');
   if (earned - state.spent < item.price) throw Error('军需点不足');
   state.spent += item.price;
-  if (modifications[id]) state.mods[id] = true;
+  if (modifications[id]) {
+    state.mods[id] = true;
+    if (!selectedBranches(state,weapon)[modifications[id].slot]) chooseBranch(state,weapon,id);
+  }
   else state.stock[id] = (state.stock[id] ?? 0) + 1;
 }
-export function packKit(state, items) {
+export function packKit(state, items, weapon='*') {
   const counts = {};
   for (const id of state.items.filter(Boolean)) {
     const free = Number(id === 'medkit' || id === 'grenade');
@@ -50,7 +81,9 @@ export function packKit(state, items) {
     state.stock[id] = (state.stock[id] ?? 0) - fromStock;
     counts[id] = fromStock + free;
   }
-  return { skills: [...state.skills], items: [...state.items], counts, mods: { ...state.mods } };
+  const build=selectedBranches(state,weapon);
+  return { skills: [...state.skills], items: [...state.items], counts, build,
+    mods:Object.fromEntries(Object.values(build).filter(id=>state.mods[id] && modifications[id]).map(id=>[id,true])) };
 }
 export async function updateGear(store, mutate) {
   for (let attempt = 0; attempt < 8; attempt++) {

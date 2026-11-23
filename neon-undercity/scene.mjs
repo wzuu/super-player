@@ -389,13 +389,14 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound}){
     point.set(wreck.x,wreck.impact+.29,wreck.z);
     game.effects.spray(point,sparks,43,8.2,.074,'spark');
     game.effects.spray(point,smoke,18,5,.109,'mist');
-    sound.hiss(.27,2100,170,.32);
+    sound.stageEvent('impact',game,point);
     const p=game.player;
     if(unobstructed(p.x,p.y+.48,p.z,drone.crashRadius))p.hurt(drone.playerDamage,game,undefined,wreck,2);
     if(game.phase!=='play')return;
     for(const b of game.beasts.pool){
       if(!b.active||!unobstructed(b.x,b.y+.24,b.z,drone.crashRadius))continue;
       target.set(b.x,b.y+.45,b.z);
+      game.weapon.combat.element(b,'electric',game,'electric-environment');
       game.beasts.takeHit(b,drone.beastDamage,target,dir,game,null,'electric-environment');
     }
   }
@@ -784,6 +785,10 @@ function machineModel(type,{THREE,shapes,mergeGeometries},rage=false){
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'管道集市坡道口',at:[10.65,17.4],entries:[[17,17],[-1,16]]},
+    {name:'全息广告广场',at:[-10,8],entries:[[-17,12],[0,3]]},
+  ]},
   weaponSkin: 'neon-undercity',
   pageTitle:'霓雨下城 | 第九关',
   grid:MAP_GRID,
@@ -799,7 +804,11 @@ export default {
   createPortal,
   beastSurface,
   beastDropHeight(beast,level){return beast.type===2 ? wreckLanding(beast,level) : beast.y;},
-  onBeastDefeated(beast,game){return beast.type===2&&game.encounter.stage(beast,game);},
+  onBeastDefeated(beast,game){
+    if(beast.type!==2 || !game.encounter.stage(beast,game)) return false;
+    game.sound.stageEvent('warning',game,beast);
+    return true;
+  },
   buildBeastModel:machineModel,
   buildRageModel(helpers){return machineModel(3,helpers,true);},
   portal:{width:1.35,depth:1.04,verticalRange:.50,useRadius:4.10},

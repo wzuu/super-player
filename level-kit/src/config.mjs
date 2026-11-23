@@ -6,12 +6,19 @@ const DEFAULT_CONFIG = {
     arcDuration: 0.8, mergeWindow: 0.1, criticalHealth: 0.3,
     impactDuration: 0.15, impactAngle: 0.033, impactFov: 3, hitStop: 0.04,
     warningRange: 5, warningCount: 4, chargeWindup: 0.42,
+    attackStop: [0, .010, .015, .026, .034], lowAttackInterval: .18,
+    tracers: {
+      rifle: { color: 0xffdfa2, width: .021, life: .070 },
+      pellet: { color: 0xff935a, width: .016, life: .085, length: 8 },
+      arc: { color: 0x82ecff, width: .027, life: .085 },
+    },
   },
   player: {
     eye: 1.7, height: 1.77, radius: 0.33, health: 100, walk: 5.25, backward: 0.81,
     sprint: 8.1, stamina: 100, sprintUse: 24, staminaRegen: 17, sprintResume: 19,
     jump: 5.75, gravity: 16.5, step: 0.46, healDelay: 5, healRate: 4.5, safeTime: 9, safeRadius: 6,
     hurtCooldown: 0.24, mouseSpeed: 0.86, crouch: null,
+    safeDrop:4.5, fallDamagePerMeter:7,
   },
   weapon: {
     fireRate: 10, magazine: 60, reserve: 300, maxReserve: 540, reloadTime: 1.8,

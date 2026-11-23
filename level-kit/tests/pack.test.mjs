@@ -15,9 +15,10 @@ test('独立 HTML 保留传递依赖并排除注释中的导入', async t => {
     await pack(scene, output);
     return [...(await readFile(output, 'utf8')).matchAll(/data-level-module="([^"]+)"/g)].map(m => m[1]);
   };
-  const bare = await modules("// import '@level-kit/stage-craft.mjs'\nexport default {};");
+  const bare = await modules("// import '@level-kit/missing-pack-fixture.mjs'\nexport default {};");
   assert.ok(bare.includes('@level-kit/weapon-perks.mjs'));
-  assert.ok(!bare.includes('@level-kit/stage-craft.mjs'));
+  assert.ok(!bare.includes('@level-kit/missing-pack-fixture.mjs'));
   const used = await modules("export { stageBuilder }\nfrom '@level-kit/stage-craft.mjs';\nexport const lazy = () => import('@level-kit/stage-craft.mjs');");
   assert.equal(used.filter(id => id === '@level-kit/stage-craft.mjs').length, 1);
+  await assert.rejects(modules("export const lazy=()=>import('@level-kit/missing-pack-fixture.mjs');"), /ENOENT/);
 });

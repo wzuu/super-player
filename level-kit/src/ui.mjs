@@ -9,6 +9,10 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.size = this.nodes.map.width;
       this.facing = new V3();
       this.directions = $('directions');
+      this.nodes.combo = $('combo');
+      this.nodes['trait-label'] = $('trait-label');
+      this.ring = $('reload-ring'); this.aimDot = $('aim-dot');
+      for (const id of ['task-panel','task-update','objective-detail']) this.nodes[id] = $(id);
       const markers = (length, className) => Array.from({ length }, () => {
         const node = document.createElement('i');
         node.className = className; node.hidden = true;
@@ -59,13 +63,18 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       ctx.fillStyle = '#ffb171'; ctx.fillRect(this.px(this.level.gate.x) - 3, this.pz(this.level.gate.z) - 3, 6, 6);
       ctx.fillStyle = '#a1a086'; ctx.fillRect(this.px(this.level.bossAnchor.x) - 2, this.pz(this.level.bossAnchor.z) - 2, 4, 4);
     }
-    drawMap(game) {
+    drawMap(game, target) {
       const ctx = this.ctx;
       ctx.drawImage(this.base, 0, 0);
       definition.minimap?.overlay?.({ ctx, px: x => this.px(x), pz: z => this.pz(z), game });
+      game.field?.minimap(ctx,x=>this.px(x),z=>this.pz(z),game);
+      for(const lift of game.lifts?.lifts??[]) {
+        ctx.fillStyle='#8feddb';ctx.font='bold 11px sans-serif';
+        ctx.fillText(lift.y>game.player.y+1?'↑':lift.y<game.player.y-1?'↓':'↕',this.px(lift.x),this.pz(lift.z));
+      }
       for (const b of game.beasts.pool) {
-        if (!b.active) continue;
-        ctx.fillStyle = b.type === 3 ? '#ff9a71' : '#f45f76';
+        if (!b.active || b.hunted && (!b.playerVisible || Math.hypot(b.x-game.player.x,b.z-game.player.z)>14)) continue;
+        ctx.fillStyle = b.hunted ? '#ffce68' : b.type === 3 ? '#ff9a71' : '#f45f76';
         ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), b.type === 3 ? 3.2 : 1.5, 0, TAU); ctx.fill();
         if (b.statusEffects.has('marked')) {
           ctx.strokeStyle = '#ffd780'; ctx.beginPath(); ctx.arc(this.px(b.x), this.pz(b.z), 4.4, 0, TAU); ctx.stroke();
@@ -82,6 +91,16 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         ctx.beginPath();ctx.moveTo(16,0);ctx.lineTo(9,-4);ctx.lineTo(9,4);ctx.fill();ctx.restore();
       }
       this.facing.set(0, 0, -1).applyQuaternion(game.player.look.quaternion);
+      if (game.objective.mode==='escort') {
+        const drone=game.objective.drone.position;
+        ctx.fillStyle=game.objective.escortHealth<=40?'#ff9966':'#83f4ec';
+        ctx.beginPath();ctx.arc(this.px(drone.x),this.pz(drone.z),3.5,0,TAU);ctx.fill();
+      }
+      if (target) {
+        const x = this.px(target.x), z = this.pz(target.z);
+        ctx.save(); ctx.translate(x,z); ctx.rotate(Math.PI/4);
+        ctx.strokeStyle = '#9bffde'; ctx.lineWidth = 2; ctx.strokeRect(-4,-4,8,8); ctx.restore();
+      }
       ctx.save();
       ctx.translate(this.px(game.player.x), this.pz(game.player.z));
       ctx.rotate(Math.atan2(this.facing.x, -this.facing.z));
@@ -99,7 +118,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
     }
     hit(kind) {
       this.nodes.cross.dataset.hit = kind;
-      this.hitTime = kind === 'kill' ? 0.20 : 0.12;
+      this.hitTime = ({ hit: .10, weak: .15, kill: .20, 'critical-kill': .25 })[kind];
     }
     placeMarker(node, angle, width, height) {
       // 把世界方位投到矩形边界上，宽屏时左右斜角仍指向正确方向。
@@ -144,6 +163,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       });
     }
     reset() {
+      this.clearTask();
       this.tick = 0; this.hitTime = 0; this.noticeTime = 0;
       this.nodes.cross.dataset.hit = '';
       this.nodes.blast.style.opacity = '0'; this.nodes.injury.style.opacity = '0';
@@ -151,10 +171,42 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.condition.hidden = true; this.nodes.posture.hidden = true;
       this.nodes.hud.removeAttribute('data-offline');
       this.nodes.hud.removeAttribute('data-critical');
+      this.ring.hidden = this.aimDot.hidden = true;
+      this.nodes.hud.removeAttribute('data-aim');
       for (const node of [...this.damageArcs, ...this.nearWarnings]) node.hidden = true;
       this.text('hud-announcement', '');
     }
+    clearTask() {
+      this.taskStage = null;
+      this.taskChangedUntil = 0;
+      this.nodes['task-panel'].removeAttribute('data-update');
+      this.nodes['task-update'].hidden = this.nodes['objective-detail'].hidden = true;
+      this.text('objective', ''); this.text('objective-detail', '');
+    }
+    showTask(task, game) {
+      if (this.taskStage !== task.stage) {
+        this.taskChangedUntil = game.time + 2.4;
+        this.taskStage = task.stage;
+      }
+      const changed = game.time < this.taskChangedUntil;
+      this.nodes['task-panel'].toggleAttribute('data-update', changed);
+      this.nodes['task-update'].hidden = !changed;
+      this.text('objective', task.title);
+      let direction = '';
+      if (task.target) {
+        const dx = task.target.x - game.player.x, dz = task.target.z - game.player.z;
+        const dy = task.target.y - game.player.y, range = Math.hypot(dx, dz);
+        const compass = ['北','东北','东','东南','南','西南','西','西北'];
+        const bearing = compass[(Math.round(Math.atan2(dx, -dz) * 4 / Math.PI) + 8) % 8];
+        direction = (range > 1 ? bearing + ' ' : '') + Math.round(Math.hypot(range,dy)) + ' 米' +
+          (dy > 1.5 ? ' · 上方' : dy < -1.5 ? ' · 下方' : '');
+      }
+      const detail = [task.detail, direction].filter(Boolean).join(' · ');
+      this.text('objective-detail', detail);
+      this.nodes['objective-detail'].hidden = !detail;
+    }
     update(dt, game) {
+      if (game.phase !== 'play') return;
       if (this.hitTime > 0) {
         this.hitTime -= dt;
         if (this.hitTime <= 0) this.nodes.cross.dataset.hit = '';
@@ -162,6 +214,12 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.noticeTime -= dt;
       if (this.noticeTime <= 0) this.text('hud-announcement', '');
       const { player: p, weapon: w } = game;
+      this.nodes.hud.toggleAttribute('data-steam',game.time<w.combat.mistUntil);
+      const aimed = p.aiming && p.ads > .70;
+      this.nodes.hud.toggleAttribute('data-aim',aimed);
+      this.aimDot.hidden = !aimed;
+      this.ring.hidden = w.reloadLeft <= 0 || game.blast > 0;
+      if (!this.ring.hidden) this.ring.style.setProperty('--remaining',(w.reloadLeft/w.reloadTotal).toFixed(4)+'turn');
       const criticalAt = CONFIG.player.health * CONFIG.feedback.criticalHealth;
       const critical = p.hp > 0 && p.hp < criticalAt;
       this.nodes.hud.toggleAttribute('data-critical', critical);
@@ -173,6 +231,9 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       if (this.tick > 0) return;
       this.tick = 0.062;
       this.updateDirections(game);
+      const performance = game.performance;
+      this.text('trait-label', game.beasts.traitLabel || '');
+      this.text('combo', game.time < performance.noticeUntil ? performance.notice : '');
       const status = w.combat.status(game);
       const condition = game.encounter?.status ?? (status ? { title: '武器特性', detail: '' } : null);
       this.nodes.condition.hidden = !condition;
@@ -187,54 +248,67 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       }
       const offline = game.encounter?.hudOffline === true;
       this.nodes.hud.toggleAttribute('data-offline', offline);
-      if (offline) return;
+      if (offline) {game.story?.marker(null,game);return;}
       this.text('area', this.level.area(p.x, p.z, p.y));
       this.text('hp', String(Math.ceil(p.hp)));
       this.text('energy', String(Math.ceil(p.energy)));
       this.nodes.posture.hidden = !p.crouched;
       this.nodes.health.value = p.hp; this.nodes.stamina.value = p.energy;
       this.text('ammo', String(w.ammo).padStart(2, '0'));
-      this.text('reserve', '/ ' + w.reserve);
+      this.text('reserve', game.training?.kind === 'range' ? '/ ∞ 无限备弹' : '/ ' + w.reserve);
       this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 && w.reserve === 0 ? '弹药耗尽' : '');
       this.nodes.cross.style.setProperty('--gap', (7 + w.heat * 12 + (p.sprinting ? 5 : 0)).toFixed(1) + 'px');
-      this.text('loot', game.loot.length + ' / ' + (definition.loot?.length ?? 0));
-      this.text('kills', game.objective.mode && game.objective.mode !== 'classic' ? String(game.kills) : game.kills + ' / ' + CONFIG.beasts.killsToWin);
-      const remaining = Math.max(0, CONFIG.beasts.killsToWin - game.kills);
-      const objective = blast ? TEXT.detonating : game.ready() ? TEXT.exitObjective :
-        game.core ? `已取得${TEXT.keyItem}，还需击杀 ${remaining} 只${TEXT.enemy}` :
-          game.bossDead ? '靠近掉落物，拾取' + TEXT.keyItem : TEXT.objective;
-      const variant = game.objective.label(game);
-      const showVariant = !blast && (!game.ready() || game.objective.mode === 'timed');
-      this.text('objective', showVariant && variant ? variant : objective);
+      const baseLoot=game.loot.filter(item=>!item.origin || item.origin==='main').length;
+      this.text('loot', baseLoot + ' / ' + (definition.loot?.length ?? 0) +
+        (game.loot.length>baseLoot ? ' +'+(game.loot.length-baseLoot) : ''));
+      this.text('kills', game.objective.mode && (game.objective.mode !== 'classic' || definition.story?.type==='lab') ? String(game.kills) : game.kills + ' / ' + CONFIG.beasts.killsToWin);
+      const task = game.training?.guide(game) ?? game.objective.guide(game, TEXT);
+      game.story?.marker(task,game);
+      this.showTask(task, game);
       const boss = game.beasts.boss;
       this.nodes.boss.hidden = !boss || Math.hypot(boss.x - p.x, boss.z - p.z) > 28;
       if (!this.nodes.boss.hidden) {
-        this.text('boss-phase', boss.rage ? '狂暴' : '第一阶段');
+        const f=boss.fight;
+        this.text('boss-phase', f ? ['第一阶段','第二阶段','狂暴'][f.stage] + ' · ' +
+          (game.time<f.transitionUntil?'转阶段':game.time<f.brokenUntil?'已破甲':game.time<f.weakUntil?'弱点暴露':f.winding?'蓄力':'装甲') +
+          ' · 破甲 '+f.charge+'/'+f.rules.breakHits : boss.rage ? '狂暴' : '第一阶段');
+        this.nodes['boss-health'].max=boss.maxHP;
         this.nodes['boss-health'].value = Math.max(boss.hp, 0);
       }
       let note = !blast && this.noticeTime > 0 ? this.notice : '';
       if (game.pickups.nearKey(p)) note = '按 F 拾取' + TEXT.keyItem;
       else if (game.nearGate()) {
         if (game.ready() && !game.blast) note = '按 F 引爆' + TEXT.portal;
-        else if (!note && !game.blast) note = game.objective.label(game) || ['屏障封印', remaining ? '还需击杀 ' + remaining + ' 只' : '', game.core ? '' : '需要' + TEXT.keyItem].filter(Boolean).join(' / ');
+        else if (!note && !game.blast) note = task.title;
       } else if (!note && !blast) {
         note = game.encounter?.interactionHint?.(game) ??
           (p.protected(game) ? TEXT.safe + ' / ' + Math.max(0, Math.ceil(CONFIG.player.safeTime - game.time)) + ' 秒' : '');
       }
+      note = game.field?.hint(game) || game.lifts?.hint(p) || note;
       this.nodes.message.hidden = !note;
       if (note) this.text('message', note);
-      this.drawMap(game);
+      this.drawMap(game, task.target);
     }
     menu(mode, game) {
       const overlay = this.nodes.menu;
+      if (game.training) {
+        document.getElementById('loadout-pane').hidden = true;
+        document.getElementById('practice-restart').hidden = mode !== 'pause';
+        document.getElementById('next-level').hidden = mode !== 'win' || game.training.kind !== 'tutorial';
+      }
       this.text('menu-title', mode === 'pause' ? '行动暂停' : mode === 'win' ? '撤离成功' : mode === 'fail' ? '撤离失败' : TEXT.title);
-      this.text('menu-text', mode === 'pause' ? TEXT.pauseBrief : mode === 'win' ? TEXT.winBrief : mode === 'fail' ? TEXT.failBrief : TEXT.brief);
+      this.text('menu-text', mode === 'pause' ? TEXT.pauseBrief : mode === 'win' ? game.endReason || TEXT.winBrief : mode === 'fail' ? game.endReason || TEXT.failBrief : TEXT.brief);
       this.text('start', mode === 'pause' ? '继续游戏' : mode === 'ready' ? TEXT.enter : '再来一局');
       this.text('menu-status', '');
       const ended = mode === 'win' || mode === 'fail';
+      if (mode!=='ready') game.story?.marker(null,game);
+      if (ended) this.clearTask();
+      if (ended) this.ring.hidden = this.aimDot.hidden = true;
+      this.nodes.guide.closest('details').hidden = ended;
       this.nodes.guide.hidden = ended;
       this.nodes.summary.hidden = !ended;
-      if (ended) this.text('summary', '累计击杀 ' + game.kills + ' 只 / 带回 ' + game.loot.length + ' 件' + TEXT.loot + ' / 结算价值 ' + game.value);
+      if (ended) this.text('summary', '评级 ' + game.performance.result(game, mode === 'win').grade +
+        ' · 最高 ' + game.performance.maxCombo + ' 连杀 · 累计击杀 ' + game.kills + ' 只 / 带回 ' + game.loot.length + ' 件' + TEXT.loot + ' / 结算价值 ' + game.value);
       if (!overlay.open) overlay.showModal();
       this.nodes.start.focus({ preventScroll: true });
     }

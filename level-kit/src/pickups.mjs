@@ -17,6 +17,7 @@ export function createPickupClass(context) {
     }
     reset() {
       this.age = 0;
+      this.deepSupplies = false;
       this.keyItem = null;
       for (const p of this.objects) p.active = false;
       for (const [x, z, name, value, height] of definition.loot ?? []) {
@@ -34,6 +35,7 @@ export function createPickupClass(context) {
         this.add('ammo', x, z, this.level.base(x, z), '补给弹药', CONFIG.pickups.ammoCache, true);
     }
     add(kind, x, z, y, name, value, permanent = false) {
+      if (this.deepSupplies && !permanent && ['ammo','health','grenade','sample'].includes(kind)) return;
       if (!permanent && ['ammo', 'health', 'grenade'].includes(kind)) {
         for (const p of this.objects) {
           if (!p.active || p.permanent || p.kind !== kind || p.name !== name || Math.abs(y - p.y) > 0.25) continue;
@@ -63,7 +65,7 @@ export function createPickupClass(context) {
       if (!object) return;
       if (kind === 'core') this.keyItem = object;
       const style = kind === 'rare' && value >= cfg.preciousValue ? 'precious' : kind;
-      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent, born: this.age });
+      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent, origin:null, born: this.age });
       return object;
     }
     withinReach(item, player) {
@@ -82,6 +84,7 @@ export function createPickupClass(context) {
       this.keyItem = null;
       game.core = true;
       game.sound.pickup(true);
+      game.sound.stageEvent('clear',game,player);
       game.ui.notify('获得 ' + TEXT.keyItem + ' ×1 · ' + TEXT.coreCollected, 2);
       return true;
     }
@@ -122,10 +125,11 @@ export function createPickupClass(context) {
       let amount = 1,
         detail = '';
       if (item.kind === 'rare') {
-        game.loot.push({ name: item.name, value: item.value });
-        game.value += item.value;
-        const supply = game.kit?.supply();
-        detail = ' · 价值 ' + item.value + (supply ? ' · 补给 ' + supply : '');
+        const value = Math.round(item.value * (game.variation?.value ?? 1));
+        game.loot.push({ name: item.name, value, origin:item.origin ?? 'main' });
+        game.value += value;
+        const supply = !this.deepSupplies && game.kit?.supply();
+        detail = ' · 价值 ' + value + (supply ? ' · 补给 ' + supply : '');
         item.active = false;
       } else if (item.kind === 'sample') {
         game.weapon.combat.samplePending = true;

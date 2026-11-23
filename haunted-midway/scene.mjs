@@ -548,15 +548,13 @@ function createEncounter({ CONFIG: config, level, THREE, brighter, sound }) {
       if (!this.ride && t >= this.next - rules.warning) {
         this.ride = Math.random() < 0.55 ? 'carousel' : 'train';
         game.ui.notify(label(this.ride) + '亮起警示灯，请撤出标记范围', rules.warning);
-        sound.tone(523, 537, 0.42, 0.17, 'sine');
-        sound.tone(698, 660, 0.55, 0.15, 'triangle', 0.32);
+        sound.stageEvent('warning',game,this.ride==='train'?{x:TRACK.x,z:this.trainZ}:{x:0,z:0});
       }
       const duration = this.ride === 'carousel' ? rules.carouselDuration : rules.trainDuration;
       if (this.ride && !this.rideActive && t >= this.next) {
         this.rideActive = true;
         game.ui.notify(label(this.ride) + '失控启动', 1.4);
-        sound.hiss(0.48, 1800, 150, 0.27);
-        sound.tone(95, 42, 0.48, 0.25, 'triangle');
+        sound.stageEvent('danger',game,this.ride==='train'?{x:TRACK.x,z:this.trainZ}:{x:0,z:0});
       }
       if (this.rideActive && t >= this.next + duration) {
         this.next += rules.period;
@@ -590,7 +588,10 @@ function createEncounter({ CONFIG: config, level, THREE, brighter, sound }) {
       }
       if (this.rideActive) {
         const train = this.ride === 'train';
-        if (train) this.trainZ = TRACK.reach * (1 - 2 * Math.min(1, (t - this.next) / duration));
+        if (train) {
+          this.trainZ = TRACK.reach * (1 - 2 * Math.min(1, (t - this.next) / duration));
+          sound.stageEvent('impact',game,{x:TRACK.x,y:trackHeight(this.trainZ),z:this.trainZ});
+        }
         const check = (b, isPlayer) => {
           if (!isPlayer && !b.active) return;
           if ((isPlayer ? this.lastPlayerHit : nextHit[b.id]) > t) return;
@@ -843,6 +844,10 @@ function carnivalModel(type, { THREE, shapes, mergeGeometries }, rage = false) {
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'游园售票亭',at:[-8,27],entries:[[-16,24],[0,19]]},
+    {name:'旋转木马广场',at:[16,5],entries:[[24,6],[12,-1]]},
+  ]},
   weaponSkin: 'haunted-midway',
   pageTitle: '永夜游园 | 第十四关',
   grid: GRID,

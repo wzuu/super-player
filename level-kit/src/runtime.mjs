@@ -3,16 +3,26 @@ import { createWorld, createGrid } from '@level-kit/world.mjs';
 import { createRendering } from '@level-kit/rendering.mjs';
 import { createEffectClasses } from '@level-kit/effects.mjs';
 import { createSoundClass } from '@level-kit/audio.mjs';
+import { stageVoice } from '@level-kit/stage-voice.mjs';
 import { createBeastClasses } from '@level-kit/beasts.mjs';
 import { createPlayerClass } from '@level-kit/player.mjs';
 import { createPickupClass } from '@level-kit/pickups.mjs';
 import { createWeaponClass } from '@level-kit/weapon.mjs';
+import { shotgunRules } from '@level-kit/weapon-classes.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 import { createUIClass } from '@level-kit/ui.mjs';
-import { preferences, storePreferences, keyName } from '@level-kit/preferences.mjs';
+import { preferences, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
 import { createFieldKit } from '@level-kit/field-kit.mjs';
-import { createObjective, campaignMission, missionNames } from '@level-kit/objectives.mjs';
+import { createObjective, missionRules } from '@level-kit/objectives.mjs';
+import { createStory } from '@level-kit/story.mjs';
+import { initBriefing } from '@level-kit/briefing.mjs';
 import { qualityMonitor } from '@level-kit/quality.mjs';
+import { BattlePerformance } from '@level-kit/battle-performance.mjs';
+import { variationDeck } from '@level-kit/variations.mjs';
+import { createFieldOperations } from '@level-kit/field-operations.mjs';
+import { createLifts } from '@level-kit/lifts.mjs';
+import { BattleJournal } from '@level-kit/battle-journal.mjs';
+import { createTraining } from '@level-kit/training.mjs';
 import { rotateLook } from '@level-kit/look.mjs';
 
 export function startLevel(definition, campaign = null, campaignStage = 0) {
@@ -22,10 +32,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const menus = $('menu');
   const CONFIG = makeConfig(definition.config, campaignStage);
   const prefs = preferences();
+  const training = createTraining(CONFIG,prefs);
   CONFIG.player.mouseSpeed *= prefs.sensitivity;
   CONFIG.player.incoming = { assist: 0.7, standard: 1, hard: 1.35 }[prefs.difficulty];
   CONFIG.player.steady = prefs.steady;
   CONFIG.feedback.hitShake = prefs.hitShake;
+  CONFIG.feedback.attackShake = prefs.attackShake;
   CONFIG.feedback.directionIndicators = prefs.directionIndicators;
   CONFIG.audio.volume = prefs.volume / 100;
   CONFIG.audio.muted = prefs.muted;
@@ -50,10 +62,16 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     ammoTint: brighter(palette.ammo ?? 0x7fc8ed, 1.1),
   };
   const TEXT = makeText(definition);
+  if (training) Object.assign(TEXT,{
+    title:training.title, enter:'进入'+training.title, tag:'独立练习',
+    brief:training.kind==='range'?'无限备弹、快速换弹和连续敌潮。':'进入练习场，跟随当前任务完成操作和撤离。',
+    winBrief:'撤离成功可带回战利品并解锁下一关，失败会失去本局战利品。坚守需要守满时长，护送需要保护目标抵达，限时撤离须在时限内完成。无尽生存按波次记录，没有常规撤离胜利条件。',
+  });
   const context = {
     ...visual,
     CONFIG,
     GRID,
+    campaignStage,
     definition,
     TEXT,
     colors,
@@ -68,11 +86,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     randomRange,
     seededRandom,
   };
-  document.title = definition.pageTitle ?? TEXT.title;
+  document.title = training?.title ?? definition.pageTitle ?? TEXT.title;
   const { Level, Navigation } = createWorld(context);
   const { Effects, Rift, Projectiles } = createEffectClasses(context);
   const { BeastManager } = createBeastClasses(context);
-  const Sound = createSoundClass(context);
+  const Sound = createSoundClass({...context,score:stageVoice(definition.weaponSkin)});
   const Player = createPlayerClass(context);
   const Pickups = createPickupClass(context);
   const WeaponSystem = createWeaponClass(context);
@@ -93,6 +111,9 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
           level.gate.y + (gate.height ?? 4.72),
         );
   const nav = new Navigation(level);
+  const lifts=createLifts({...context,level},definition.lifts);
+  const story = createStory({...context,level,nav}, missionRules);
+  const field=training?null:createFieldOperations({...context,level,nav},campaign);
   const look = new THREE.PerspectiveCamera();
   document.addEventListener('mousemove', (event) => {
     if (document.pointerLockElement === canvas && game.phase === 'play') {
@@ -109,6 +130,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     clear() {
       this.down.clear();
       this.padFire = this.fire = this.jump = this.reload = this.interact = false;
+      player.aiming = false;
+      player.ads = 0;
+      player.positionCamera(0);
+      ui.aimDot.hidden=true;
+      ui.nodes.hud.removeAttribute('data-aim');
+      weapon.shoulder.body.visible=false;
     },
   };
   const sound = new Sound(),
@@ -119,7 +146,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     beasts = new BeastManager(level, nav);
   const projectiles = new Projectiles(level, effects),
     pickups = new Pickups(level, effects);
-  const skinId = resolveRifleSkin(campaign?.equippedSkin, resolveRifleSkin(definition.weaponSkin));
+  const practiceWeapon=training ? $('practice-weapon').value : null;
+  const skinId = resolveRifleSkin(practiceWeapon || campaign?.equippedSkin, resolveRifleSkin(definition.weaponSkin));
+  if (rifleSkins[skinId].category === '霰弹枪') {
+    const practiceRules=training ? {magazine:6,reloadTime:training.kind==='range' ? .32 : .49} : {};
+    Object.assign(CONFIG.weapon,shotgunRules,practiceRules);
+  }
   const weapon = new WeaponSystem(skinId),
     ui = new UI(level);
   $('rifle-label').textContent = rifleSkins[skinId].name;
@@ -127,19 +159,23 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const blastTint = brighter(palette.blast ?? 0xb78cff, 2.8);
   const encounter = definition.createEncounter?.({ ...context, level, mapData, sound });
 
-  const kit = createFieldKit(
-    CONFIG,
-    ['KeyQ', 'KeyE', 'Digit1', 'Digit2'].map((id) => keyName(prefs.keys[id])),
-    visual,
-  );
+  const slotKeys = ['KeyQ', 'KeyE', 'Digit1', 'Digit2'].map((id) => keyName(prefs.keys[id]));
+  const kit = createFieldKit(CONFIG, slotKeys, visual);
   const objective = createObjective(campaignStage, visual, CONFIG);
   const modeSelect = $('mission-mode');
-  for (const id of new Set([campaignMission(campaignStage), 'classic', 'endless']))
-    modeSelect.add(new Option(missionNames[id], id));
+  CONFIG.interactLabel = keyName(prefs.keys.KeyF);
+  CONFIG.deepKey = keyName(prefs.keys.KeyG);
+  CONFIG.supportsHunt=Boolean(field?.cfg.hunt);
+  initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign);
+  const deck=variationDeck(campaignStage,CONFIG,visual,modeSelect,$('run-variation'));
   let packed = null,
     preparing = false;
   const game = {
+    training,
+    field,
+    lifts,
     kit,
+    story,
     objective,
     level,
     player,
@@ -154,11 +190,15 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     phase: 'ready',
     time: 0,
     kills: 0,
+    performance: new BattlePerformance(),
+    journal: campaign ? new BattleJournal() : null,
+    stageKillTarget: CONFIG.beasts.killsToWin,
     core: false,
     bossDead: false,
     loot: [],
     value: 0,
     hitStop: 0,
+    attackPauseUntil:0,
     shotAt: -Infinity,
     shotX: 0,
     shotY: 0,
@@ -169,8 +209,10 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     blastClock: 0,
     reset() {
       campaign?.reset();
+      sound.resetStage();
       this.time = 0;
       this.kills = 0;
+      this.performance.reset();
       this.core = false;
       this.bossDead = false;
       this.loot.length = 0;
@@ -179,18 +221,28 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.footstep.at = -Infinity;
       encounter?.reset?.();
       this.hitStop = 0;
+      this.attackPauseUntil=0;
       this.blast = 0;
       this.blastClock = 0;
       if (gateShield) gateShield.active = true;
-      kit.reset(packed);
-      packed = null;
-      objective.reset(modeSelect.value, this);
+      kit.reset(training ? structuredClone(training.kit) : packed);
+      objective.reset(training ? 'classic' : modeSelect.value, this);
+      deck.start(this);
       player.reset();
-      beasts.reset(player);
+      lifts.reset();
+      this.journal?.start(this, { difficulty: prefs.difficulty, recordReplay: preferences().recordReplay }, packed);
+      packed = null;
+      story.prepare(training ? null : objective.mode);
+      training?.prepare();
+      beasts.reset(player, this);
       projectiles.reset();
       effects.reset();
       pickups.reset();
+      story.reset(this);
+      nav.rebuild(player.x,player.z);
+      field?.reset(this);
       weapon.reset();
+      training?.reset(this);
       ui.reset();
       input.clear();
     },
@@ -218,9 +270,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       weapon.group.visible = false;
       input.clear();
     },
-    finish(won) {
+    finish(won, reason) {
       if (this.phase !== 'play') return;
+      this.endReason = reason;
+      const details = this.journal?.finish(this, won, reason);
       this.phase = won ? 'win' : 'fail';
+      deck.finish();
       if (!won) {
         this.loot.length = 0;
         this.value = 0;
@@ -232,6 +287,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       weapon.group.visible = false;
       $('equipment-hud').hidden = true;
       modeSelect.disabled = false;
+      $('practice-weapon').disabled=false;
+      $('loadout-pane').hidden = false;
       if (campaign) $('preparation').hidden = false;
       ui.menu(this.phase, this);
       campaign?.finish({
@@ -240,12 +297,21 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
         durationMs: Math.round(this.time * 1000),
         loot: this.loot,
         remaining: kit.remaining(),
+        ...details,
       });
     },
     step(dt) {
       this.time += dt;
+      this.performance.step(this.time);
       if (!this.blast) {
         objective.step(dt, this);
+        if (this.phase !== 'play') return;
+        beasts.releaseSplits(this);
+        if (!field?.deep) story.step(dt,this);
+        if (this.phase !== 'play') return;
+        field?.step(dt,this);
+        if (this.phase !== 'play') return;
+        lifts.step(dt,this);
         if (this.phase !== 'play') return;
         kit.step(dt, this);
       }
@@ -256,18 +322,19 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (!this.blast) {
         weapon.combat.passive(dt, this);
         player.update(dt - frozen, input, this);
+        player.positionCamera(0);
         const interact = input.interact;
         input.interact = false;
-        if (interact && !pickups.takeKey(player, this)) {
+        if (interact && !pickups.takeKey(player, this) && (field?.deep || !story.interact(this)) && !field?.interact(this) && !lifts.interact(this)) {
           if (this.nearGate()) {
-            if (!this.ready()) ui.notify(objective.label(this) || TEXT.locked, 1.55);
+            if (!this.ready()) ui.notify(objective.guide(this,TEXT).title, 1.55);
             this.trigger();
           } else if (encounter?.interactionHint?.(this) || !pickups.takeAimed(player,this)) {
             encounter?.interact?.(this);
           }
         }
+        if (this.phase !== 'play') return;
         if (!this.blast) {
-          player.positionCamera(0);
           weapon.update(dt, input, this);
           if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt, this);
           else beasts.update(dt - frozen, player, this);
@@ -284,6 +351,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       effects.update(dt);
       player.positionCamera(dt);
       if (this.phase === 'play') sound.updateThreats(this);
+      if (this.phase === 'play') this.journal?.update(this);
+      if (this.phase === 'play') training?.step(this,input);
       weapon.render(dt, player, this);
       ui.update(dt, this);
     },
@@ -291,6 +360,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
 
   function pause() {
     if (game.phase !== 'play') return;
+    training?.paused();
     if (lastFrame !== null) pendingTime += Math.max(0, (performance.now() - lastFrame) / 1000);
     game.phase = 'pause';
     input.clear();
@@ -330,7 +400,9 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (campaign && !packed) {
         preparing = true;
         try {
-          packed = await campaign.prepare();
+          const [kit, stats] = await Promise.all([campaign.prepare(), campaign.statistics().catch(() => null)]);
+          packed = kit;
+          if (stats) weapon.savedKills = stats.reduce((sum,row) => sum + (row.weapon === weapon.skinId ? row.weaponKills ?? 0 : 0), 0);
         } catch (error) {
           ui.text('menu-status', error.message);
           document.exitPointerLock();
@@ -347,8 +419,10 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     lastFrame = performance.now();
     game.phase = 'play';
     $('equipment-hud').hidden = false;
+    $('loadout-pane').hidden = true;
     $('preparation').hidden = true;
     modeSelect.disabled = true;
+    $('practice-weapon').disabled=true;
     ui.nodes.hud.hidden = false;
     weapon.group.visible = game.blast === 0;
     sound.active(true);
@@ -357,15 +431,31 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('pointerlockerror', lockError);
   menus.addEventListener('cancel', (event) => event.preventDefault());
   $('start').addEventListener('click', startGame);
-  $('sound').addEventListener('click', () => {
-    sound.toggle();
-    try {
-      storePreferences({ ...preferences(), muted: !sound.enabled });
-    } catch {
-      /* 本局音效仍可切换 */
+  if (training) {
+    $('campaign-home').hidden = false;
+    $('campaign-home').href = '../index.html';
+    $('practice-controls').hidden = false;
+    $('practice-bindings').textContent = training.controls;
+    $('practice-restart').onclick = () => {game.phase='ready'; startGame();};
+    $('next-level').href = '../underground-lab/index.html?campaign';
+    $('next-level').textContent = '开始战役';
+  }
+  $('campaign-home').addEventListener('click', event => {
+    if (campaign && game.phase === 'pause' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+      game.phase = 'play';
+      game.finish(false, '主动退出');
     }
-    $('sound').setAttribute('aria-pressed', String(sound.enabled));
-    ui.text('sound', sound.enabled ? '音效开启' : '音效关闭');
+  });
+  bindSoundControl($('sound'), (current, state) => {
+    CONFIG.player.steady = current.steady;
+    CONFIG.feedback.hitShake = current.hitShake;
+    CONFIG.feedback.attackShake = current.attackShake;
+    CONFIG.feedback.directionIndicators = current.directionIndicators;
+    CONFIG.audio.volume = current.volume / 100;
+    sound.enabled = !current.muted;
+    if(!sound.enabled) sound.stopVoices();
+    if (sound.ctx) sound.main.gain.setTargetAtTime(sound.enabled ? CONFIG.audio.volume * .65 : 0, sound.ctx.currentTime, .055);
+    $('sound-state').textContent = state + ' · ' + keyName(current.keys.KeyM);
   });
 
   const keyMap = new Map(Object.entries(prefs.keys).map(([action, code]) => [code, action]));
@@ -380,8 +470,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   guide[4].textContent = names(['KeyC']);
   guide[5].textContent = names(['KeyQ', 'KeyE']);
   guide[6].textContent = names(['Digit1', 'Digit2']);
-  CONFIG.interactLabel = keyName(prefs.keys.KeyF);
+  guide[7].textContent = names(['KeyV']);
   function pressAction(code) {
+    if (code === 'KeyG') field?.deepen(game);
+    if (code === 'KeyI' && !weapon.reloadLeft && !player.aiming && !player.sprinting) weapon.inspectTime = 2;
+    if (code === 'KeyV') player.thirdPerson = !player.thirdPerson;
     if (code === 'KeyR') input.reload = true;
     if (code === 'Space') input.jump = true;
     if (code === 'KeyF') input.interact = true;
@@ -405,14 +498,20 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   });
   document.addEventListener('keyup', (event) => input.down.delete(keyMap.get(event.code)));
   document.addEventListener('mousedown', (event) => {
-    if (event.button !== 0 || game.phase !== 'play' || document.pointerLockElement !== canvas) return;
+    if (game.phase !== 'play' || document.pointerLockElement !== canvas || ![0,2].includes(event.button)) return;
     event.preventDefault();
-    input.fire = true;
+    if (event.button === 2) player.aiming = true;
+    else input.fire = true;
   });
   document.addEventListener('mouseup', (event) => {
     if (event.button === 0) input.fire = false;
+    if (event.button === 2) player.aiming = false;
   });
   window.addEventListener('blur', input.clear.bind(input));
+  window.addEventListener('pagehide', () => {
+    sound.active(false);
+    sound.ctx?.suspend().catch(()=>{});
+  });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
   const padDown = new Set(),
@@ -542,7 +641,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     rift.update(worldTime, game.ready(), game.blast);
     renderer.info.reset();
     weaponPass.enabled = weapon.group.visible;
-    composer.render(dt);
+    if (game.phase!=='play' || game.time>=game.attackPauseUntil) composer.render(dt);
     requested = requestAnimationFrame(animate);
   }
 
@@ -561,8 +660,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   });
   pickups.reset();
   resize();
-  $('sound').setAttribute('aria-pressed', String(sound.enabled));
-  ui.text('sound', sound.enabled ? '音效开启' : '音效关闭');
   $('start').disabled = false;
   ui.menu('ready', game);
   requested = requestAnimationFrame(animate);

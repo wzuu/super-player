@@ -568,6 +568,7 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
           this.poisoned = false;
           this.poisonTick = Infinity;
           game.sound.pickup(true);
+          game.sound.stageEvent('clear',game,herb);
           game.ui.notify('已拾取解毒草，毒素解除', 2.3);
           game.effects.spray(splash.set(herb.x, herb.y + .25, herb.z), root, 14, 2.7, .051, 'spark');
         } else if (t >= this.poisonTick && p.hurt(poison.damage, game, .13, undefined, 2)) {
@@ -618,6 +619,7 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
       hunter.reinforcement = true;
       if (distance < 22) hunter.alert = tune.beasts.memory;
       this.ambushers.add(hunter);
+      game.sound.stageEvent('warning',game,hunter);
       const water = WETLANDS.find(pool => contains(pool, x, z)).water + this.height;
       game.effects.spray(splash.set(x, water + .08, z), brighter(0xabf0c8, 1.7), 15, 4.8, .075, 'mist');
     },
@@ -855,7 +857,7 @@ function createEnvironment(context) {
       const intensity = rainy ? .88 + flood * .12 : warning ? .18 : .08;
       const rain = game.phase === 'ready' ? .20 : intensity;
       scene.fog.color.copy(calmFog).lerp(stormFog, rain * .82);
-      scene.fog.density = tune.map.fog * (1 + rain * .42);
+      scene.fog.density = tune.map.fog * (1 + rain * .42) * (game.variation?.fog ?? 1);
       scene.background.copy(calmSky).lerp(stormSky, rain);
       clouds.position.copy(camera.position);
       clouds.rotation.y = t * .006;
@@ -1169,6 +1171,10 @@ function jungleBeast(type, { THREE, shapes, mergeGeometries }, rage = false) {
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'河岸石阶',at:[-9,29],entries:[[-17,25],[0,22]]},
+    {name:'西侧瀑布池',at:[-25,6],entries:[[-32,11],[-22,-3]]},
+  ]},
   weaponSkin: 'jungle-temple',
   pageTitle: '雨蚀天阶 | 第十关',
   grid: MAP_GRID,
@@ -1192,7 +1198,7 @@ export default {
     game.sound.hiss(.58, 2300, 320, .32);
   },
   projectileGeometry(THREE) { return new THREE.ConeGeometry(.37, 4.3, 5).rotateX(Math.PI / 2); },
-  onProjectileHit(game) { game.encounter.envenom(game); },
+  onProjectileHit(game) { game.sound.tone(1350,720,.10,.15,'sine'); game.encounter.envenom(game); },
   portal: { width: 1.93, depth: .38, verticalRange: .50, useRadius: 4.26 },
   terrain: { ground, moveScale: waterScale },
   inSafeZone(x, z, margin = 0) {

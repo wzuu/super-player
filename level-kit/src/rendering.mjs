@@ -76,14 +76,14 @@ export function createRendering({ CONFIG, definition, canvas }) {
       stamp.updateMatrix();
       this.groups.get(key).rows.push({ matrix: stamp.matrix.clone(), color: color?.isColor ? color : new THREE.Color(color) });
     }
-    flush() {
+    flush(parent = scene) {
       for (const { kind, mat, rows } of this.groups.values()) {
         const mesh = new THREE.InstancedMesh(this.geometries[kind], this.materials[mat], rows.length);
         for (let i = 0; i < rows.length; i++) {
           mesh.setMatrixAt(i, rows[i].matrix); mesh.setColorAt(i, rows[i].color);
         }
         mesh.computeBoundingSphere();
-        scene.add(mesh);
+        parent.add(mesh);
       }
       this.groups.clear();
     }

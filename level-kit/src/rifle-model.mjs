@@ -1,14 +1,47 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
+import { createShotgun } from '@level-kit/shotgun-model.mjs';
 import { rifleFinish, rifleFrost, rifleRandom, rifleTexture, rifleWood } from '@level-kit/rifle-textures.mjs';
 
 const tau = Math.PI * 2;
 
 // 模型以 X 轴向前，展示台直接使用，第一人称旋转后沿相机的 -Z 轴。
-export function createRifle(id, { firstPerson = false } = {}) {
+export function createRifle(id, options = {}) {
+  const rifle = makeRifle(id, options);
+  const canvas = document.createElement('canvas');
+  canvas.width = 256; canvas.height = 80;
+  const context = canvas.getContext('2d');
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.MeshBasicMaterial({map:texture, toneMapped:false});
+  const geometry = new THREE.PlaneGeometry(.21,.066);
+  for (const side of [-1,1]) {
+    const plate = new THREE.Mesh(geometry,material);
+    plate.position.set(-.085,.04,.102*side);
+    plate.rotation.y = side < 0 ? Math.PI : 0;
+    rifle.root.add(plate);
+  }
+  let previous;
+  rifle.setCount = count => {
+    if (previous === count) return;
+    previous = count;
+    context.fillStyle='#122026'; context.fillRect(0,0,256,80);
+    context.strokeStyle='#536b73'; context.lineWidth=4; context.strokeRect(3,3,250,74);
+    context.fillStyle='#b8f4d9'; context.font='bold 54px monospace'; context.textAlign='center';
+    context.fillText(String(count).padStart(5,'0'),128,59,236);
+    texture.needsUpdate=true;
+  };
+  rifle.setCount(0);
+  const dispose = rifle.dispose.bind(rifle);
+  rifle.dispose = () => { dispose(); texture.dispose(); material.dispose(); };
+  return rifle;
+}
+
+function makeRifle(id, { firstPerson = false } = {}) {
   id = resolveRifleSkin(id);
   const skin = rifleSkins[id];
+  if (skin.category === '霰弹枪') return createShotgun(id,skin);
   const root = new THREE.Group();
   root.name = id;
   const groups = Object.fromEntries(['枪身', '枪管', '护木', '弹匣', '枪托', '瞄具'].map(name => {

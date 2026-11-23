@@ -27,7 +27,7 @@
 
 模块预览读取当前登记顺序，独立 HTML 在打包时写入关卡序号。调整顺序后重新生成受影响的关卡。未登记的灰盒模板和独立场景使用各自的配置。
 
-战役首页的个人收藏可以预览全部武器外观。成功撤离对应关卡后可佩戴，已有通关记录也计入。佩戴项写入同一 SQLite 存档。恢复关卡默认后，战役及直接打开的各关卡使用各自配套外观。
+战役首页的武器库可以预览全部武器外观。成功撤离对应关卡后可佩戴，已有通关记录也计入。佩戴项写入同一 SQLite 存档。恢复关卡默认后，战役及直接打开的各关卡使用各自配套外观。
 
 本地依赖入口为 `vendor/three-entry.mjs`，包含关卡运行时使用的 Three.js 与插件。需要重建时，在临时目录安装 `three@0.160.0` 和 `esbuild@0.28.2`，用该目录中的 esbuild 执行下列命令，`NODE_PATH` 指向临时目录的 `node_modules`。第三方许可随包保存在 `vendor/THREE-LICENSE.txt`。
 
@@ -92,8 +92,20 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | `src/beasts.mjs` | 四类凶兽的 AI、血条、对象池、实例渲染和远距降频 |
 | `src/effects.mjs`、`src/audio.mjs` | 弹丸、可选落地伤害区、传送门、粒子、曳光和合成音效 |
 | `src/pickups.mjs`、`src/ui.mjs` | 弹药、生命补给、宝物与核心拾取、HUD、小地图及结算 |
+| `src/story.mjs`、`src/objectives.mjs` | 读取关卡的区域、入口、敌种、数量与同场上限，推进门禁、护送、坚守和撤离 |
+| `src/stair-navigation.mjs` | 四种体型经双端楼梯跨层追击，按体型和入口缓存寻路场，远程体争夺高点 |
+
+普通战区在场景的 `story.sectors` 设置地点与增援入口。实验室、钟楼和古都的 `story.route` 按顺序配置清剿、交互与撤离。地面坐标写作 `[x,z]`，跨层坐标写作 `[x,y,z]`。巴黎的 `platform`、`beacon`、`rescue` 和 `climbs` 分别维护防守区、信标、登机点与攀登轨迹。时限集中于 `missionRules`。
+
+生成入口后，`python level-kit/tests/story_browser.py` 验证各关目标连通、守卫和任务重开，`python level-kit/tests/stair_routes_browser.py` 验证四种体型的双向楼梯。使用 `python level-kit/tests/story_performance.py <基线构建根目录>` 比较同机位持续射击下的帧率和帧时间。
 
 ## 武器外观调节
+
+雨夜废城和黄铜机坊通关后分别解锁「雨巷破阵」「铜炉雷鸣」。霰弹参数在 `src/weapon-classes.mjs`，弹丸独立检测遮挡、近远距离和穿透，每次开火仅计一次射击。单发装填可被开火打断，黄铜款击杀后短时加快装填。配装、瞄准和方向镜头的端到端回归为 `python level-kit/tests/weapon_system_browser.py`。
+
+武器库的分支永久购买，免费按枪切换。旧扩容弹匣保留为供弹位的扩容分支，快换组件保留为快换分支，稳定组件改为长枪管。两种供弹组件均已购时默认快换，可免费换回扩容。已购金额不变。穿透与天生穿透合计最多贯穿一个目标，选择分裂时覆盖穿透，每次射击最多一次溅射。分支调节见 `src/gear.mjs`。
+
+毒爆、导电、碎冰、蒸爆的范围、系数及上限见 `src/weapon-perks.mjs`。结清到期持续伤害后才消耗反应状态。武器触发的反应击杀计入该枪，道具和环境触发分别计入对应来源。关卡的环境脉冲、警示、触发和任务音型集中于 `src/stage-voice.mjs`，方位声源取事件坐标。
 
 配色、金属度和粗糙度在 `src/rifle-skins.mjs`。按关卡 ID 在 `src/rifle-textures.mjs` 调整纹理，在 `src/rifle-model.mjs` 调整几何、发光和透明材质。展示灯光及环境粒子在 `campaign/weapon-preview.mjs`。改动共享模型或纹理后重新打包所有关卡。
 
@@ -116,4 +128,4 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 
 新关在各自的 `scene.mjs` 调整布局。樱町的 `parade`、机坊的 `pipes` / `conveyor` 和游园的 `rides` 分别控制主题事件。武器回归命令为 `node --test level-kit/tests/weapon-perks.test.mjs`。
 
-有 Chrome 与 Python Playwright 的开发机可运行 `python level-kit/tests/campaign_browser.py`。该测试自行启动本地服务并使用临时存档，检查打包后的三关、持续开火换弹、暂停继续、E 键撤离、收藏解锁和跨关佩戴。
+有 Chrome 与 Python Playwright 的开发机可运行 `python level-kit/tests/campaign_browser.py`。该测试自行启动本地服务并使用临时存档，检查分区清剿、首领三个阶段、持续开火换弹、暂停继续、F 键撤离、收藏解锁和跨关佩戴。

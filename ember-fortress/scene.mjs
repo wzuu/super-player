@@ -842,6 +842,10 @@ function lavaModel(type,{THREE,shapes,mergeGeometries},broken=false){
 }
 
 export default {
+  story:{type:'regions',sectors:[
+    {name:'吊桥灰原',at:[-8,25],entries:[[-14,19],[0,18]]},
+    {name:'东侧铸造工坊',at:[17,10],entries:[[24,6],[12,14]]},
+  ]},
   weaponSkin: 'ember-fortress',
   pageTitle:'烬火要塞 | 第七关',
   grid:MAP_GRID,

@@ -41,9 +41,40 @@ jobs:
         with:
           path: ${{ github.event_name == 'pull_request' && 'dist' || vars.PAGES_DEMO_ENABLED == 'true' && 'dist' || 'ops/offline' }}
 
+  gameplay:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suites:
+          - 'reports_browser practice_browser weapon_system_browser'
+          - 'story_browser stair_routes_browser stage_audio_browser'
+          - 'combat_expansion field_operations_browser'
+    env:
+      GAME_TEST_BROWSER: chromium
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: npm ci && npm run build
+      - run: python -m pip install playwright==1.65.2
+      - run: python -m playwright install --with-deps chromium
+      - name: Run gameplay checks
+        env:
+          SUITES: ${{ matrix.suites }}
+        run: |
+          for suite in $SUITES; do
+            python "level-kit/tests/$suite.py"
+          done
+
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: test-build
+    needs: [test-build, gameplay]
     runs-on: ubuntu-latest
     permissions:
       pages: write

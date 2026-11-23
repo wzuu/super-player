@@ -20,13 +20,13 @@ async function request(profile, path, data, timeout = 8000) {
   return response.json();
 }
 
-async function openCampaign() {
+async function openCampaign(onUpgradeBlocked) {
   const profile = activeProfile();
   const api = (...args) => request(profile, ...args);
   const namespace = root.pathname + (profile ? '@' + profile : '');
   if (globalThis.offlineCampaignLevels) {
     const { openBrowserStore } = await import('./browser-store.mjs');
-    return openBrowserStore(globalThis.offlineCampaignLevels, namespace);
+    return openBrowserStore(globalThis.offlineCampaignLevels, namespace, onUpgradeBlocked);
   }
   const manifest = await fetch(new URL('levels.json', import.meta.url), {
     cache: 'no-store',
@@ -41,6 +41,11 @@ async function openCampaign() {
       pendingPrefix: profile ? 'super-player:' + profile + ':pending:' : 'super-player:pending:',
       progress: () => api('progress'),
       history: (before) => api('battles?before=' + encodeURIComponent(before)),
+      report: id => api('report?id=' + encodeURIComponent(id)),
+      replay: id => api('replay?id=' + encodeURIComponent(id)),
+      saveReplay: (id, replay) => api('replay', { id, replay }),
+      statistics: () => api('statistics'),
+      discover: level => api('discovery',{level}),
       gear: () => api('gear'),
       writeGear: (data) => api('gear', data),
       loadout: () => api('loadout', undefined, 2500),
@@ -49,11 +54,11 @@ async function openCampaign() {
     };
   }
   const { openBrowserStore } = await import('./browser-store.mjs');
-  return openBrowserStore(levels, namespace);
+  return openBrowserStore(levels, namespace, onUpgradeBlocked);
 }
 
-export function campaignStore() {
-  loading ??= openCampaign().catch((error) => {
+export function campaignStore(onUpgradeBlocked) {
+  loading ??= openCampaign(onUpgradeBlocked).catch((error) => {
     loading = undefined;
     throw error;
   });

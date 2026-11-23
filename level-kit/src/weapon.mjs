@@ -1,8 +1,9 @@
 import { createRifle } from '@level-kit/rifle-model.mjs';
 import { WeaponCombat } from '@level-kit/weapon-perks.mjs';
+import { createShoulderView } from '@level-kit/shoulder-view.mjs';
+import { pelletDamage } from '@level-kit/weapon-classes.mjs';
 
-export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene, definition, shapes, brighter, lerp, randomRange, colors }) {
-  const { spark } = colors;
+export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weaponScene, definition, shapes, brighter, lerp, randomRange }) {
   const nativeSkin = definition.weaponSkin;
   const bloodMoonLevel = nativeSkin === 'shanhai-secret-realm' || nativeSkin === 'bloodmoon-castle';
 
@@ -19,7 +20,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
         game.effects.spray(center(to, b), tints[kind], 8, 2.8, .07, kind === 'steam' || kind === 'petal' ? 'mist' : 'spark');
       };
       this.combat.arc = (a, b, game) => {
-        game.effects.streak(center(from, a), center(to, b));
+        game.effects.streak(center(from, a), center(to, b), 'arc');
         this.combat.visual(b, game, 'arc');
       };
       this.combat.visible = (a, b, game) => {
@@ -27,11 +28,31 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
         const length = sight.subVectors(to, from).length();
         return length < .01 || game.level.visible(from, sight.divideScalar(length), length);
       };
+      const seenKey='super-player:reaction-discoveries:v1';
+      let discoveries;
+      try { discoveries=new Set(JSON.parse(localStorage.getItem(seenKey) || '[]')); } catch {discoveries=new Set();}
+      this.combat.announceReaction=(rule,game)=>{
+        const first=!discoveries.has(rule.id);
+        if(first) {
+          discoveries.add(rule.id);
+          try {localStorage.setItem(seenKey,JSON.stringify([...discoveries]));} catch { /* 本页记录仍有效 */ }
+        }
+        game.ui.notify(rule.name+(first?' · 已记录到战场图鉴':''),first?2.4:1);
+        const tones={toxic:[168,38],conduct:[960,1800],shatter:[1840,400],vapor:[440,65]};
+        game.sound.tone(...tones[rule.id],.16,.22,rule.id==='conduct'?'square':'triangle');
+      };
       this.group = new THREE.Group();
       weaponScene.add(this.group);
       this.rifle = createRifle(skinId, { firstPerson: true });
       this.rifle.root.rotation.y = Math.PI / 2;
       this.group.add(this.rifle.root);
+      this.shoulder = createShoulderView(THREE, scene, this.rifle);
+      this.sight = new THREE.Group();
+      this.sight.position.set(0,.23,-.20);
+      this.group.add(this.sight);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(.068,.009,6,24), new THREE.MeshStandardMaterial({color:0x28343c,metalness:.55,roughness:.4}));
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(.063,24), new THREE.MeshBasicMaterial({color:0x87ced2,transparent:true,opacity:.10,depthWrite:false}));
+      this.sight.add(rim,lens);
       this.signals = {};
       this.empRecovery = 0;
       const glove = new THREE.MeshStandardMaterial({ color: 0x35373b, roughness: .86 });
@@ -64,9 +85,13 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.reset();
     }
     reset() {
+      this.inspectTime = 0;
       this.ammo = CONFIG.weapon.magazine; this.reserve = CONFIG.weapon.reserve;
       this.heat = 0; this.cooldown = 0; this.reloadLeft = 0; this.kick = 0; this.flash = 0;
       this.emptyAt = -5;
+      this.reloadTotal = 0;
+      this.shoulder.body.visible = false;
+      this.lastImpact = -Infinity;
       this.combat.reset();
       this.empRecovery = 0;
       this.signals.emp = false;
@@ -75,7 +100,8 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
     }
     reload(game) {
       if (this.reloadLeft > 0 || this.ammo >= CONFIG.weapon.magazine || this.reserve <= 0) return;
-      this.reloadLeft = CONFIG.weapon.reloadTime; game.sound.reload();
+      this.reloadTotal = this.reloadLeft = CONFIG.weapon.reloadTime * (game.time < this.combat.fastLoadUntil ? .68 : 1);
+      game.sound.reload();
     }
     shoot(game) {
       const w = CONFIG.weapon, p = game.player;
@@ -85,13 +111,37 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       p.recoil = Math.min(0.085, p.recoil + w.recoil * (1 + 1.1 * this.heat));
       p.recoilRoll += randomRange(-0.004, 0.004) * (1 + this.heat);
       game.shotAt = game.time; game.shotX = p.x; game.shotY = p.y; game.shotZ = p.z;
-      game.shotHearingScale = this.combat.hearingScale(p);
-      const penetrate = this.combat.beginShot();
-      game.sound.shoot();
+      game.shotHearingScale = this.combat.hearingScale(p)*(game.variation?.hearing ?? 1);
+      const innatePenetration = this.combat.beginShot();
+      const penetrate = !w.split && (innatePenetration || w.pierce);
+      game.sound.shoot(w.pellets);
       const spread = lerp(w.baseSpread, w.maxSpread, this.heat ** 1.25) * (p.sprinting ? 1.45 : 1);
-      const a = randomRange(0, TAU), s = Math.sqrt(Math.random()) * spread;
-      this.dir.set(Math.cos(a) * s, Math.sin(a) * s, -1).normalize().applyQuaternion(camera.quaternion);
       this.origin.copy(camera.position);
+      this.group.updateWorldMatrix(true,true);
+      camera.localToWorld(this.flashGroup.getWorldPosition(this.muzzle));
+      const count = w.pellets ?? 1, rotation = randomRange(0,TAU);
+      const middlePellet = Math.floor((count - 1) / 2);
+      const lowDetail = CONFIG.graphics.particleScale <= .3;
+      this.splitUsed=false; this.impactParticles=0;
+      let hits = 0, rank = 0;
+      for (let i=0;i<count;i++) {
+        const angle = rotation + i*2.39996;
+        const radius = spread*(count===1 ? Math.sqrt(Math.random()) : Math.sqrt(i/(count-1)));
+        this.dir.set(Math.cos(angle)*radius,Math.sin(angle)*radius*(count===1?1:.72),-1).normalize().applyQuaternion(camera.quaternion);
+        // 抽取扇面两侧的实际弹丸。低画质省去中央曳光，所有弹丸仍单独判定。
+        const draw = i === middlePellet || i === count - 1 || (!lowDetail && i === 0);
+        const result=this.trace(game,penetrate,draw);
+        if (result) hits++;
+        rank=Math.max(rank,result);
+      }
+      game.performance.shot(hits>0);
+      if (hits) {
+        this.impact(rank,game);
+        if (count>1 && hits>=4) game.sound.tone(320+hits*32,130,.09,.20,'triangle');
+      } else this.combat.miss();
+    }
+    trace(game,penetrate,draw) {
+      const w=CONFIG.weapon;
       const cover = game.level.hash.ray(this.origin, this.dir, w.range);
       let limit = game.level.hash.depth;
       if (this.dir.y < -0.009) {
@@ -102,46 +152,67 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
           limit = Math.min(limit, Math.max(0, depth));
         }
       }
+      const hazard=game.field?.ray(this.origin,this.dir,limit);
+      if(hazard) limit=hazard.distance;
       const hit = game.beasts.hash.ray(this.origin, this.dir, limit);
       this.end.copy(this.origin).addScaledVector(this.dir, game.beasts.hash.depth);
-      this.group.updateWorldMatrix(true, true);
-      camera.localToWorld(this.flashGroup.getWorldPosition(this.muzzle));
-      const streakLength = this.muzzle.distanceTo(this.end);
-      if (streakLength > 0.28) game.effects.streak(this.muzzle, this.end);
+      const streakKind = w.pellets ? 'pellet' : 'rifle';
       if (hit) {
-        let dead = this.hitTarget(hit, game);
+        let rank = this.hitTarget(hit, game);
         if (penetrate) {
           const next = game.beasts.hash.ray(this.origin, this.dir, limit, hit);
           if (next) {
             this.end.copy(this.origin).addScaledVector(this.dir, game.beasts.hash.depth);
-            game.effects.streak(this.muzzle, this.end);
-            dead = this.hitTarget(next, game) || dead;
+            rank = Math.max(rank, this.hitTarget(next, game));
           }
         }
-        game.sound.hit(dead);
-        game.ui.hit(dead ? 'kill' : 'hit');
-        game.hitStop = w.hitStop;
-      } else {
-        this.combat.miss();
-        if (cover || limit < w.range) game.effects.spray(this.end, spark, 5, 3.2, 0.025, 'spark');
+        if (draw && this.muzzle.distanceTo(this.end) > .28) game.effects.streak(this.muzzle, this.end, streakKind);
+        return rank;
       }
+      if (hazard) game.field.hit(hazard.trap,CONFIG.weapon.damage,game);
+      if (draw && this.muzzle.distanceTo(this.end) > .28) game.effects.streak(this.muzzle, this.end, streakKind);
+      if (draw && (cover || limit < w.range)) game.effects.impact(this.end, Boolean(w.pellets));
+      return 0;
     }
     hitTarget(target, game) {
-      const hit = { damage: CONFIG.weapon.damage, headshot: this.end.y >= target.y + target.height * .75 };
+      const distance=this.origin.distanceTo(this.end);
+      const hit = { damage: pelletDamage(distance,CONFIG.weapon), pellet:Boolean(CONFIG.weapon.pellets), heavy: CONFIG.weapon.pellets && distance<=CONFIG.weapon.falloffStart,
+        quietImpact:this.impactParticles++>=3,
+        headshot: this.end.y >= target.y + target.height * .75 };
       this.combat.hit(target, hit, game);
-      return !target.active || game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
+      if (CONFIG.weapon.split && !this.splitUsed) {
+        this.splitUsed=true;
+        this.combat.splash(target,hit.damage,game);
+      }
+      const killed = !target.active || game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
+      return (killed ? 3 : 1) + Number(hit.headshot || hit.weak === true);
+    }
+    impact(rank, game) {
+      const kind = ['', 'hit', 'weak', 'kill', 'critical-kill'][rank];
+      game.ui.hit(kind);
+      game.sound.hit(rank, game.performance.combo);
+      const feedback = CONFIG.feedback;
+      if (CONFIG.graphics.particleScale <= .3 && game.time - this.lastImpact < feedback.lowAttackInterval) return;
+      this.lastImpact = game.time;
+      game.attackPauseUntil=Math.max(game.attackPauseUntil,game.time+feedback.attackStop[rank]);
+      if (rank >= 3) game.player.attackKick = Math.max(game.player.attackKick, rank === 4 ? .28 : .15);
     }
     update(dt, input, game) {
+      if (input.fire || input.padFire || input.reload || this.reloadLeft > 0 || game.player.aiming || game.player.sprinting)
+        this.inspectTime = 0;
       this.cooldown = Math.max(-dt, this.cooldown - dt);
       this.heat = Math.max(0, this.heat - dt * CONFIG.weapon.heatRecovery * ((input.fire || input.padFire) && this.ammo > 0 && this.reloadLeft <= 0 ? 0.26 : 1));
       if (input.reload) { input.reload = false; this.reload(game); }
+      const firing=input.fire || input.padFire;
+      if (CONFIG.weapon.pellets && firing && this.ammo>0) this.reloadLeft=0;
       if (this.reloadLeft > 0) {
         this.reloadLeft = Math.max(0, this.reloadLeft - dt);
         if (this.reloadLeft === 0) {
-          const fill = Math.min(CONFIG.weapon.magazine - this.ammo, this.reserve);
+          const fill = Math.min(CONFIG.weapon.magazine - this.ammo, this.reserve, CONFIG.weapon.pellets ? 1 : Infinity);
           this.ammo += fill; this.reserve -= fill; game.sound.reload(true);
           this.combat.reloaded();
           this.cooldown = Math.max(0.08, this.cooldown);
+          if (CONFIG.weapon.pellets && !firing) this.reload(game);
         }
       }
       if (!input.fire && !input.padFire) this.cooldown = Math.max(0, this.cooldown);
@@ -169,10 +240,29 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
       this.rifle.update(game.time, this.signals);
       this.kick *= Math.exp(-dt * 17);
       this.flash = Math.max(0, this.flash - dt);
-      const cycle = this.reloadLeft > 0 ? Math.sin(Math.PI * this.reloadLeft / CONFIG.weapon.reloadTime) : 0;
+      const cycle = this.reloadLeft > 0 ? Math.sin(Math.PI * this.reloadLeft / this.reloadTotal) : 0;
       const sway = player.speedMix * Math.sin(player.bob);
       this.group.position.set(0.315 + sway * 0.028 + cycle * 0.075, -0.315 + sway * 0.023 - cycle * 0.29, -0.67 + this.kick * 0.8 + (player.sprinting ? 0.041 : 0));
       this.group.rotation.set(this.kick * 0.24 - cycle * 0.31, -0.045 + cycle * 0.26, -0.013 + player.sway * 0.026 - cycle * 0.62);
+      const ads = player.ads;
+      this.rifle.setCount((this.savedKills ?? 0) + game.performance.weaponKills);
+      this.inspectTime = Math.max(0,this.inspectTime-dt);
+      if (this.inspectTime > 0) {
+        const mix = Math.min(1, (2 - this.inspectTime) * 5, this.inspectTime * 4);
+        this.group.position.x -= .30 * mix;
+        this.group.position.y += .22 * mix;
+        this.group.rotation.y -= 1.25 * mix;
+        this.group.rotation.z += .18 * mix;
+      }
+      this.group.position.x *= 1-ads;
+      this.group.position.y = lerp(this.group.position.y,-this.sight.position.y,ads);
+      this.group.position.z = lerp(this.group.position.z,-.38,ads);
+      this.group.rotation.set(this.group.rotation.x*(1-ads),this.group.rotation.y*(1-ads),this.group.rotation.z*(1-ads));
+      const playing = game.phase === 'play' && !game.blast;
+      const shoulder = playing && player.thirdPerson && !player.aiming && !this.inspectTime;
+      this.group.visible = playing && !shoulder;
+      this.shoulder.body.visible = false;
+      if (shoulder) this.shoulder.update(camera,player,game);
       this.rifle.magazine.position.y = -Math.sin(cycle * 1.56) * 0.18;
       this.flashGroup.visible = this.flash > 0;
       if (this.flashGroup.visible) {

@@ -14,13 +14,15 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const p = CONFIG.player;
       this.x = this.level.spawn.x; this.z = this.level.spawn.z;
       this.y = this.level.spawn.y;
+      this.fallPeak=this.y;
       this.escaped = false;
       this.crouched = false; this.height = p.height; this.eye = p.eye;
       this.hp = p.health; this.energy = p.stamina;
+      this.ads = 0; this.aiming = this.thirdPerson = false;
       this.vy = 0; this.grounded = true; this.tired = false;
       this.sprinting = false; this.lastHurt = -Infinity; this.hurtDelay = 0;
       this.slowUntil = -Infinity; this.slowScale = 1;
-      this.damageVignette = 0; this.shake = 0; this.bob = 0; this.sway = 0;
+      this.damageVignette = 0; this.shake = this.attackKick = 0; this.bob = 0; this.sway = 0;
       this.hitDirections.fill(-Infinity);
       this.impactLeft = this.impactStrength = this.impactBearing = 0;
       this.recoil = 0; this.recoilRoll = 0; this.speedMix = 0;
@@ -40,6 +42,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
     hurt(amount, game, cooldown = CONFIG.player.hurtCooldown, source, kind = source?.type) {
       if (game.phase !== 'play' || this.hurtDelay > 0 || this.protected(game) || game.kit?.protected(game.time)) return false;
       const feedback = CONFIG.feedback, damage = amount * CONFIG.player.incoming;
+      game.performance.hurt(Math.min(this.hp, damage));
       this.hp = Math.max(0, this.hp - damage); this.hurtDelay = cooldown; this.lastHurt = game.time;
       const severity = clamp(damage / CONFIG.player.health * 3, 0, 1);
       this.damageVignette = Math.min(1, this.damageVignette * .5 + .22 + severity + .18 * (1 - this.hp / CONFIG.player.health));
@@ -90,8 +93,9 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const stride = this.sprinting ? p.sprint : p.walk * (forward < 0 ? p.backward : 1) * (this.crouched ? p.crouch.speed : 1);
       const exposure = game.encounter?.moveScale ?? 1;
       const terrain = game.weapon.combat.terrainScale(this.level.movementScale(this.x, this.z, this.y, game)) * game.weapon.combat.moveSpeed;
-      const scale = dt * stride * exposure * impairment * terrain / Math.max(1, Math.hypot(forward, strafe));
+      const scale = dt * stride * exposure * impairment * terrain * (CONFIG.weapon.mobility ?? 1) / Math.max(1, Math.hypot(forward, strafe));
       const floorBefore = this.level.foot(this.x, this.z, this.y + 0.052, this.radius);
+      this.fallPeak=Math.max(this.fallPeak,this.y);
       this.grounded = this.y <= floorBefore + 0.07 && this.vy <= 0;
       if (input.jump) {
         input.jump = false;
@@ -110,12 +114,17 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       } else {
         this.y = floor; this.vy = 0;
       }
+      if(this.y<=floor+.07 && this.vy===0) {
+        const drop=this.fallPeak-this.y;
+        this.fallPeak=this.y;
+        if(drop>p.safeDrop) this.hurt((drop-p.safeDrop)*p.fallDamagePerMeter,game);
+      }
       if (!this.level.inSafeZone(this.x, this.z)) this.escaped = true;
       const encounter = game.encounter;
       if (encounter?.hearingOnly && this.grounded && moved > 0.003 && !this.crouched) {
         const footstep = game.footstep;
         footstep.x = this.x; footstep.y = this.y; footstep.z = this.z; footstep.at = game.time;
-        footstep.radius = this.sprinting ? encounter.runHearing : encounter.walkHearing;
+        footstep.radius = (this.sprinting ? encounter.runHearing : encounter.walkHearing)*(game.variation?.hearing ?? 1);
       }
       this.speedMix = lerp(this.speedMix, clamp(moved / Math.max(0.001, dt * p.walk), 0, 1.3), 1 - Math.exp(-14 * dt));
       this.bob += dt * (this.sprinting ? 13.0 : 8.3) * (0.25 + this.speedMix * 0.8);
@@ -126,6 +135,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
     positionCamera(dt) {
       this.damageVignette *= Math.exp(-dt * 4.8);
       this.shake *= Math.exp(-dt * 12);
+      this.attackKick *= Math.exp(-dt * 12);
       this.recoil *= Math.exp(-dt * 13.3);
       this.recoilRoll *= Math.exp(-dt * 10);
       const wobble = this.speedMix * Math.sin(this.bob * 2) * 0.028;
@@ -133,15 +143,17 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const feedback = CONFIG.feedback;
       this.impactLeft = Math.max(0, this.impactLeft - dt);
       const impact = p.steady ? 0 : (this.impactLeft / feedback.impactDuration) ** 2 * this.impactStrength * feedback.hitShake;
-      const fov = this.baseFov - feedback.impactFov * impact;
+      this.ads = lerp(this.ads, Number(this.aiming),1-Math.exp(-dt*20));
+      const fov = this.baseFov * (1-.19*this.ads) - feedback.impactFov * impact;
       if (camera.fov !== fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
       const targetEye = this.crouched ? p.crouch.eye : p.eye;
       this.eye = lerp(this.eye, targetEye, 1 - Math.exp(-dt * 17));
       camera.position.set(this.x, this.y + this.eye + wobble, this.z);
       camera.position.x += Math.sin(this.bob * 0.48) * this.speedMix * 0.012;
-      this.visual.set(this.recoil + randomRange(-0.028, 0.028) * this.shake,
-        randomRange(-0.021, 0.021) * this.shake,
-        this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * this.shake, 'YXZ');
+      const cameraShake = Math.max(this.shake, this.attackKick * feedback.attackShake);
+      this.visual.set(this.recoil + randomRange(-0.028, 0.028) * cameraShake,
+        randomRange(-0.021, 0.021) * cameraShake,
+        this.recoilRoll - this.sway * 0.012 + randomRange(-0.031, 0.031) * cameraShake, 'YXZ');
       if (impact && Number.isFinite(this.impactBearing)) {
         const angle = this.impactBearing + this.look.rotation.y;
         this.visual.x -= Math.cos(angle) * feedback.impactAngle * impact;
