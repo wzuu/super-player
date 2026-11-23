@@ -144,7 +144,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
           this.cooldown = Math.max(0.08, this.cooldown);
         }
       }
-      if (!input.fire) this.cooldown = Math.max(0, this.cooldown);
+      if (!input.fire && !input.padFire) this.cooldown = Math.max(0, this.cooldown);
       if ((input.fire || input.padFire) && this.reloadLeft <= 0 && this.cooldown <= 0) {
         if (this.ammo > 0) {
           this.cooldown += 1 / (CONFIG.weapon.fireRate * this.combat.fireRate);

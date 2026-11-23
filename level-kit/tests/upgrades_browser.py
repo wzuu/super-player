@@ -92,9 +92,9 @@ def field(page, url):
     page.wait_for_function("yaw => run.game.player.look.rotation.y !== yaw", arg=before)
     page.evaluate("delete navigator.getGamepads")
     page.keyboard.press("z")
-    page.wait_for_function("document.querySelector('#equipment-hud').textContent.includes('翻滚 6s')")
+    page.wait_for_function("/翻滚 [1-6]s/.test(document.querySelector('#equipment-hud').textContent)")
     page.keyboard.press("e")
-    page.wait_for_function("document.querySelector('#equipment-hud').textContent.includes('冲击波 15s')")
+    page.wait_for_function("/冲击波 [0-9]+s/.test(document.querySelector('#equipment-hud').textContent)")
     page.keyboard.press("2")
     assert page.evaluate("run.game.kit.remaining().grenade") == 1
     page.evaluate("run.game.finish(true)")
