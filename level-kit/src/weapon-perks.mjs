@@ -432,6 +432,11 @@ export class WeaponCombat {
     this.consecutive = 0;
   }
   hit(target, info, game) {
+    // 武器先于敌人更新。按旧层数结清已到时的伤害，再刷新或叠加效果。
+    if (target.statusEffects.size) {
+      this.updateTarget(target, game);
+      if (!target.active) return;
+    }
     const same = this.tracked === target && this.generation === target.spawnGeneration;
     this.consecutive = same ? this.consecutive + 1 : 1;
     this.tracked = target;
@@ -469,7 +474,7 @@ export class WeaponCombat {
             : kind === 'poison'
               ? 0.08 * effect.stacks
               : 0.12 * (steam ? 2 : 1);
-        while (effect.tickAt <= Math.min(effect.until, time)) {
+        while (effect.tickAt <= Math.min(effect.until, time) + 1e-9) {
           effect.tickAt += 0.5;
           game.beasts.damage(b, this.baseDamage * perSecond * 0.5, game, 'weapon');
           if (!b.active) return true;

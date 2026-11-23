@@ -18,23 +18,26 @@ async function sendBattle(battle) {
   return result;
 }
 
-export async function flushPendingBattles() {
+export async function* flushPendingBattles() {
   let keys;
   try {
     keys = Object.keys(localStorage).filter(key => key.startsWith(prefix));
   } catch {
-    return true;
+    return;
   }
-  let complete = true;
   for (const key of keys) {
+    let battle;
     try {
       const entry = localStorage.getItem(key);
-      if (entry) await sendBattle(JSON.parse(entry));
+      if (!entry) continue;
+      battle = JSON.parse(entry);
+      await sendBattle(battle);
     } catch {
-      complete = false;
+      yield null;
+      continue;
     }
+    yield battle;
   }
-  return complete;
 }
 
 export async function connectCampaign(level) {

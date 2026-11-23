@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS battle_loot (
     value INTEGER NOT NULL CHECK(value >= 0),
     PRIMARY KEY (battle_id, name)
 );
+CREATE INDEX IF NOT EXISTS battles_history ON battles(ended_at DESC, sequence DESC);
 CREATE INDEX IF NOT EXISTS battles_progress ON battles(won, level);
 CREATE TABLE IF NOT EXISTS weapon_loadout (
     slot INTEGER PRIMARY KEY CHECK(slot = 1),
@@ -58,15 +59,23 @@ def unlocked_levels(db):
 
 
 def history(db, before):
+    # 游标仍为上一页末行的序号，已存在的客户端可继续翻页。
+    anchor = db.execute("SELECT ended_at FROM battles WHERE sequence = ?", (before,)).fetchone()
+    if anchor:
+        boundary = "WHERE (ended_at, sequence) < (?, ?)"
+        params = (anchor["ended_at"], before)
+    else:
+        boundary = "WHERE sequence < ?"
+        params = (before,)
     rows = db.execute(
-        """
+        f"""
         SELECT b.sequence, b.id, b.level, b.won, b.ended_at AS endedAt,
                b.duration_ms AS durationMs, b.kills,
                COUNT(l.name) AS lootCount, COALESCE(SUM(l.value), 0) AS lootValue
-        FROM (SELECT * FROM battles WHERE sequence < ? ORDER BY sequence DESC LIMIT ?) b
+        FROM (SELECT * FROM battles {boundary} ORDER BY ended_at DESC, sequence DESC LIMIT ?) b
         LEFT JOIN battle_loot l ON l.battle_id = b.id
-        GROUP BY b.sequence ORDER BY b.sequence DESC
-        """, (before, PAGE_SIZE + 1)
+        GROUP BY b.sequence ORDER BY b.ended_at DESC, b.sequence DESC
+        """, (*params, PAGE_SIZE + 1)
     ).fetchall()
     return {
         "battles": [dict(row) for row in rows[:PAGE_SIZE]],

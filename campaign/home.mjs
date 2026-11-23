@@ -248,25 +248,42 @@ async function equipRifle(skin) {
   }
 }
 
+async function refreshProgress() {
+  progress = await read('/api/progress');
+  renderMissions();
+  $('battle-list').replaceChildren();
+  appendBattles(progress);
+  const selection = option.value;
+  option.replaceChildren(...progress.levels.map((level, index) =>
+    new Option(order(index) + ' / ' + level.title, level.id)));
+  option.value = progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
+  option.closest('.collection-toolbar').hidden = false;
+  renderCollection();
+  renderRifles();
+}
+
 async function loadProgress() {
   if (loading) return;
   loading = true;
   try {
-    const saved = await flushPendingBattles();
-    progress = await read('/api/progress');
-    renderMissions();
-    $('battle-list').replaceChildren();
-    appendBattles(progress);
-    const selection = option.value;
-    option.replaceChildren(...progress.levels.map((level, index) =>
-      new Option(order(index) + ' / ' + level.title, level.id)));
-    option.value = progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
-    option.closest('.collection-toolbar').hidden = false;
-    renderCollection();
-    renderRifles();
+    await refreshProgress();
+    let complete = true, refreshHistory = false;
+    for await (const battle of flushPendingBattles()) {
+      if (!battle) {
+        complete = false;
+        continue;
+      }
+      refreshHistory = true;
+      // 首次通关立即开放下一关，其他写入在队列结束时统一刷新。
+      if (battle.won && progress.levels.some(level => level.id === battle.level && !level.cleared)) {
+        await refreshProgress();
+        refreshHistory = false;
+      }
+    }
+    if (refreshHistory) await refreshProgress();
     const locked = new URLSearchParams(location.search).get('locked');
     const denied = progress.levels.find(level => level.id === locked && !level.unlocked);
-    if (!saved) feedback('还有对战记录等待写入，请重新读取。', true);
+    if (!complete) feedback('还有对战记录等待写入，请重新读取。', true);
     else feedback(denied ? denied.title + '尚未解锁，请先通关上一关。' : '');
   } catch {
     feedback('无法读取存档。请确认本机游戏服务已启动，再试一次。', true);
@@ -276,10 +293,13 @@ async function loadProgress() {
 }
 
 more.addEventListener('click', async () => {
-  if (!before || loading) return;
+  if (!before) return;
+  const snapshot = progress;
   more.disabled = true;
   try {
-    appendBattles(await read('/api/battles?before=' + before));
+    const page = await read('/api/battles?before=' + before);
+    if (snapshot !== progress) return;
+    appendBattles(page);
     feedback('');
     if (!before) $('history-region').focus({ preventScroll: true });
   } catch {

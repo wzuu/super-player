@@ -129,7 +129,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, weaponScene,
     hitTarget(target, game) {
       const hit = { damage: CONFIG.weapon.damage, headshot: this.end.y >= target.y + target.height * .75 };
       this.combat.hit(target, hit, game);
-      return game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
+      return !target.active || game.beasts.takeHit(target, hit.damage, this.end, this.dir, game, hit);
     }
     update(dt, input, game) {
       this.cooldown = Math.max(-dt, this.cooldown - dt);
