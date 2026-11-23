@@ -515,10 +515,6 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       b.hp -= applied;
       if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
-      const corpse=this.corpses[this.nextCorpse];
-      this.nextCorpse=(this.nextCorpse+1)%this.corpses.length;
-      Object.assign(corpse,{x:b.x,y:b.y,z:b.z,yaw:b.yaw,roll:b.surfaceRoll,type:b.type,rage:b.rage,
-        farLOD:b.farLOD,until:game.time+CONFIG.beasts.appearance.fallTime});
       this.retire(b, game);
       const dropY = this.dropHeight(b);
       if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
@@ -528,6 +524,13 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         game.ui.notify(TEXT.bossDefeated, 2.6);
       }
       if (!definition.onBeastDefeated?.(b, game, source)) {
+        // 无人机残骸等由关卡接管死亡表现，普通凶兽才进入倒地池。
+        const corpse = this.corpses[this.nextCorpse];
+        this.nextCorpse = (this.nextCorpse + 1) % this.corpses.length;
+        Object.assign(corpse, {
+          x: b.x, y: b.y, z: b.z, yaw: b.yaw, roll: b.surfaceRoll, type, rage: b.rage,
+          farLOD: b.farLOD, until: game.time + CONFIG.beasts.appearance.fallTime,
+        });
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');

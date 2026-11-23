@@ -79,18 +79,26 @@ def check_features(page):
       const aimed=p.add('ammo',0,-3,30,'瞄准补给',7);
       run.camera.position.set(0,31.7,0);run.camera.lookAt(0,30.4,-3);
       g.weapon.reserve=0;expect(p.takeAimed(q,g) && !aimed.active && g.weapon.reserve===7,'瞄准手动拾取');
+      run.camera.position.y=30.4;run.camera.lookAt(0,30.4,-3);
+      const full=p.add('ammo',0,-2,30,'满仓弹药',7);
+      const treasure=p.add('rare',.08,-3,30,'瞄准宝物',100);
+      g.weapon.reserve=run.config.weapon.maxReserve;
+      expect(p.takeAimed(q,g) && full.active && !treasure.active,'满仓弹药旁仍可瞄准拾取宝物');
+      full.active=false;
       expect(p.add('ammo',0,0,30,'弹药',6)===a && a.value===14,'同类数量合并');
       const upper=p.add('ammo',0,0,32,'弹药',4);
       expect(upper!==a,'楼层独立');
       g.weapon.reserve=run.config.weapon.maxReserve-5;
       p.update(0,q,g);expect(a.active && a.value===9,'部分拾取保留余额');
-      const key=p.add('core',0,0,30,'核心',0);
+      const key=p.add('core',.4,0,30,'核心',0);
+      expect(!p.nearKey(q) && !p.takeKey(q,g) && key.active,'墙后显示信标但不能穿墙领取核心');
       const chest=p.add('rare',1,0,37,'珍宝',350,true);
       const grenade=p.add('grenade',0,0,30,'手雷',1);
       const count=g.kit.remaining().grenade;
       p.update(.01,q,g);expect(!grenade.active && g.kit.remaining().grenade===count+1,'手雷入库');
       p.update(cfg.lifetime+1,q,g);
       expect(!a.active && !upper.active && chest.active && key.active && !g.core,'普通过期、核心手动');
+      q.x=.5;
       expect(chest.style==='precious' && p.takeKey(q,g) && g.core,'宝物稀有度与核心交互');
     }""")
     print("PASS 分批/倒地、堆叠/障碍/跨层、部分补给、手雷、核心与过期", flush=True)
@@ -134,6 +142,16 @@ def audit(browser, url):
           ctx.putImageData(img,0,0);return {counts,png:canvas.toDataURL()};
         }""")
         print(level["id"],result["counts"], flush=True)
+        if level["id"] == "neon-undercity" and "--baseline" not in sys.argv:
+            page.click("#start")
+            page.wait_for_function("run.game.phase==='play'")
+            assert page.evaluate("""() => {
+              const g=run.game, manager=g.beasts;
+              const drone=manager.spawn(2,g.player.x+4,g.player.z,g.player.y+2);
+              const kills=g.kills, slot=manager.nextCorpse;
+              return manager.damage(drone,drone.hp+100,g) && g.kills===kills+1 &&
+                manager.nextCorpse===slot && g.encounter.wrecks.some(w=>w.active && w.x===drone.x && w.z===drone.z);
+            }"""), "无人机应只生成关卡坠毁残骸"
         if output:=os.environ.get("BATTLEFIELD_AUDIT"):
             Path(output,f"{index+1:02}-{level['id']}.png").write_bytes(base64.b64decode(result["png"].split(",")[1]))
         response=page.request.post(url+"/api/battles",headers={"Origin":url},data={

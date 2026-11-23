@@ -66,13 +66,15 @@ export function createPickupClass(context) {
       Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent, born: this.age });
       return object;
     }
+    withinReach(item, player) {
+      const dx = item.x - player.x, dy = item.y - player.y, dz = item.z - player.z;
+      if (Math.abs(dy) > 1.25 || dx * dx + dz * dz > cfg.grab * cfg.grab) return false;
+      this.where.set(player.x, player.y + 0.35, player.z);
+      const distance = this.direction.set(dx, dy, dz).length();
+      return !distance || this.level.visible(this.where, this.direction.divideScalar(distance), distance);
+    }
     nearKey(player) {
-      const item = this.keyItem;
-      return (
-        item?.active &&
-        Math.abs(player.y - item.y) <= 1.25 &&
-        Math.hypot(player.x - item.x, player.z - item.z) <= CONFIG.pickups.grab
-      );
+      return this.keyItem?.active && this.withinReach(this.keyItem, player);
     }
     takeKey(player, game) {
       if (!this.nearKey(player)) return false;
@@ -96,18 +98,12 @@ export function createPickupClass(context) {
           item.active = false;
           continue;
         }
-        if (item.kind === 'core' || Math.abs(player.y - item.y) > 1.25) continue;
-        const distance = this.direction.set(item.x - player.x, item.y - player.y, item.z - player.z).length();
-        if (Math.hypot(player.x - item.x, player.z - item.z) > cfg.grab) continue;
-        this.where.set(player.x, player.y + 0.35, player.z);
-        if (distance && !this.level.visible(this.where, this.direction.divideScalar(distance), distance)) continue;
-        this.collect(item, player, game);
+        if (item.kind !== 'core' && this.withinReach(item, player)) this.collect(item, player, game);
       }
     }
     takeAimed(player, game) {
       camera.getWorldDirection(this.aim);
-      let selected = null,
-        best = 0.985;
+      const candidates = [];
       for (const item of this.objects) {
         if (!item.active || item.kind === 'core' || Math.abs(player.y - item.y) > 1.25) continue;
         this.direction.set(item.x, item.y + 0.4, item.z).sub(camera.position);
@@ -115,11 +111,12 @@ export function createPickupClass(context) {
         if (length <= 0 || length > cfg.nameRange) continue;
         this.direction.divideScalar(length);
         const aim = this.direction.dot(this.aim);
-        if (aim <= best || !this.level.visible(camera.position, this.direction, length)) continue;
-        selected = item;
-        best = aim;
+        if (aim > 0.985 && this.level.visible(camera.position, this.direction, length)) {
+          candidates.push({item, aim, length});
+        }
       }
-      return selected && this.collect(selected, player, game);
+      candidates.sort((a, b) => b.aim - a.aim || a.length - b.length);
+      return candidates.some(({item}) => this.collect(item, player, game));
     }
     collect(item, player, game) {
       let amount = 1,
