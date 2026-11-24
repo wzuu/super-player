@@ -106,6 +106,9 @@ const sites = {
     '观景台速写',
     '速写标记着第一架救援机降落的位置。',
   ],
+  'orbital-brood-ring': [
+    [44,28],[-23,-15],'密封货柜','转动泄压阀','休眠值班牌','值班牌的背面刻着返航点的轨道周期。',
+  ],
 };
 export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
@@ -127,6 +130,7 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     ['机油桶', '蒸汽锅炉', '吊装齿轮'],
     ['烟花箱', '舞台冷雾罐', '吊挂道具箱'],
     ['发电机油箱', '高压蒸汽管', '塔架吊篮'],
+    ['航天燃料瓶','失压冷凝管','悬挂电池箱'],
   ];
   const value = 450 + stage * 25;
   const treasure = [{ name: '宝库·' + name, value }];

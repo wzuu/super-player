@@ -173,6 +173,7 @@ function perk(onHit = NONE, onKill = NONE, passive = NONE) {
 }
 
 export const weaponPerks = {
+  'orbital-brood-ring': perk(),
   'paris-tower': perk(),
   'shotgun-pump': perk(),
   'shotgun-forge': perk(NONE,(c,b,h,g)=>{c.fastLoadUntil=g.time+3;}),

@@ -15,6 +15,7 @@ const voices = {
   'brass-factory': ['triangle', 160, 740, 1340, 204, 1.7],
   'haunted-midway': ['sine', 523, 720, 92, 370, 3.2],
   'paris-tower': ['triangle', 88, 510, 180, 790, 2.6],
+  'orbital-brood-ring': ['sine', 118, 660, 235, 930, 2.2],
 };
 export function stageVoice(id) {
   const data = voices[id];

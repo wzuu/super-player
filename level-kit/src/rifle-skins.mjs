@@ -1,5 +1,10 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'orbital-brood-ring': {
+    name:'轨道值勤型',detail:'蓝灰隔热机匣，配有停靠舱的琥珀色防撞饰条与青绿状态灯。',
+    base:'#637986',trim:'#ce965e',dark:'#354453',light:'#82e0d6',
+    backdrop:'#213345',key:'#f2cdac',fill:'#abd8e5',metalness:.61,roughness:.45,
+  },
   'shotgun-pump': {
     name:'雨巷破阵',category:'霰弹枪',unlock:'rain-city',detail:'泵动霰弹枪。宽扇面弹丸适合近距离群敌，远处快速衰减。逐发装填，有弹即可打断装填射击。',
     base:'#5f7279',trim:'#b0c7c6',dark:'#684b38',light:'#82dfcf',
