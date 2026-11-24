@@ -39,14 +39,15 @@ BEFORE = """stage=>{
   const {game:g,nav}=run,s=g.story,m=g.beasts,p=g.player;
   const move=q=>{Object.assign(p,{x:q.x,y:q.y,z:q.z});nav.rebuild(p.x,p.z);};
   const course=window.fixtureCourse,street=stage==='rain-city';
-  const room=stage==='long-door'?course.find(a=>a.kind==='fight'):
+  const room=stage==='transport-door'?course.filter(a=>a.kind==='fight')[1]:
+    stage==='long-door'?course.find(a=>a.kind==='fight'):
     course.find(a=>a.kind==='fight' && (street?a.name==='钟楼南街':(a.passage || a.name.startsWith('服务器'))));
   if(!room)throw Error('场景没有目标战区 '+stage);
   const door=course[course.indexOf(room)-1], [rx,rz]=[room.at[0],room.at.at(-1)];
   const ry=room.at.length===3?room.at[1]:g.level.surface(rx,rz,g.level.base(rx,rz)+.5);
   const isGate=()=>!street && s.stage==='use' && s.target && door?.door &&
     s.target.x===door.at[0] && s.target.z===door.at.at(-1);
-  window.room=room.name;window.roomTarget={x:rx,y:ry,z:rz};
+  window.room=room.name;window.batchSize=room.count??100;window.roomTarget={x:rx,y:ry,z:rz};
   for(let i=0;i<2000;i++){
     if(s.target)move(s.target);
     if(isGate())return;
@@ -138,12 +139,12 @@ RECORD = """async ([sample,residual,profile,warm]) => {
   }
   let batch,instanceMs=0,frameNo=0,trigger=-1,work=0,triggerSim=0;
   m.spawnGroup=(...args)=>{
-    if(args[0].length!==100)return original(...args);
+    if(args[0].length!==window.batchSize)return original(...args);
     window.deploymentProbe=profile;
     const start=performance.now();let actors;
     try {actors=original(...args);}finally{window.deploymentProbe=false;}
     const elapsed=performance.now()-start;
-    if(actors.length===100 && !batch){
+    if(actors.length===window.batchSize && !batch){
       const sites=actors.map(b=>[b.type,b.x,b.y,b.z].map(n=>Math.round(n*100)).join(',')).join(';');
       const hash=Array.from(sites).reduce((v,c)=>Math.imul(v^c.charCodeAt(0),16777619)>>>0,2166136261);
       batch={count:actors.length,ms:elapsed,placements:hash};trigger=frameNo;
@@ -177,21 +178,21 @@ RECORD = """async ([sample,residual,profile,warm]) => {
     if(frameNo-trigger<10)stamps.push(rafInterval);
     if(stable.length===80)break;
   }
-  if(!batch || !s.encounters.some(e=>e.spawned===100 && (door || e.name===window.room)))throw Error('没有整群');
+  if(!batch || !s.encounters.some(e=>e.spawned===window.batchSize && (door || e.name===window.room)))throw Error('没有整群');
   const q=(a,n)=>[...a].sort((a,b)=>a-b)[Math.ceil(n*a.length)-1];
   const round=n=>Math.round(n*10)/10;
   return {sample,residual:aliveBefore,gpu:herdGPU(),count:batch.count,placements:batch.placements,stationed:!!batch.stationed,
     warm:warmMs.length,warmCpuP95:round(q(warmMs,.95)),crossFrames:beforeGap.length,triggerSimMs:round(triggerSim*1000),
     deploy:round(batch.ms),triggerCPU:round(work),triggerFrame:round(early[0]),early:early.map(round),
     rafTimeline:stamps.map(round),warmCpuMax:round(Math.max(...warmMs)),
-    earlyOver25:early.filter(x=>x>25).length,p95:round(q(stable,.95)),
+    earlyOver25:early.filter(x=>x>25).length,p50:round(q(stable,.5)),p95:round(q(stable,.95)),
     profile:profile?{...deployProfile,firstInstanceRender:instanceMs}:undefined,frameProfile:profile?batch.frameProfile:undefined};
 }"""
 
 
 
 def measure(browser, root, stage, residual, profile, warm):
-    entry = root.resolve() / ('underground-lab' if stage=='long-door' else stage) / 'index.html'
+    entry = root.resolve() / ('underground-lab' if stage in ('long-door','transport-door') else stage) / 'index.html'
     html = entry.read_text(encoding='utf-8')
     old_return = 'return { game, scene, camera, renderer, config: CONFIG, grid: GRID, nav };'
     old_entry = '    startLevel(definition, campaign, campaignStage);'
@@ -236,7 +237,7 @@ if __name__=='__main__':
     parser.add_argument('--root',type=Path,default=ROOT)
     parser.add_argument('--gpu',choices=['integrated','discrete'],default='integrated')
     parser.add_argument('--repeat',type=int,default=3)
-    parser.add_argument('--stages',nargs='+',choices=[*ROOMS,'long-door'],default=list(ROOMS))
+    parser.add_argument('--stages',nargs='+',choices=[*ROOMS,'long-door','transport-door'],default=list(ROOMS))
     parser.add_argument('--warm',type=int,default=60)
     parser.add_argument('--residual',nargs='+',type=int,choices=(0,20),default=(0,20))
     args=parser.parse_args()

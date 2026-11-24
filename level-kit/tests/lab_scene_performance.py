@@ -24,7 +24,7 @@ setup = """name => {
   }
   if(name==='overlap'){
     at({x:22.05,y:0,z:-27});g.encounter.interact(g);g.encounter.update(g,1);
-    if(m.live<314)throw Error('三场残敌与可选档案室未全部进场 '+m.live);
+    if(m.live<56)throw Error('三场残敌与可选档案室未全部进场 '+m.live);
   }
   const coords = {overlap:[22,-27,38,-27],hall:[0,51,0,34],room:[-9,32,-20,33],reactor:[1,-57,1.5,-65]}[name];
   at({x:coords[0],y:g.level.base(coords[0],coords[1]),z:coords[1]});

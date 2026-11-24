@@ -58,7 +58,7 @@ CHECK = """([stage,mode])=>{
   const current=m.spawnGroup.bind(m);let births=0,batch=null,near=Infinity,priorView=null,exposedBodies=null;
   m.spawnGroup=(entries,options)=>{
     const team=current(entries,options);
-    if(entries.length===100 && team.length){
+    if(entries.length===window.batchSize && team.length){
       births++;batch=team;
       priorView=team.filter(b=>oldSight(b.x,b.y+b.height*.55,b.z)).length;
       // 检查头部、底部和四面外缘，防止中心点已被挡住但角色仍在门缝处弹出。
@@ -77,7 +77,7 @@ CHECK = """([stage,mode])=>{
     if(door){
       if(mode==='retry'){
         const names=Object.keys(s.doorStates).filter(k=>s.doorStates[k]),journal=s.encounters.length,original=m.spawnGroup;
-        m.spawnGroup=(entries,opts)=>entries.length===100 ? [] : original(entries,opts);
+        m.spawnGroup=(entries,opts)=>entries.length===window.batchSize ? [] : original(entries,opts);
         input.interact=true;g.step(1/60);m.spawnGroup=original;
         if(s.encounters.length!==journal || !names.every(k=>s.doorStates[k]) || s.stage!=='use')
           throw Error('摆不下一队时已开门或推进任务');
@@ -100,7 +100,7 @@ CHECK = """([stage,mode])=>{
       batch=waiting;priorView=waiting.filter(b=>oldSight(b.x,b.y+b.height*.55,b.z)).length;
     }
     const record=s.encounters[old];
-    if(!record || record.spawned!==100)throw Error('战区未登记一百名成员');
+    if(!record || record.spawned!==window.batchSize)throw Error('战区登记人数与配置不符');
     if(mode==='return'){
       const surviving=batch.filter(b=>b.active);
       for(const turn of [yaw+Math.PI,yaw]){

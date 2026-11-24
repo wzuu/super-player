@@ -94,7 +94,11 @@ async function prepareCampaignView([stage, view]) {
           break;
         }
         if (!story.interact(g)) throw Error('旧阶段门无法打开');
-      } else for (const b of m.pool) if (b.active && b.storyWave) m.damage(b, 1e7, g);
+      } else {
+        // 检修段按抵达梯口推进，即使驻军全灭也需走到该目标。
+        if (story.stage==='fight' && t) stand(t.x,t.z,t.y);
+        for (const b of m.pool) if (b.active && b.storyWave) m.damage(b, 1e7, g);
+      }
       g.time += 0.25;
       m.releaseSplits(g);
       story.step(0.25, g);

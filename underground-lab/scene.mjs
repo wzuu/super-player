@@ -25,6 +25,7 @@ const CONFIG = {
 };
 
 const AIRLOCK={x:0,z:60,width:7,depth:.55,height:3.48};
+const ARCHIVE_GUARDS=10;
 const HATCH={x:23,z:-27,width:4.5,depth:.5,height:3.1};
 const DARK=0x192b35,STEEL=0x586f81,JADE=0x65dec6,ICE=0x92e3ff,AMBER=0xf29a54;
 const wallBoxes=[], locks=[], course=[], sections=[], ammo=[],health=[],loot=[],decor=[];
@@ -41,10 +42,10 @@ function sideWall(x,z0,z1,doorZ){
 for (const x of [-23,23]) {vertical(x,-84,-44);vertical(x,52,67);}
 vertical(51,-42,-12);horizontal(23,51,-42);horizontal(23,51,-12);horizontal(-23,23,67);horizontal(-23,23,-84);
 horizontal(-23,-3.5,60);horizontal(3.5,23,60);
-for(const [n,c,title,lname,rname,mix] of [
-  [0,36,'安检折廊','安保室','防疫站',[0,0,0,2]],
-  [1,4,'弯折运输廊','培养室','配电房',[0,2,0,1,0]],
-  [2,-28,'检修运输廊','梯井值班室','机柜室',[0,1,0,2,0,1,2]]]){
+for(const [n,c,title,lname,rname,mix,roster] of [
+  [0,36,'安检折廊','安保室','防疫站',[0,0,2,0],[1,1,1,1]],
+  [1,4,'弯折运输廊','培养室','配电房',[0,2,0,1,0],[9,8,11,2]],
+  [2,-28,'检修运输廊','梯井值班室','机柜室',[0,1,0,2,0,1,2],[7,8,8,1]]]){
   const z0=c-16,z1=c+16;
   const door=mainDoor(['security','samples','power'][n],z1,'开启'+title+'隔离门');
   course.push(door);
@@ -75,17 +76,17 @@ for(const [n,c,title,lname,rname,mix] of [
   const requiredRoom=n===1 ? rname : lname;
   // 门口群驻守在远端，入口巡逻与两翼仍登记在同一场遭遇中。
   const parts=[
-    {name:title+'门卫',count:23,bounds:[-7.15,z0+.8,7.15,c-1.8],anchor:[0,c-9]},
-    {name:lname,count:firstSide<0 ? 43 : 32,bounds:[west+.5,z0+3.7,-13.1,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
-    {name:rname,count:firstSide>0 ? 43 : 32,bounds:[13.1,z0+3.7,east-.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]},
-    {name:title+'巡逻岗',count:2,bounds:[-6.8,c+5.8,6.8,c+9.5],anchor:[2,c+7],types:[0]}
+    {name:title+'门卫',count:roster[0],bounds:[-7.15,z0+.8,7.15,c-1.8],anchor:[0,c-9]},
+    {name:lname,count:roster[1],bounds:[west+.5,z0+3.7,-13.1,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
+    {name:rname,count:roster[2],bounds:[13.1,z0+3.7,east-.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]},
+    {name:title+'巡逻岗',count:roster[3],bounds:[-6.8,c+5.8,6.8,c+9.5],anchor:[2,c+7],types:[0]}
   ];
   for (const part of parts.slice(1,3)) {
     part.reward = {name: part.name + '查获记录', value: 120, at: [Math.sign(part.anchor[0])*15.35,z0+5.7]};
   }
   sections.push({title,parts,z0,z1,west,east,sideDoorZ});
   const passage=n===2;
-  course.push({kind:'fight',name:title,parts,at:[0,passage ? z0+1.25 : z1+1],range:4,
+  course.push({kind:'fight',name:title,parts,count:parts.reduce((sum,part)=>sum+part.count,0),at:[0,passage ? z0+1.25 : z1+1],range:4,
     entries:parts.map(s=>s.anchor),mix,bounds:parts.map(s=>s.bounds),passage,
     requiredRoom:passage ? null : requiredRoom,label:passage ? '穿过检修运输廊，到达折返梯入口' : '清除'+requiredRoom+'守卫'});
   if (!passage) vertical(firstSide*14.8,c+5.8,c+8.2,.42);
@@ -95,7 +96,7 @@ for(const [n,c,title,lname,rname,mix] of [
   health.push([-.8,z1+2,45],[0,c,60]);
   loot.push([0,c-9,title+'记录',90+n*17]);
 }
-course.push(mainDoor('reactor',-44,'打开反应堆主隔离门'),{kind:'boss',label:'歼灭零号实验体',victory:'零号实验体已被歼灭，研究设施行动完成。'});
+course.push(mainDoor('reactor',-44,'打开反应堆主隔离门'),{kind:'boss',summon:[2,2],label:'歼灭零号实验体',victory:'零号实验体已被歼灭，研究设施行动完成。'});
 const bossSupplies=[[.4,-42],[9.5,-58.5],[-10,-63]];
 ammo.push([2.5,62],...bossSupplies);health.push([-9,-63,65],[8,-53,60]);
 for(const [x,z] of [[-7,-59],[7,-68],[-12.5,-67],[13,-60]])decor.push([x,z,2.1,2.8,1.4,3]);
@@ -548,10 +549,10 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
     interact(game) {
       if (!this.interactionHint(game)) return;
       hatch.set(true);
-      const members=game.beasts.spawnGroup(Array.from({length:100},(_,i)=>({type:[0,0,2,0,1][i%5],
+      const members=game.beasts.spawnGroup(Array.from({length:ARCHIVE_GUARDS},(_,i)=>({type:[0,0,2,0,1][i%5],
         anchor:{x:42,z:-27,y:0},angle:Math.PI/2})),{
         accept:site=>site.x>23.8 && site.x<50.2 && site.z> -41 && site.z< -13});
-      if(members.length!==100){hatch.set(false);return false;}
+      if(members.length!==ARCHIVE_GUARDS){hatch.set(false);return false;}
       this.archiveTag={};
       for(const b of members)b.archiveTag=this.archiveTag;
       this.hatchOpen = true;

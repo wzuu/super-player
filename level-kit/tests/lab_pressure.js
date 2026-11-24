@@ -73,7 +73,29 @@ function laboratoryPressure(path='cover') {
   const names=[['安检折廊','安保室','防疫站'],['弯折运输廊','培养室','配电房'],['检修运输廊','梯井值班室','机柜室']];
   const part=['front','left','right'];
   const closeDistances=[2,2,2];
+  const peaks={};
+  function countPressure(){
+    const encounter=g.story.encounters.at(-1);
+    if(!encounter)return;
+    const archive=g.encounter.hatchOpen && !g.encounter.archiveLoot;
+    const name=g.story.stage==='boss'?'反应堆':archive?'冷藏档案室':encounter.name;
+    const peak=peaks[name]??={visible:0,pressing:0,melee:0};
+    let visible=0,pressing=0,melee=0;
+    camera.updateMatrixWorld(true);
+    for(const b of g.beasts.pool){
+      if(!b.active || !line(b))continue;
+      point.project(camera);
+      if(Math.max(Math.abs(point.x),Math.abs(point.y),Math.abs(point.z))<=1)visible++;
+      if(b.type!==2 && b.mode==='windup')melee++;
+      if(b.mode==='windup' || b.mode==='charge' || b.fight?.winding ||
+        (b.alert>0 && gap(b)<(b.type===2?config.beasts.types[2].reach:5)))pressing++;
+    }
+    peak.visible=Math.max(peak.visible,visible);
+    peak.pressing=Math.max(peak.pressing,pressing);
+    peak.melee=Math.max(peak.melee,melee);
+  }
   function observe(){
+    countPressure();
     const record=g.story.encounters.at(-1);
     if(!record)return;
     if(!stages.has(record)){
@@ -142,6 +164,7 @@ function laboratoryPressure(path='cover') {
   }
   // 每段先观察门口、推进，接着打一个短点射，再退到原门框西侧；整局另记录实际侧房接近。
   function probe({group,route,move}) {
+    if(path==='regular' || path==='archive'){mode='fight';return;}
     if(!group || group.clearedAt || !stage || stage!==stages.get(group)){mode='route';return;}
     const n=groups.indexOf(stage), front=52-32*n, t=g.time-stage.open;
     const side=Math.abs(p.x)>8 && p.z>front-31 && p.z<front-1;
@@ -190,7 +213,7 @@ function laboratoryPressure(path='cover') {
       return {...type,contactCount:n,medianSightToContact:n?round((contactTimes[(n-1)>>1]+contactTimes[n>>1])/2):null};
     })}));
   }
-  return {input,observe,probe,report,get yaw(){return yaw;},
+  return {input,observe,probe,report,peaks,path,get yaw(){return yaw;},
     begin(){taps.clear();input.reload=false;input.interact=false;yaw=p.look.rotation.y;pitch=p.look.rotation.x;},
     aim(x,y){pitch=x;yaw=y;},tap(k){taps.add(k);},
     command(){

@@ -95,7 +95,7 @@ def verify(browser, url, static=False, rooms=False):
         print(json.dumps(result, ensure_ascii=False), flush=True)
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result
         assert result["missed"] and result["gunBreaks"] and result["pulseBreaks"], result
-        assert result["spawned"] == [100,100,100] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
+        assert result["spawned"] == [4,30,24] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
         assert not result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
         assert sum(result["startingAmmo"]) + sum(b["taken"] for b in result["boxes"]) == result["shots"] + sum(result["ammo"]), result
         assert page.locator("#menu-title").inner_text() == "歼灭成功"

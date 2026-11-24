@@ -1,4 +1,4 @@
-"""在真实的 100/200 敌群前采样浏览器 RAF、首次接敌和视野，同时保存正常玩家视角。"""
+"""在正式战役敌群前采样浏览器 RAF、首次接敌和视野，同时保存正常玩家视角。"""
 import argparse
 import json
 import os
@@ -29,7 +29,7 @@ def measure(browser, root, name, seed, frames, screenshots):
             screenshots.mkdir(parents=True, exist_ok=True)
             page.screenshot(path=screenshots / f"{name}.png")
         samples = page.evaluate("sampleCampaignView", frames)
-        expected = 1 if view == "reactor" else (100 if stage == "underground-lab" and view != "archive" else 200)
+        expected = {"open":4, "cover":4, "archive":34, "reactor":1}[view] if stage == "underground-lab" else 200
         assert info["missionCount"] == expected, (name, info)
         assert samples["liveMin"] >= expected, (name, samples)
         return {"scene": name, "browser": browser.version, **info, **samples}
