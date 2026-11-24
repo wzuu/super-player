@@ -426,9 +426,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   }
 
   document.addEventListener('pointerlockchange', async (event) => {
+    const locked = document.pointerLockElement === canvas;
+    lookTrace?.lock(locked,'lockchange');
+    // 同一画布再次请求锁定也可能收到通知。只有真正取得或失去锁时才切换游戏状态。
+    if (locked === (lockStartedAt !== Infinity)) return;
     pendingPointer = null;
-    lookTrace?.lock(document.pointerLockElement === canvas,'lockchange');
-    if (document.pointerLockElement !== canvas) {
+    if (!locked) {
       lockStartedAt = Infinity;
       pause();
       return;
@@ -550,14 +553,20 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('mousedown', (event) => {
     if (game.phase !== 'play' || document.pointerLockElement !== canvas || ![0,2].includes(event.button)) return;
     event.preventDefault();
-    if (event.button === 0) input.fire = true;
+    if (event.button === 0) {
+      input.fire = true;
+      lookTrace?.button(event,true);
+    }
     else if (RED_DOT_AIM_ENABLED) {
       if (!input.aimPressed) player.aimRequested = prefs.aimMode === 'hold' || !player.aimRequested;
       input.aimPressed = true;
     }
   });
   document.addEventListener('mouseup', (event) => {
-    if (event.button === 0) input.fire = false;
+    if (event.button === 0) {
+      if (input.fire) lookTrace?.button(event,false);
+      input.fire = false;
+    }
     if (event.button === 2 && RED_DOT_AIM_ENABLED) {
       input.aimPressed = false;
       if (prefs.aimMode === 'hold') player.aimRequested = false;
@@ -711,7 +720,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     weaponPass.enabled = weapon.group.visible;
     const drawn = game.phase!=='play' || game.time>=game.attackPauseUntil;
     if (drawn) composer.render(dt);
-    if (game.phase==='play') lookTrace?.frame(game,camera,drawn);
+    if (game.phase==='play') lookTrace?.frame(game,camera,drawn,input.fire);
     requested = requestAnimationFrame(animate);
   }
 

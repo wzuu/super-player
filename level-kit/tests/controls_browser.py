@@ -194,9 +194,11 @@ def check_sound_storage(page):
 
 
 def check(browser):
+    from held_fire_browser import check_held_fire
     from aiming_browser import check_aiming
     from mouse_motion_browser import check_mouse_motion
     from pointer_samples_browser import verify as check_pointer_samples
+    check_held_fire(browser)
     check_aiming(browser)
     check_mouse_motion(browser)
     check_pointer_samples(browser, ROOT)

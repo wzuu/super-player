@@ -1,7 +1,7 @@
 // 仅由诊断链接启用。按浏览器单调时钟对齐设备事件和实际提交绘制的帧。
 export function createLookTrace(stage, button) {
   if (new URLSearchParams(location.search).get('lookTrace') !== '1') return null;
-  const buffers = {mouse: ring(32768), frames: ring(2400), lock: ring(64)};
+  const buffers = {mouse: ring(32768), frames: ring(2400), lock: ring(64), buttons: ring(256)};
   let last = 0;
   function ring(capacity) {
     return {rows:new Array(capacity), written:0};
@@ -26,8 +26,10 @@ export function createLookTrace(stage, button) {
       columns:{
         mouse:['eventTime','receivedTime','movementX','movementY','yawAfter','pitchAfter'],
         frames:['time','simulationTime','yaw','pitch','cameraQx','cameraQy','cameraQz','cameraQw',
-          'stickX','stickY','shoulder','recoil','impactRemaining','encounterActive','drawn'],
+          'stickX','stickY','shoulder','recoil','impactRemaining','encounterActive','drawn','mouseFire','ammo','reserve',
+          'reloadLeft','shots','muzzleFlash','focused'],
         lock:['time','locked','requestedInput'],
+        buttons:['eventTime','receivedTime','held','buttons'],
       },
       ...Object.fromEntries(Object.entries(buffers).map(([k,v]) => [k,recent(v,k==='lock' ? 0 : last-20000)])),
     };
@@ -41,10 +43,13 @@ export function createLookTrace(stage, button) {
     mouse(dx,dy,time,rotation) { add('mouse',[time,performance.now(),dx,dy,rotation.y,rotation.x]); },
     pad(x,y) { stickX=x; stickY=y; },
     lock(locked,mode) { add('lock',[performance.now(),locked,mode]); },
-    frame(g,camera,drawn) {
+    button(event,held) { add('buttons',[event.timeStamp,performance.now(),held,event.buttons]); },
+    frame(g,camera,drawn,fire) {
       const p=g.player, q=camera.quaternion;
       add('frames',[performance.now(),g.time,p.look.rotation.y,p.look.rotation.x,q.x,q.y,q.z,q.w,
-        stickX,stickY,p.thirdPerson,p.recoil,p.impactLeft,Boolean(g.encounter?.active),drawn]);
+        stickX,stickY,p.thirdPerson,p.recoil,p.impactLeft,Boolean(g.encounter?.active),drawn,fire,g.weapon.ammo,
+        Number.isFinite(g.weapon.reserve) ? g.weapon.reserve : 'unlimited',
+        g.weapon.reloadLeft,g.performance.shots,g.weapon.flash,document.hasFocus()]);
     },
   };
 }
