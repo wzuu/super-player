@@ -5,6 +5,7 @@ async function verifyLabLayout({ offsets, extract }) {
     m = g.beasts;
   const reports = [],
     rooms = [],
+    approaches = [],
     optional = {};
   const routes = new Map();
   function walk(q) {
@@ -102,6 +103,28 @@ async function verifyLabLayout({ offsets, extract }) {
         closedBefore,
       });
       if (team.length !== 100) return { error: s.guide(g, { keyItem: '核心' }), reports };
+      if (offsets.length > 1) {
+        // 从门口的左、中、右三个站位出发，分别实际走到左右侧房，开门时只能直接迎击走廊驻敌。
+        const start = {x:p.x, y:p.y, z:p.z};
+        const visible = team.filter(b => {
+          const eye=m.air.set(p.x,p.y+p.eye,p.z);
+          const ray=m.line.set(b.x-eye.x,b.y+b.height*.65-eye.y,b.z-eye.z), range=ray.length();
+          return g.level.visible(eye,ray.divideScalar(range),range);
+        });
+        if (!visible.length || visible.some(b => b.roomBounds[0]>0 || b.roomBounds[2]<0))
+          throw Error('开门时的射界未与侧房错开 '+JSON.stringify({j,offset,names:visible.map(b=>b.sectionRoom)}));
+        const metres=[];
+        for (const side of [-1,1]) {
+          Object.assign(p,start);
+          nav.rebuild(p.x,p.z);
+          metres.push(walk({x:side*15.35,y:0,z:z-26.3}));
+        }
+        const [near,far]=j===1 ? [metres[1],metres[0]] : metres;
+        if (far<=near) throw Error('后侧房间没有错开推进距离 '+JSON.stringify({j,offset,metres}));
+        approaches.push({j,offset,visible:visible.length,near,far});
+        Object.assign(p,start);
+        nav.rebuild(p.x,p.z);
+      }
       if (offset === 0) {
         const left = team[48].sectionRoom;
         clearGroup((b) => b.sectionRoom === left && b.storyWave === team[0].storyWave);
@@ -205,5 +228,72 @@ async function verifyLabLayout({ offsets, extract }) {
     s.step(0.04, g);
     if (g.phase !== 'win') throw Error('mission exit blocked ' + g.phase);
   }
-  return { reports, rooms, optional, device: g.field.device, vault: g.field.vault?.front };
+  return { reports, rooms, approaches, optional, device: g.field.device, vault: g.field.vault?.front };
+}
+
+function verifyLabWatch() {
+  const {game:g, nav, config} = run, p=g.player, m=g.beasts, l=g.level;
+  const dt=.04;
+  const check=(ok,why) => { if (!ok) throw Error(why); };
+  const at=(x,z) => { Object.assign(p,{x,y:0,z}); nav.rebuild(x,z); };
+  function tick(n) {
+    for(let i=0;i<n;i++){g.time+=dt; m.update(dt,p,g);}
+  }
+  function sees(b,x,z) {
+    const eye=m.air.set(b.x,b.y+.8,b.z);
+    const ray=m.line.set(x-eye.x,.5-eye.y,z-eye.z), range=ray.length();
+    return l.visible(eye,ray.divideScalar(range),range);
+  }
+  document.querySelector('#mission-mode').value='classic';
+  g.reset(); g.phase='play'; p.hurtDelay=Infinity; g.encounter.update(g,.1);
+  at(0,53.1); g.story.interact(g);
+  const guards=m.pool.filter(b=>b.active && b.guardPost);
+  check(guards.length===100,'首次开门未部署100个带驻点的守卫');
+  const identity=guards.map(b=>[b.spawnGeneration,b.storyWave,b.sectionRoom]);
+  at(0,-70);
+  const before=guards.map(b=>[b.x,b.z,b.yaw]);
+  tick(110);
+  const patrolling=guards.filter((b,i)=>Math.hypot(b.x-before[i][0],b.z-before[i][1])>.15).length;
+  const watching=guards.filter((b,i)=>Math.abs(Math.sin(b.yaw-before[i][2]))>.12).length;
+  check(patrolling>0 && watching>0 && guards.every(b=>!b.roomAlert),'隔门守卫没有巡逻/警戒，或隔墙追击');
+  check(!guards.some((b,i)=>guards.slice(i+1).some(a=>Math.hypot(a.x-b.x,a.z-b.z)+.02<a.radius+b.radius)),'警戒巡视中守卫互相挤入');
+  check(guards.every(b=>!l.blocked(b.x,b.z,b.y,b.radius,b.height) && Math.abs(b.y-l.foot(b.x,b.z,b.y+.05,b.radius))<.08),'巡逻撞墙或离地');
+  const source={x:0,z:39};
+  at(source.x,source.z);
+  const hidden=guards.filter(b=>!b.roomAlert && b.sectionRoom!=='安检走廊' && !sees(b,p.x,p.z) &&
+    Math.hypot(b.x-p.x,b.z-p.z)<config.weapon.hearingRadius-1);
+  check(hidden.length>=2,'射程内没有隔墙驻守者');
+  Object.assign(g,{shotAt:g.time,shotX:p.x,shotY:p.y,shotZ:p.z,shotHearingScale:1});
+  tick(1);
+  const heard=hidden.filter(b=>!b.roomAlert && b.heardAt===g.shotAt);
+  check(heard.length>=2,'墙后守卫未听到枪声，或直接锁定了玩家');
+  at(0,-70);
+  const gaps=heard.map(b=>Math.hypot(b.x-source.x,b.z-source.z));
+  tick(45);
+  const pursuer=heard.find((b,i)=>!b.roomAlert && gaps[i]-Math.hypot(b.x-source.x,b.z-source.z)>.16);
+  check(pursuer && heard.every(b=>!b.roomAlert && b.heardX===source.x && b.heardZ===source.z),
+    '守卫未调查最后一次开火的位置或隔墙改跟了玩家');
+  const investigated=gaps[heard.indexOf(pursuer)]-Math.hypot(pursuer.x-source.x,pursuer.z-source.z);
+  const target=heard.find(b=>b!==pursuer);
+  m.damage(target,4,g,'weapon'); tick(1);
+  check(target.roomAlert,'守卫被命中后未立即接战');
+  let exposed=null;
+  for(let radius=5; radius<=12 && !exposed; radius++)
+    for(let i=0;i<16 && !exposed;i++){
+      const angle=i*Math.PI/8, x=pursuer.x+Math.cos(angle)*radius, z=pursuer.z+Math.sin(angle)*radius;
+      if (!l.blocked(x,z,0,p.radius,p.height) && sees(pursuer,x,z)) exposed={x,z};
+    }
+  check(exposed,'没有可站立的守卫正面视点');
+  at(exposed.x,exposed.z); tick(6);
+  check(pursuer.roomAlert,'六帧观察内可见玩家未触发追击');
+  at(0,22.3); tick(120);
+  check(g.story.doorStates.samples && guards.some(b=>b.roomAlert && Math.hypot(b.x,b.z-20)<6),'已接战守卫没有抵达关闭的下一段门前');
+  // 把玩家定位到下一扇实门后面。当前段已追到门前的守卫仍受实体碰撞，未激活者没有隔门视野。
+  at(0,18.1);
+  const unalerted=guards.filter(b=>!b.roomAlert);
+  tick(140);
+  check(unalerted.length>0 && guards.every(b=>b.z>20) && unalerted.every(b=>!b.roomAlert),'追击穿过了关门，或在关门后看到了玩家');
+  check(guards.every((b,i)=>b.active && b.spawnGeneration===identity[i][0] && b.storyWave===identity[i][1] && b.sectionRoom===identity[i][2]),
+    '巡逻、调查或追击改变了整批驻敌的房间归属');
+  return {patrolling,watching,heard:heard.length,investigated:+investigated.toFixed(2),behindDoor:unalerted.length};
 }

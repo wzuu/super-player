@@ -375,11 +375,13 @@ def verify(browser,ids):
         if stage == 'underground-lab':
             page.add_script_tag(content=(ROOT/'level-kit/tests/lab_layout.js').read_text(encoding='utf8'))
             layout = page.evaluate('() => verifyLabLayout({offsets:[-1.9,0,1.9],extract:false})')
+            assert len(layout['approaches']) == 9, layout
             assert len(layout['reports']) == 9 and len(layout['rooms']) == 6, layout
             for sample in layout['reports']:
                 assert sorted(sample['homes'].values()) == [26,26,48] and sample['gap'] >= 6, sample
                 assert sample['closedBefore'] and not sample['blocked'] and not sample['overlap'], sample
             print('PASS laboratory formation, approach and room rewards',layout,flush=True)
+            print('PASS laboratory watch, hearing, pursuit and closed gate', page.evaluate('() => verifyLabWatch()'), flush=True)
             route_guard = page.evaluate("""()=>{
               const g=run.game,s=g.story,p=g.player,l=g.level;
               const pos=(x,z)=>({x,y:0,z}), go=target=>{

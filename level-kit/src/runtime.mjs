@@ -24,7 +24,8 @@ import { createLifts } from '@level-kit/lifts.mjs';
 import { createRecovery } from '@level-kit/recovery.mjs';
 import { BattleJournal } from '@level-kit/battle-journal.mjs';
 import { createTraining } from '@level-kit/training.mjs';
-import { rotateLook, StickLook } from '@level-kit/look.mjs';
+import { applyMouseLook, requestMouseLock, StickLook } from '@level-kit/look.mjs';
+import { createLookTrace } from '@level-kit/look-trace.mjs';
 
 export function startLevel(definition, campaign = null, campaignStage = 0) {
   if (typeof definition?.buildMap !== 'function') throw new TypeError('关卡需要实现 buildMap()');
@@ -117,14 +118,27 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const story = createStory({...context,level,nav}, missionRules);
   const field=training?null:createFieldOperations({...context,level,nav},campaign);
   const look = new THREE.PerspectiveCamera();
+  const lookTrace = createLookTrace(training?.kind ?? definition.weaponSkin, $('look-trace-download'));
   const stickLook = new StickLook();
   const padDown = new Set(), previousButtons = new Set();
-  let padIndex = null, lockStartedAt = Infinity;
-  document.addEventListener('mousemove', (event) => {
-    if (document.pointerLockElement === canvas && game.phase === 'play' && event.timeStamp >= lockStartedAt) {
-      rotateLook(look.rotation, event.movementX, event.movementY, CONFIG.player.mouseSpeed);
+  let padIndex = null, lockStartedAt = Infinity, pendingPointer = null;
+  const recordMotion = lookTrace && ((dx,dy,time) => lookTrace.mouse(dx,dy,time,look.rotation));
+  function moveLook(event) {
+    if (document.pointerLockElement !== canvas || game.phase !== 'play') return;
+    const pointer = event.type === 'pointermove';
+    if (pointer && event.pointerType !== 'mouse') return;
+    if (!pointer && pendingPointer) {
+      // 同一次派发的兼容 MouseEvent 继承设备时间和外层位移；单独到来的后续移动仍须处理。
+      const paired = event.timeStamp === pendingPointer.timeStamp &&
+        event.movementX === pendingPointer.movementX && event.movementY === pendingPointer.movementY;
+      pendingPointer = null;
+      if (paired) return;
     }
-  });
+    const used = applyMouseLook(look.rotation,event,CONFIG.player.mouseSpeed,lockStartedAt,recordMotion);
+    if (pointer) pendingPointer = used ? event : null;
+  }
+  document.addEventListener('pointermove',moveLook);
+  document.addEventListener('mousemove',moveLook);
 
   const input = {
     down: new Set(),
@@ -399,8 +413,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     ui.text('menu-status', '');
     try {
       // 在点击事件中请求锁定，保留浏览器所需的用户激活状态。
-      const result = canvas.requestPointerLock();
-      result?.catch(lockError);
+      requestMouseLock(canvas,mode => lookTrace?.lock(document.pointerLockElement === canvas,mode)).catch(lockError);
       sound.open();
     } catch {
       lockError();
@@ -408,16 +421,20 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   }
 
   function lockError() {
+    if (document.pointerLockElement === canvas) return;
     ui.text('menu-status', '鼠标锁定未成功。请聚焦此窗口，再点击进入游戏。');
   }
 
   document.addEventListener('pointerlockchange', async (event) => {
+    pendingPointer = null;
+    lookTrace?.lock(document.pointerLockElement === canvas,'lockchange');
     if (document.pointerLockElement !== canvas) {
       lockStartedAt = Infinity;
       pause();
       return;
     }
     lockStartedAt = event.timeStamp;
+    ui.text('menu-status', '');
     if (preparing) return;
     if (game.phase !== 'pause') {
       if (campaign && !packed) {
@@ -575,8 +592,9 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       input.clearPad();
       padIndex = index;
     }
-    if (!pad) return;
+    if (!pad) { lookTrace?.pad(0,0); return; }
     const [x, y, rx, ry] = pad.axes;
+    lookTrace?.pad(rx,ry);
     if (Math.abs(x) > 0.22) padDown.add(x > 0 ? 'KeyD' : 'KeyA');
     if (Math.abs(y) > 0.22) padDown.add(y > 0 ? 'KeyS' : 'KeyW');
     if (pad.buttons[10]?.pressed) padDown.add('ShiftLeft');
@@ -691,7 +709,9 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     rift.update(worldTime, game.ready(), game.blast);
     renderer.info.reset();
     weaponPass.enabled = weapon.group.visible;
-    if (game.phase!=='play' || game.time>=game.attackPauseUntil) composer.render(dt);
+    const drawn = game.phase!=='play' || game.time>=game.attackPauseUntil;
+    if (drawn) composer.render(dt);
+    if (game.phase==='play') lookTrace?.frame(game,camera,drawn);
     requested = requestAnimationFrame(animate);
   }
 
