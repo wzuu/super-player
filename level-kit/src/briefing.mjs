@@ -3,9 +3,10 @@ import { campaignMission, missionNames, missionRules } from '@level-kit/objectiv
 
 export function initBriefing(stage, config, text, keys, campaign, story) {
   const mode = document.getElementById('mission-mode');
-  const defaultMode = campaignMission(stage);
-  for (const id of new Set([defaultMode, 'classic', 'endless'])) {
-    const label = id==='classic' && story?.classicAction ? story.classicAction : missionNames[id];
+  const defaultMode = story?.defaultMode??campaignMission(stage);
+  for (const id of new Set(story?.modes??[defaultMode, 'classic', 'endless'])) {
+    const label = id==='escort' && story?.convoy ? '护送'+story.convoy.name :
+      id==='classic' && story?.classicAction ? story.classicAction : missionNames[id];
     mode.add(new Option(label + (id === defaultMode ? ' · 本关默认' : ''), id));
   }
   if (config.supportsHunt) mode.add(new Option('追踪猎杀', 'hunt'));
@@ -33,6 +34,7 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
       endless: '清空本波普通凶兽后，下一波敌群一起入场。此模式没有撤离结算。',
     };
     if (story?.classicRule) rules.classic = story.classicRule;
+    if (story?.convoy) rules.escort = story.convoy.rule;
     if (stage === 3)
       rules.hold =
         '在钟楼坚守 ' +

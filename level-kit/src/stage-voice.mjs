@@ -20,6 +20,9 @@ const voices = {
   'storm-city-overpass': ['sawtooth', 105, 390, 142, 620, 2.8],
   'lantern-shrine-escape': ['triangle', 196, 294, 147, 588, 3.3],
   'neon-northline-escape': ['sine', 123, 554, 185, 830, 2.4],
+  'sunken-rooftop-recovery': ['sine',132,462,158,693,3.6],
+  'frost-sample-escort': ['triangle',98,392,147,684,3.1],
+  'steam-service-rail': ['sawtooth',110,415,185,660,2.8],
 };
 export function stageVoice(id) {
   const data = voices[id];

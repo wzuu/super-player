@@ -18,5 +18,8 @@
   {"id":"moonlit-stained-glass-keep","title":"月下彩窗堡","brief":"从吊桥下到墓穴寻找钥匙，在钟楼转动绞盘，进入彩窗下的大厅歼灭伯爵。"},
   {"id":"storm-city-overpass","title":"雨城高架接应","brief":"从封锁地铁口穿过积水街或连排商铺，沿钟楼匝道抵达桥下救援车。"},
   {"id":"lantern-shrine-escape","title":"灯巷神社撤离","brief":"绕过低街巡游队，穿过织坊或药铺，沿石阶登上山腰神社。"},
-  {"id":"neon-northline-escape","title":"霓城北线撤离","brief":"穿过地下诊所或夜市后街，循应急地灯上检修梯，到高架接应车撤离。"}
+  {"id":"neon-northline-escape","title":"霓城北线撤离","brief":"穿过地下诊所或夜市后街，循应急地灯上检修梯，到高架接应车撤离。"},
+  {"id":"sunken-rooftop-recovery","title":"沉城屋顶回收","brief":"伴随勘探无人机穿过珊瑚拱廊，沿干燥的外盘坡抵达屋顶回收吊架。"},
+  {"id":"frost-sample-escort","title":"冰原样本撤运","brief":"保护携带冰原样本的技术员，穿过回温前厅和观测栈道，赶到跑道救援舱。"},
+  {"id":"steam-service-rail","title":"蒸汽检修线","brief":"伴随载有校准设备的检修车通过机器棚，沿两段折返坡道上到出厂升降机。"}
 ]

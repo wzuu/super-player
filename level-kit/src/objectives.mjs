@@ -11,19 +11,22 @@ export const missionNames = {
 export function campaignMission(stage) {
   return variants[stage] ?? 'classic';
 }
-export function createObjective(stage, { THREE, scene }) {
+export function createObjective(stage, { THREE, scene }, config, plan) {
   const drone = new THREE.Mesh(
-    new THREE.OctahedronGeometry(0.42),
+    new THREE.OctahedronGeometry(plan?.model ? .10 : .42),
     new THREE.MeshBasicMaterial({ color: 0x8effdb }),
   );
   scene.add(drone);
   drone.visible = false;
+  const convoy=plan?.createMotion(THREE,drone,plan);
+  if(plan?.model)drone.add(plan.model(THREE));
+  const escortName=plan?.name??'无人机';
 
   const trail = [];
   const reunionRay={x:0,y:0,z:0};
   let hold, deadline, wave, escorted, waiting, mode, underAttackUntil;
   const goal = {
-    drone,
+    drone,convoy,escortName,
     reset(selected, game) {
       mode = selected || campaignMission(stage);
       goal.mode = mode;
@@ -38,6 +41,7 @@ export function createObjective(stage, { THREE, scene }) {
       goal.reinforcements = 0;
       drone.visible = mode === 'escort';
       drone.position.set(game.level.spawn.x, game.level.spawn.y + 1, game.level.spawn.z);
+      if(mode==='escort')convoy?.reset(game);
     },
     step(dt, g) {
       if (g.field?.deep) return;
@@ -50,6 +54,11 @@ export function createObjective(stage, { THREE, scene }) {
       }
       if (mode === 'escort' && !escorted) {
         if (g.time >= underAttackUntil && drone.material) drone.material.color.setHex(goal.escortHealth <= 40 ? 0xff8957 : 0x8effdb);
+        if(convoy){
+          convoy.step(dt,g);
+          escorted=convoy.finished && goal.escortHealth>0;
+          return;
+        }
         const pos = drone.position;
         const gap = Math.hypot(pos.x - p.x, pos.y - p.y - 1, pos.z - p.z);
         if (gap > 10) {
@@ -104,8 +113,8 @@ export function createObjective(stage, { THREE, scene }) {
       drone.material.color.setHex(goal.escortHealth <= 40 ? 0xff8957 : 0xffcf67);
       g.sound.tone(510, 250, .16, .13, 'triangle');
       g.sound.stageEvent?.('impact',g,drone.position);
-      g.ui.notify('无人机受袭 · 剩余耐久 ' + goal.escortHealth + '%', 1.6);
-      if (!goal.escortHealth) g.finish(false, '勘探无人机已损毁');
+      g.ui.notify(escortName+'受袭 · 剩余耐久 ' + goal.escortHealth + '%', 1.6);
+      if (!goal.escortHealth) g.finish(false, plan?.loss??'勘探无人机已损毁');
     },
     result(g) {
       const deep = g.field?.deep ? {deepCompleted:Boolean(g.field.deepFinished),deepSeconds:Math.floor(g.time-g.field.deepAt)} : {};
@@ -126,6 +135,7 @@ export function createObjective(stage, { THREE, scene }) {
         return deadline === null
           ? '取得道具后 ' + missionRules.escapeSeconds + ' 秒内撤离'
           : '撤离倒计时 ' + Math.max(0, Math.ceil(deadline - g.time)) + ' 秒';
+      if(mode==='escort' && convoy)return convoy.guide(g,config.interactLabel).title;
       if (mode === 'escort')
         return (
           (waiting ? '返回无人机旁重新会合 · 距离 ' : '护送绿色无人机到撤离区 · 距离 ') +
@@ -141,6 +151,10 @@ export function createObjective(stage, { THREE, scene }) {
       const gate = g.level.gate;
       const step = (stage, title, target = null, detail = '') => ({ stage, title, target, detail });
       if (g.blast) return step('blast', text.detonating);
+      if(mode==='escort' && convoy){
+        const route=convoy.guide(g,config.interactLabel);
+        return {...route,detail:(underAttackUntil>g.time?'受袭 · ':'')+escortName+'耐久 '+goal.escortHealth+'%'};
+      }
       const route = g.story?.guide?.(g,text);
       if (route && !(mode === 'escort' && waiting && !g.story.droneDocked))
         return mode === 'escort' ? { ...route, detail: [route.detail, underAttackUntil>g.time?'无人机受袭':'', '无人机耐久 ' + goal.escortHealth + '%'].filter(Boolean).join(' · ') } : route;

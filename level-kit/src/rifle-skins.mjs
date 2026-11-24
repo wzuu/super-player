@@ -1,5 +1,20 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'steam-service-rail': {
+    name:'车间监修型',detail:'青灰烤漆机匣，护木两侧装有黄铜检修刻度。',
+    base:'#63777c',trim:'#b99756',dark:'#374951',light:'#dfc292',
+    backdrop:'#304347',key:'#efddbc',fill:'#9bb6b9',metalness:.56,roughness:.45,
+  },
+  'frost-sample-escort': {
+    name:'极圈押运型',detail:'雪灰枪身配有加厚护木，橙色识别条便于在雪地取用。',
+    base:'#8397a1',trim:'#c28753',dark:'#425362',light:'#dee2d7',
+    backdrop:'#374552',key:'#e2eeef',fill:'#afc4d3',metalness:.47,roughness:.53,
+  },
+  'sunken-rooftop-recovery': {
+    name:'海测打捞型',detail:'罩壳覆铜绿防蚀漆，握把和准星护圈采用吊装设备的琥珀橙。',
+    base:'#54847e',trim:'#c79558',dark:'#344c53',light:'#e5c998',
+    backdrop:'#30494b',key:'#d1efdf',fill:'#90bac4',metalness:.49,roughness:.54,
+  },
   'lantern-shrine-escape': {
     name:'染织町巡夜型',detail:'靛色机匣与朱漆护木，浅金刻纹沿木托收边。',
     base:'#595778',trim:'#ae6250',dark:'#413746',light:'#d5b38b',

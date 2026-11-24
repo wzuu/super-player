@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="760" viewBox="0 0 900 760" role="img" aria-labelledby="title">
+<title id="title">蒸汽检修线平面与主路高程</title>
+<rect width="900" height="760" fill="#192d34"/>
+<g fill="#eef5ed" font-family="system-ui,sans-serif">
+<text x="28.0" y="40.0" font-size="25" fill="#eef5ed">蒸汽检修线　护送路线</text>
+<text x="415.0" y="65.0" font-size="15" fill="#eef5ed">北 ↑</text>
+<rect x="160" y="420.0" width="92" height="97.2" fill="#475d63"/>
+<rect x="172" y="384.0" width="188" height="64.8" fill="#475d63"/>
+<rect x="280" y="283.2" width="76" height="133.20000000000002" fill="#475d63"/>
+<rect x="216" y="322.8" width="76" height="82.8" fill="#475d63"/>
+<rect x="176" y="322.8" width="64" height="64.8" fill="#475d63"/>
+<rect x="120" y="272.4" width="236" height="54.0" fill="#475d63"/>
+<rect x="120" y="211.2" width="72" height="93.60000000000001" fill="#475d63"/>
+<rect x="140" y="200.39999999999998" width="220" height="54.0" fill="#475d63"/>
+<rect x="288" y="146.4" width="80" height="90.0" fill="#475d63"/>
+<rect x="164" y="121.19999999999999" width="188" height="61.2" fill="#475d63"/>
+<polyline points="208.0,477.6 208.0,416.4 312.0,416.4 312.0,362.4 312.0,301.2 156.0,301.2 156.0,229.2 324.0,229.2 324.0,157.2 192.0,157.2" stroke="#a9e6cd" stroke-width="4" stroke-dasharray="" fill="none"/>
+<polyline points="312.0,362.4 256.0,362.4 204.0,348.0 256.0,362.4 312.0,362.4" stroke="#e8be78" stroke-width="2" stroke-dasharray="5 3" fill="none"/>
+<circle cx="188.0" cy="470.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="232.0" cy="416.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="324.0" cy="358.8" r="2.7" fill="#b3d8ff"/>
+<circle cx="184.0" cy="297.6" r="2.7" fill="#b3d8ff"/>
+<circle cx="168.0" cy="214.8" r="2.7" fill="#b3d8ff"/>
+<circle cx="332.0" cy="182.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="256.0" cy="160.8" r="2.7" fill="#b3d8ff"/>
+<circle cx="224.0" cy="463.2" r="3.4" fill="#90df8f"/>
+<circle cx="304.0" cy="218.4" r="3.4" fill="#90df8f"/>
+<circle cx="208.0" cy="477.6" r="4" fill="#f5ffeb"/>
+<text x="215.0" y="471.6" font-size="13" fill="#eef5ed">卸货湾</text>
+<circle cx="312.0" cy="362.4" r="4" fill="#f5ffeb"/>
+<text x="319.0" y="356.4" font-size="13" fill="#eef5ed">机器棚</text>
+<circle cx="324.0" cy="229.2" r="4" fill="#f5ffeb"/>
+<text x="331.0" y="223.2" font-size="13" fill="#eef5ed">压力阀房</text>
+<circle cx="192.0" cy="157.2" r="4" fill="#f5ffeb"/>
+<text x="199.0" y="151.2" font-size="13" fill="#eef5ed">出厂升降机</text>
+<text x="485.0" y="90.0" font-size="20" fill="#eef5ed">驻防与接敌方向</text>
+<circle cx="204.0" cy="416.4" r="8" fill="#843f39"/>
+<text x="200.0" y="420.4" font-size="12" fill="#eef5ed">1</text>
+<text x="485.0" y="122.0" font-size="15" fill="#eef5ed">1　卸货机群　4 只</text>
+<circle cx="324.0" cy="387.6" r="8" fill="#843f39"/>
+<text x="320.0" y="391.6" font-size="12" fill="#eef5ed">2</text>
+<text x="485.0" y="151.0" font-size="15" fill="#eef5ed">2　机器棚来敌　6 只</text>
+<polyline points="321.0,381.3 317.6,374.1 316.6,379.0" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="220.0" cy="351.6" r="8" fill="#843f39"/>
+<text x="216.0" y="355.6" font-size="12" fill="#eef5ed">3</text>
+<text x="485.0" y="180.0" font-size="15" fill="#eef5ed">3　皮带侧翼　4 只</text>
+<polyline points="218.7,358.5 217.3,366.3 220.9,363.0" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="240.0" cy="304.8" r="8" fill="#843f39"/>
+<text x="236.0" y="308.8" font-size="12" fill="#eef5ed">4</text>
+<text x="485.0" y="209.0" font-size="15" fill="#eef5ed">4　下层轨道　7 只</text>
+<polyline points="247.0,304.5 255.0,304.1 250.8,301.3" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="228.0" cy="229.2" r="8" fill="#843f39"/>
+<text x="224.0" y="233.2" font-size="12" fill="#eef5ed">5</text>
+<text x="485.0" y="238.0" font-size="15" fill="#eef5ed">5　压力阀前哨　7 只</text>
+<polyline points="221.0,229.2 213.0,229.2 217.0,232.2" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="248.0" cy="153.6" r="8" fill="#843f39"/>
+<text x="244.0" y="157.6" font-size="12" fill="#eef5ed">6</text>
+<text x="485.0" y="267.0" font-size="15" fill="#eef5ed">6　装车拦截组　5 只</text>
+<polyline points="241.0,154.0 233.0,154.6 237.2,157.3" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<text x="485.0" y="320.0" font-size="15" fill="#eef5ed">绿色实线 · 护送与返回路线</text>
+<text x="485.0" y="352.0" font-size="15" fill="#eef5ed">金色虚线 · 可选 黄铜校准规</text>
+<text x="485.0" y="384.0" font-size="15" fill="#eef5ed">浅蓝点 · 弹箱　绿点 · 医疗</text>
+<text x="485.0" y="422.0" font-size="18" fill="#eef5ed">停靠交接</text>
+<text x="485.0" y="455.0" font-size="15" fill="#eef5ed">放行满载检修车</text>
+<text x="485.0" y="482.0" font-size="15" fill="#eef5ed">确认压力表，开启装车闸</text>
+<text x="28.0" y="580.0" font-size="18" fill="#eef5ed">沿主线的地面高程（米）</text>
+<polyline points="40.0,692.0 840.0,692.0" stroke="#637c81" stroke-width="1" stroke-dasharray="" fill="none"/>
+<polyline points="42.0,691.0 100.6,691.0 190.3,691.0 242.1,691.0 300.7,691.0 435.3,661.0 504.3,661.0 649.2,629.0 718.2,629.0 832.0,629.0" stroke="#a9e6cd" stroke-width="3" stroke-dasharray="" fill="none"/>
+<circle cx="42.0" cy="691.0" r="3.5" fill="#f5ffeb"/>
+<text x="42.0" y="681.0" font-size="14" fill="#eef5ed">0.00 m</text>
+<text x="42.0" y="728.0" font-size="14" fill="#eef5ed">卸货湾</text>
+<circle cx="242.1" cy="691.0" r="3.5" fill="#f5ffeb"/>
+<text x="242.1" y="681.0" font-size="14" fill="#eef5ed">0.00 m</text>
+<text x="242.1" y="728.0" font-size="14" fill="#eef5ed">机器棚</text>
+<circle cx="649.2" cy="629.0" r="3.5" fill="#f5ffeb"/>
+<text x="649.2" y="619.0" font-size="14" fill="#eef5ed">6.20 m</text>
+<text x="649.2" y="728.0" font-size="14" fill="#eef5ed">压力阀房</text>
+<circle cx="832.0" cy="629.0" r="3.5" fill="#f5ffeb"/>
+<text x="765.0" y="619.0" font-size="14" fill="#eef5ed">6.20 m</text>
+<text x="765.0" y="728.0" font-size="14" fill="#eef5ed">出厂升降机</text>
+</g></svg>

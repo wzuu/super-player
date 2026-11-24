@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="760" viewBox="0 0 900 760" role="img" aria-labelledby="title">
+<title id="title">沉城屋顶回收平面与主路高程</title>
+<rect width="900" height="760" fill="#192d34"/>
+<g fill="#eef5ed" font-family="system-ui,sans-serif">
+<text x="28.0" y="40.0" font-size="25" fill="#eef5ed">沉城屋顶回收　护送路线</text>
+<text x="415.0" y="65.0" font-size="15" fill="#eef5ed">北 ↑</text>
+<rect x="132" y="438.0" width="80" height="86.4" fill="#475d63"/>
+<rect x="140" y="380.4" width="148" height="72.0" fill="#475d63"/>
+<rect x="224" y="265.2" width="68" height="144.0" fill="#475d63"/>
+<rect x="284" y="312.0" width="108" height="64.8" fill="#475d63"/>
+<rect x="336" y="276.0" width="56" height="50.4" fill="#475d63"/>
+<rect x="128" y="250.8" width="264" height="46.800000000000004" fill="#475d63"/>
+<rect x="128" y="189.6" width="72" height="79.2" fill="#475d63"/>
+<rect x="136" y="182.39999999999998" width="224" height="50.4" fill="#475d63"/>
+<rect x="300" y="117.6" width="68" height="90.0" fill="#475d63"/>
+<rect x="212" y="96.0" width="152" height="57.6" fill="#475d63"/>
+<polyline points="176.0,484.8 176.0,409.2 256.0,409.2 256.0,340.8 256.0,276.0 172.0,276.0 172.0,211.2 328.0,211.2 328.0,128.4 256.0,128.4" stroke="#a9e6cd" stroke-width="4" stroke-dasharray="" fill="none"/>
+<polyline points="256.0,340.8 308.0,340.8 352.0,340.8 364.0,279.6 256.0,276.0" stroke="#e8be78" stroke-width="2" stroke-dasharray="5 3" fill="none"/>
+<circle cx="160.0" cy="474.0" r="2.7" fill="#b3d8ff"/>
+<circle cx="192.0" cy="416.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="272.0" cy="362.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="252.0" cy="294.0" r="2.7" fill="#b3d8ff"/>
+<circle cx="148.0" cy="218.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="296.0" cy="214.8" r="2.7" fill="#b3d8ff"/>
+<circle cx="332.0" cy="146.4" r="2.7" fill="#b3d8ff"/>
+<circle cx="188.0" cy="470.4" r="3.4" fill="#90df8f"/>
+<circle cx="160.0" cy="229.2" r="3.4" fill="#90df8f"/>
+<circle cx="176.0" cy="484.8" r="4" fill="#f5ffeb"/>
+<text x="183.0" y="478.8" font-size="13" fill="#eef5ed">潜水舱</text>
+<circle cx="256.0" cy="340.8" r="4" fill="#f5ffeb"/>
+<text x="263.0" y="334.8" font-size="13" fill="#eef5ed">珊瑚拱廊</text>
+<circle cx="172.0" cy="211.2" r="4" fill="#f5ffeb"/>
+<text x="179.0" y="205.2" font-size="13" fill="#eef5ed">盘坡脚</text>
+<circle cx="256.0" cy="128.4" r="4" fill="#f5ffeb"/>
+<text x="263.0" y="122.4" font-size="13" fill="#eef5ed">屋顶回收台</text>
+<text x="485.0" y="90.0" font-size="20" fill="#eef5ed">驻防与接敌方向</text>
+<circle cx="180.0" cy="412.8" r="8" fill="#843f39"/>
+<text x="176.0" y="416.8" font-size="12" fill="#eef5ed">1</text>
+<text x="485.0" y="122.0" font-size="15" fill="#eef5ed">1　海藻林前排　5 只</text>
+<circle cx="260.0" cy="348.0" r="8" fill="#843f39"/>
+<text x="256.0" y="352.0" font-size="12" fill="#eef5ed">2</text>
+<text x="485.0" y="151.0" font-size="15" fill="#eef5ed">2　拱廊伏兵　8 只</text>
+<circle cx="348.0" cy="340.8" r="8" fill="#843f39"/>
+<text x="344.0" y="344.8" font-size="12" fill="#eef5ed">3</text>
+<text x="485.0" y="180.0" font-size="15" fill="#eef5ed">3　浅水侧翼　5 只</text>
+<polyline points="341.0,340.8 333.0,340.8 337.0,343.8" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="204.0" cy="272.4" r="8" fill="#843f39"/>
+<text x="200.0" y="276.4" font-size="12" fill="#eef5ed">4</text>
+<text x="485.0" y="209.0" font-size="15" fill="#eef5ed">4　珊瑚拦截队　7 只</text>
+<polyline points="197.0,273.2 189.1,274.1 193.4,276.6" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<circle cx="168.0" cy="214.8" r="8" fill="#843f39"/>
+<text x="164.0" y="218.8" font-size="12" fill="#eef5ed">5</text>
+<text x="485.0" y="238.0" font-size="15" fill="#eef5ed">5　坡脚驻守　5 只</text>
+<circle cx="312.0" cy="132.0" r="8" fill="#843f39"/>
+<text x="308.0" y="136.0" font-size="12" fill="#eef5ed">6</text>
+<text x="485.0" y="267.0" font-size="15" fill="#eef5ed">6　屋顶防卫　4 只</text>
+<polyline points="318.8,130.5 326.6,128.7 322.1,126.7" stroke="#efad95" stroke-width="2" stroke-dasharray="" fill="none"/>
+<text x="485.0" y="320.0" font-size="15" fill="#eef5ed">绿色实线 · 护送与返回路线</text>
+<text x="485.0" y="352.0" font-size="15" fill="#eef5ed">金色虚线 · 可选 珊瑚祭器</text>
+<text x="485.0" y="384.0" font-size="15" fill="#eef5ed">浅蓝点 · 弹箱　绿点 · 医疗</text>
+<text x="485.0" y="422.0" font-size="18" fill="#eef5ed">停靠交接</text>
+<text x="485.0" y="455.0" font-size="15" fill="#eef5ed">核对拱廊采样记录</text>
+<text x="485.0" y="482.0" font-size="15" fill="#eef5ed">接通屋顶回收信标</text>
+<text x="28.0" y="580.0" font-size="18" fill="#eef5ed">沿主线的地面高程（米）</text>
+<polyline points="40.0,692.0 840.0,692.0" stroke="#637c81" stroke-width="1" stroke-dasharray="" fill="none"/>
+<polyline points="42.0,678.5 126.2,678.5 206.4,678.5 282.6,678.5 354.8,678.5 439.0,678.5 511.2,678.5 667.6,626.5 759.8,626.5 832.0,626.5" stroke="#a9e6cd" stroke-width="3" stroke-dasharray="" fill="none"/>
+<circle cx="42.0" cy="678.5" r="3.5" fill="#f5ffeb"/>
+<text x="42.0" y="668.5" font-size="14" fill="#eef5ed">1.25 m</text>
+<text x="42.0" y="728.0" font-size="14" fill="#eef5ed">潜水舱</text>
+<circle cx="282.6" cy="678.5" r="3.5" fill="#f5ffeb"/>
+<text x="282.6" y="668.5" font-size="14" fill="#eef5ed">1.25 m</text>
+<text x="282.6" y="728.0" font-size="14" fill="#eef5ed">珊瑚拱廊</text>
+<circle cx="511.2" cy="678.5" r="3.5" fill="#f5ffeb"/>
+<text x="511.2" y="668.5" font-size="14" fill="#eef5ed">1.25 m</text>
+<text x="511.2" y="728.0" font-size="14" fill="#eef5ed">盘坡脚</text>
+<circle cx="832.0" cy="626.5" r="3.5" fill="#f5ffeb"/>
+<text x="765.0" y="616.5" font-size="14" fill="#eef5ed">6.45 m</text>
+<text x="765.0" y="728.0" font-size="14" fill="#eef5ed">屋顶回收台</text>
+</g></svg>

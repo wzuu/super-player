@@ -190,7 +190,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
 
   const slotKeys = ['KeyQ', 'KeyE', 'Digit1', 'Digit2'].map((id) => keyName(prefs.keys[id]));
   const kit = createFieldKit(CONFIG, slotKeys, visual);
-  const objective = createObjective(campaignStage, visual, CONFIG);
+  const objective = createObjective(campaignStage, visual, CONFIG,definition.story?.convoy);
   const modeSelect = $('mission-mode');
   CONFIG.interactLabel = keyName(prefs.keys.KeyF);
   CONFIG.crouchLabel = keyName(prefs.keys.KeyC);

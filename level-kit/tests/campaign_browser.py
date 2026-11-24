@@ -90,6 +90,13 @@ def finish_at_gate(page):
         const tick=()=>{g.time+=.5;g.beasts.releaseSplits(g);g.objective.step(.5,g);s.step(.5,g);};
         for(let n=0;n<2400 && g.phase==='play' && s.stage!=='complete';n++) {
             const state=s.stage,t=s.target;
+            if(state==='convoy'){
+                const o=g.objective,v=o.drone.position;
+                at({x:v.x,y:v.y-1,z:v.z});
+                if(o.convoy.dock)s.interact(g);
+                g.time+=.1;g.encounter.update(g,.1);o.step(.1,g);s.step(.1,g);
+                continue;
+            }
             if(t)at(t);
             if(state==='rescue')return [treasureName,true];
             if(state==='boss') {
