@@ -7,8 +7,6 @@ export function createTraining(config, prefs) {
   Object.assign(config.beasts, {
     population: range ? 10 : 0,
     capacity: range ? 18 : 8,
-    spawnEvery: 1,
-    spawnBurst: 2,
   });
   Object.assign(config.weapon, { magazine: range ? 24 : 6, reloadTime: range ? 0.32 : 0.75 });
   config.player.crouch = { height: 1.05, eye: 0.96, speed: 0.58 };
@@ -18,6 +16,19 @@ export function createTraining(config, prefs) {
     Object.assign(config.beasts.types[3], { hp: 90, damage: 2, summonCount: 0 });
   }
   let stage, baseline, pauseSeen, used, directions, target, pickup;
+  let wave, nextWave, waveEntries;
+  function openRangeWave(g) {
+    if (g.beasts.live || g.time < nextWave) return;
+    const count = Math.min(config.beasts.capacity, config.beasts.population + wave * 2);
+    waveEntries ??= Array.from({ length: count }, () => g.beasts.randomType());
+    if (!g.beasts.spawnGroup(waveEntries).length) return;
+    wave++;
+    nextWave = g.time + 18;
+    waveEntries = null;
+  }
+  function placeTarget(g, id) {
+    [target] = g.beasts.spawnGroup([{ type: id === 'boss' ? 3 : 0, regular: false, anchor: g.level.bossSpawn }]);
+  }
   const moveKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
   const aimHint = aimInstructions(prefs.aimMode);
   const tasks = [
@@ -64,11 +75,7 @@ export function createTraining(config, prefs) {
     // 允许玩家提前试用道具，到教学步骤时至少有一次实操机会。
     const supply = id === 'slot2' ? 'medkit' : id === 'slot3' ? 'grenade' : null;
     if (supply && !g.kit.remaining()[supply]) g.kit.supply(supply);
-    if (id === 'kill' || id === 'boss') {
-      const pos = g.level.bossSpawn;
-      target = g.beasts.spawn(id === 'boss' ? 3 : 0, pos.x, pos.z, pos.y);
-      g.beasts.refreshHash();
-    }
+    if (id === 'kill' || id === 'boss') placeTarget(g, id);
   }
   return {
     kind: range ? 'range' : 'tutorial',
@@ -94,12 +101,12 @@ export function createTraining(config, prefs) {
       target = pickup = null;
       if (range) {
         g.weapon.reserve = Infinity;
+        wave = nextWave = 0;
+        waveEntries = null;
+        openRangeWave(g);
         return;
       }
       setup(g);
-    },
-    prepare() {
-      if (range) config.beasts.population = 10;
     },
     paused() {
       pauseSeen = true;
@@ -110,12 +117,13 @@ export function createTraining(config, prefs) {
     step(g, input) {
       if (range) {
         g.weapon.reserve = Infinity;
-        config.beasts.population = Math.min(18, 10 + Math.floor(g.time / 18) * 2);
+        openRangeWave(g);
         return;
       }
       const id = tasks[stage][0],
         p = g.player,
         w = g.weapon;
+      if ((id === 'kill' || id === 'boss') && !target) placeTarget(g, id);
       if (id === 'walk' && Math.hypot(p.x - baseline.x, p.z - baseline.z) > 0.005) {
         for (const key of moveKeys) if (input.held(key)) directions.add(key);
         baseline.x = p.x;
@@ -165,13 +173,14 @@ export function createTraining(config, prefs) {
           stage: 'range',
           title:
             '第 ' +
-            (1 + Math.floor(g.time / 18)) +
+            wave +
             ' 波 · ' +
             Math.floor(g.time) +
             ' 秒 · ' +
             g.kills +
             ' 击杀',
-          detail: '无限备弹 · Esc 暂停、重开或返回首页',
+          detail: (g.beasts.live ? '清空本波敌群' : '下一波倒计时 ' + Math.max(0, Math.ceil(nextWave - g.time)) + ' 秒') +
+            ' · 无限备弹 · Esc 暂停、重开或返回首页',
         };
       const [id, title] = tasks[stage];
       return {

@@ -1,5 +1,5 @@
 const variants = { 3: 'hold', 6: 'escort', 9: 'timed', 15: 'rescue' };
-export const missionRules = { holdSeconds: 45, escapeSeconds: 90, waveSeconds: 45, demolitionSeconds: 10, rescueSeconds: 90 };
+export const missionRules = { holdSeconds: 45, escapeSeconds: 90, demolitionSeconds: 10, rescueSeconds: 90 };
 export const missionNames = {
   classic: '围剿首领',
   hold: '坚守撤离区',
@@ -77,14 +77,12 @@ export function createObjective(stage, { THREE, scene }) {
         }
         escorted = !g.story?.blocksExit && Math.hypot(pos.x - g.level.gate.x, pos.y - 1 - g.level.gate.y, pos.z - g.level.gate.z) < 4;
       }
-      if (mode === 'endless') {
-        const next = 1 + Math.floor(g.time / missionRules.waveSeconds);
-        if (next > wave) {
-          wave = next;
-          goal.reinforcements = (wave - 1) * 2;
-          g.ui.notify('第 ' + wave + ' 波增援', 2);
-        }
-      }
+    },
+    advanceWave(g) {
+      if (mode !== 'endless') return;
+      wave++;
+      goal.reinforcements = (wave - 1) * 2;
+      g.ui.notify('第 ' + wave + ' 波敌群已集结', 2);
     },
     ready(g) {
       if (g.field?.deep) return false;
@@ -97,6 +95,7 @@ export function createObjective(stage, { THREE, scene }) {
       return mode === 'classic' && g.bossDead && g.core;
     },
     get held() { return hold; },
+    get wave() { return wave; },
     damageDrone(amount, g) {
       if (mode !== 'escort' || escorted || goal.escortHealth <= 0) return;
       goal.escortHealth = Math.max(0, goal.escortHealth - amount);
@@ -145,7 +144,7 @@ export function createObjective(stage, { THREE, scene }) {
       if (route && !(mode === 'escort' && waiting && !g.story.droneDocked))
         return mode === 'escort' ? { ...route, detail: [route.detail, underAttackUntil>g.time?'无人机受袭':'', '无人机耐久 ' + goal.escortHealth + '%'].filter(Boolean).join(' · ') } : route;
       if (mode === 'endless') return step('wave-' + wave, '击退第 ' + wave + ' 波凶兽', null,
-        '下一波增援 ' + Math.max(0, Math.ceil(wave * missionRules.waveSeconds - g.time)) + ' 秒');
+        '清空本波普通凶兽后进入下一波');
       if (goal.ready(g)) {
         const near = g.nearGate();
         return step(near ? 'interact' : 'exit', near ? '按 F 引爆' + text.portal : text.exitObjective,

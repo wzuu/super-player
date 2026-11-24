@@ -49,22 +49,30 @@ export class FoeTraits {
     this.available = Object.keys(roleRules).filter((key) => stage >= roleRules[key].stage);
     this.splits = [];
   }
-  assign(beast, game, forcedElite = false) {
-    if (!beast || beast.type === 3 || !this.stage) return;
-    const role = this.available.find((key) => roleRules[key].type === beast.type);
-    if (role && Math.random() < 0.13) {
-      beast.role = role;
-      beast.hp *= roleRules[role].hp;
-      beast.shield = roleRules[role].charge ?? 0;
-    }
+  roll(type, game, forcedElite = false) {
+    const eligible = this.available.find(key => roleRules[key].type === type);
+    const role = eligible && Math.random() < .13 ? eligible : null;
+    const traits = {role,affixes:null};
     const boss = game.beasts.boss;
     const bossFight = boss?.active && (boss.fight?.started || gap(boss, game.player) < 23);
     const odds = (0.012 + this.stage * 0.0028) * this.config.player.incoming;
     if (!bossFight && (forcedElite || Math.random() < odds)) {
-      const choices = affixes.filter((id) => !(id === 'swift' && beast.role === 'volatile'));
-      beast.affixes = [choices.splice(Math.floor(Math.random() * choices.length), 1)[0]];
+      const choices = affixes.filter((id) => !(id === 'swift' && role === 'volatile'));
+      traits.affixes = [choices.splice(Math.floor(Math.random() * choices.length), 1)[0]];
       if (this.stage >= 10 && Math.random() < 0.24)
-        beast.affixes.push(choices[Math.floor(Math.random() * choices.length)]);
+        traits.affixes.push(choices[Math.floor(Math.random() * choices.length)]);
+    }
+    return traits;
+  }
+  assign(beast, game, forcedElite = false, rolled) {
+    if (!beast || beast.type === 3 || !this.stage) return;
+    const {role,affixes} = rolled ?? this.roll(beast.type, game, forcedElite);
+    Object.assign(beast,{role,affixes});
+    if (role) {
+      beast.hp *= roleRules[role].hp;
+      beast.shield = roleRules[role].charge ?? 0;
+    }
+    if (affixes) {
       const scale = 1.25;
       if (!game.level.blocked(beast.x, beast.z, beast.y, beast.radius * scale, beast.height * scale)) {
         beast.scale = scale;
@@ -111,34 +119,15 @@ export class FoeTraits {
     return amount;
   }
   offspring(parent, game, count) {
-    const { beasts, level } = game;
-    if (parent.storyWave) {
-      const active = beasts.pool.filter((b) => b.active && b.storyWave).length;
-      count = Math.min(count, Math.max(0, Math.min(parent.storyWave.cap, game.story.cap) - active));
+    const children = game.beasts.spawnGroup(Array.from({length:count}, () => ({type:0,regular:false})),
+      {anchors:[parent]});
+    for (const child of children) {
+      child.alert = 5;
+      child.storyWave = parent.storyWave ?? null;
+      child.fieldGroup = parent.fieldGroup ?? null;
+      if (['vault', 'deep'].includes(child.fieldGroup)) game.field.guards.push(child);
     }
-    if (['vault', 'deep'].includes(parent.fieldGroup)) {
-      const active = beasts.pool.filter((b) => b.active && b.fieldGroup === parent.fieldGroup).length;
-      count = Math.min(count, Math.max(0, game.field.guardCount - active));
-    }
-    for (
-      let i = 0;
-      i < 8 && count > 0 && beasts.live < Math.min(this.config.beasts.population + 8, beasts.pool.length);
-      i++
-    ) {
-      const a = (i * Math.PI) / 4,
-        x = parent.x + Math.sin(a) * 1.65,
-        z = parent.z + Math.cos(a) * 1.65;
-      const floor = level.surface(x, z, parent.y + 0.42);
-      if (Math.abs(floor - parent.y) > 0.65 || gap({ x, y: floor, z }, game.player) < 1.5) continue;
-      const child = beasts.spawn(0, x, z, floor);
-      if (child) {
-        child.alert = 5;
-        child.storyWave = parent.storyWave ?? null;
-        child.fieldGroup = parent.fieldGroup ?? null;
-        if (['vault', 'deep'].includes(child.fieldGroup)) game.field.guards.push(child);
-        count--;
-      }
-    }
+    return children.length === count;
   }
   step(b, g, dt) {
     if (has(b, 'swift')) b.cooldown -= dt * 0.3;
@@ -168,7 +157,6 @@ export class FoeTraits {
         g.sound.tone(280, 560, 0.37, 0.12);
       } else {
         b.charging = false;
-        b.broods++;
         b.traitAt = g.time + rules.interval;
         const nearby = g.beasts.hash.query(
           b.x - rules.radius,
@@ -183,7 +171,8 @@ export class FoeTraits {
         if (hurt) {
           hurt.hp = Math.min(hurt.maxHP, hurt.hp + 28);
           hurt.flash = 0.09;
-        } else this.offspring(b, g, 1);
+        }
+        if (hurt || this.offspring(b, g, 1)) b.broods++;
       }
     }
   }

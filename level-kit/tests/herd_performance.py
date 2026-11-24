@@ -24,9 +24,11 @@ def measure(browser, root, mode, sample, size, frames):
     entry = "    startLevel(definition, campaign, campaignStage);"
     expose = "return { game, scene, camera, renderer, config: CONFIG, grid: GRID, nav };"
     assert html.count(entry) == html.count(expose) == 1
-    html = html.replace(entry, """    window.run=startLevel({...definition,
-      config:{...definition.config,beasts:{...definition.config?.beasts,capacity:192}}},
-      campaign,campaignStage);""").replace(expose,
+    story = sample in ("machine-room","street")
+    setup = "window.run=startLevel(definition,campaign,campaignStage);" if story else """window.run=startLevel({...definition,
+      config:{...definition.config,beasts:{...definition.config?.beasts,capacity:192,
+        simulation:{...definition.config?.beasts?.simulation,poolCapacity:192}}}},campaign,campaignStage);"""
+    html = html.replace(entry, setup).replace(expose,
         "return {game,scene,camera,renderer,config:CONFIG,grid:GRID,nav,frame:animate,input};")
     # 用指定模拟时间驱动原绘制循环，帧耗时取自浏览器真实 RAF。
     html = html.replace("requested = requestAnimationFrame(animate);", "requested = 0;")
@@ -43,7 +45,6 @@ def measure(browser, root, mode, sample, size, frames):
         page.goto(file.as_uri())
         page.wait_for_function("!!window.run", polling=50)
         page.add_script_tag(content=FIXTURE)
-        story = sample in ("machine-room", "street")
         page.evaluate("herdSetup", [mode,sample,size])
         if sample == "legacy96":
             page.add_script_tag(content=Path(__file__).with_name("shotgun_stress.js").read_text(encoding="utf-8"))
@@ -53,9 +54,24 @@ def measure(browser, root, mode, sample, size, frames):
                         actors=96,shotgun=stress["baseline"],conduct=stress["reactions"])
         if story:
             page.evaluate(PREPARE, ROOMS[STAGES[sample]])
-            peak = 14 if sample == "machine-room" else 16
+            expected = page.evaluate("run.config.beasts.encounterSize")
+            peak = expected if page.evaluate("typeof run.game.beasts.spawnGroup === 'function'") else (14 if sample == "machine-room" else 16)
+            page.evaluate("""() => {
+              const manager = run.game.beasts;
+              if (!manager.spawnGroup) return;
+              const spawn = manager.spawnGroup.bind(manager);
+              manager.spawnGroup = (...args) => {
+                const start = performance.now(), group = spawn(...args);
+                if (group.length) window.spawnBatch = {count:group.length, ms:performance.now()-start};
+                return group;
+              };
+            }""")
             page.evaluate(EXERCISE, [peak, True])
+            spawn_batch = page.evaluate("window.spawnBatch ?? null")
         result = page.evaluate("herdMeasure", frames)
+        if story and spawn_batch:
+            assert spawn_batch["count"] == expected, spawn_batch
+            result["spawnBatch"] = spawn_batch
         assert result["shots"] > 0 and not errors, (result,errors)
         if not story:
             assert result["simulated"] == size, result
@@ -85,7 +101,7 @@ if __name__=="__main__":
         with pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER","chrome"),headless=True,args=flags[args.gpu]) as browser:
             for mode in args.modes:
                 for sample in args.samples:
-                    sizes=args.sizes if sample in ("open","indoor") else [160]
+                    sizes=args.sizes if sample in ("open","indoor","dense") else [160]
                     for size in sizes:
                         row=measure(browser,args.baseline if mode=="baseline" else ROOT,mode,sample,size,args.frames)
                         print(json.dumps(row,ensure_ascii=False),flush=True)

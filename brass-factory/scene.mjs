@@ -571,8 +571,8 @@ function createEnvironment(context) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'货运月台',cap:7,interval:0.39,at:[-8,23],entries:[[-15,25],[-2,16]]},
-    {name:'锅炉机坊',cap:9,interval:0.37,at:[23,5],entries:[[31,7],[18,-1]]},
+    {name:'货运月台',at:[-8,23],entries:[[-15,25],[-2,16]]},
+    {name:'锅炉机坊',at:[23,5],entries:[[31,7],[18,-1]]},
   ]},
   config: CONFIG,
   grid: MAP_GRID,

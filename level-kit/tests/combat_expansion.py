@@ -103,6 +103,7 @@ def verify_simulation_cadence(page):
             m.resetSimulationStats();
             const spawn=(type,x,z)=>m.spawn(type,x,z,40,0);
             const idle=spawn(0,22,0), afflicted=spawn(0,22,5), hazard=spawn(0,22,9);
+            idle.waveMember = afflicted.waveMember = hazard.waveMember = true;
             const hp=afflicted.hp;
             afflicted.statusEffects.set('burn',{until:1,tickAt:.5});
             afflicted.statusEffects.set('poison',{until:1,tickAt:.5,stacks:2});
@@ -133,13 +134,16 @@ def verify_simulation_cadence(page):
             if(next!==idle || next.spawnGeneration===generation || next.idlePerception ||
                next.wakeUntil!==-Infinity || next.statusEffects.size)throw Error('池复用遗留模拟状态');
             g.reset();g.phase='play';const opening=m.live;
-            // 玩家已走出气闸，增援从主走廊连通的出生点补入。
+            // 本波击退一只不会补位；最后一只普通成员离场后应一次开启完整下一波。
             Object.assign(p,{x:0,y:0,z:28,escaped:true});m.nav.rebuild(p.x,p.z);p.positionCamera(0);
             const victim=m.pool.find(b=>b.active && b.type!==3);
             if(!victim || !m.eject(victim,g))throw Error('重开后无尽开场失败');
             const after=m.live;
-            for(let i=0;i<120 && m.live===after;i++){g.time+=.04;m.update(.04,p,g);}
-            if(m.live<=after)throw Error('无尽缺员后未补入');
+            for(let i=0;i<12;i++){g.time+=.04;m.update(.04,p,g);g.objective.step(.04,g);}
+            if(m.live!==after || g.objective.wave!==1)throw Error('无尽击退一只后提前补位');
+            for(const b of m.pool)if(b.active && b.type!==3)m.eject(b,g);
+            for(let i=0;i<120 && g.objective.wave===1;i++){g.time+=.04;m.update(.04,p,g);g.objective.step(.04,g);}
+            if(g.objective.wave!==2 || m.live<opening)throw Error('清空首波后未开启完整下一波');
             return {state,report,ready,opening,refilled:m.live,perceptions:counts.perceptions,deferred:counts.deferred};
           } finally {
             Math.random=random;config.beasts.simulation.farCadence=true;config.beasts.simulation.profile=false;
@@ -248,6 +252,46 @@ def verify_lift(page):
     }""")
 
 
+def verify_endless_deployment(page):
+    result=page.evaluate("""()=>{
+      const {game:g,config}=run, m=g.beasts, base=config.beasts.population;
+      document.querySelector('#mission-mode').value='endless';
+      const wave=()=>m.pool.filter(b=>b.active && b.waveMember);
+      const spawn=m.spawnGroup;
+      for(const blockBoss of [true,false]){
+        m.spawnGroup=function(entries,options){
+          return (entries[0]?.type===3)===blockBoss ? [] : spawn.call(this,entries,options);
+        };
+        try { g.reset(); } finally { delete m.spawnGroup; }
+        g.phase='play';
+        if(Boolean(m.boss)===blockBoss || wave().length!==(blockBoss ? base-1 : 0))
+          throw Error('首领与普通波的失败互相阻塞');
+        g.time+=.6;m.deployPopulation(g);
+        if(!m.boss?.active || wave().length!==base-1 || m.live!==base)throw Error('独立重试没有完成');
+      }
+      const boss=m.boss;
+      for(let stage=0;stage<3;stage++){g.time+=2;m.damage(boss,1e7,g,'environment');}
+      g.step(.04);
+      if(!g.bossDead || m.boss || m.live!==base-1 || g.objective.wave!==1)
+        throw Error('提前击倒首领后出现补位或提前换波');
+
+      g.reset();g.phase='play';
+      const {x,y,z}=g.field.vault.front;Object.assign(g.player,{x,y,z});
+      if(!g.field.interact(g))throw Error('未触发巴黎宝库');
+      g.time+=3;g.field.step(3,g);
+      const guards=g.field.guards.slice();
+      if(guards.length!==40)throw Error('宝库守卫未到齐');
+      for(let i=1;i<69;i++)g.objective.advanceWave(g);
+      for(const b of wave())m.eject(b,g);
+      m.deployPopulation(g);
+      if(g.objective.wave!==70 || wave().length!==116 || !m.boss?.active ||
+         !guards.every(b=>b.active && b.fieldGroup==='vault') || m.live!==157)
+        throw Error('巴黎高波与首领、宝库守卫不能共存 '+[g.objective.wave,wave().length,m.live]);
+      return [g.objective.wave,wave().length,guards.length,m.live];
+    }""")
+    print("PASS independent opening boss and wave retries, boss-first kill, Paris wave/vault coexistence",result,flush=True)
+
+
 def verify_variation(browser, name):
     page=level_page(browser,'rain-city',name)
     page.evaluate("""name=>{
@@ -297,6 +341,7 @@ def main():
                 if stage=="rain-city": verify_roles(page)
                 page.close()
             page=level_page(browser,'paris-tower')
+            verify_endless_deployment(page)
             verify_lift(page)
             page.close()
             for variant in ['fog','blackout','fury','patrol','plenty','quiet']:

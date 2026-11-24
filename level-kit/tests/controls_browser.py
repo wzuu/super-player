@@ -34,6 +34,18 @@ def start(page):
     page.wait_for_function("run.game.phase==='play' && !!document.pointerLockElement")
 
 
+def check_weapon_model(page):
+    page.evaluate("""() => {
+      const w = run.game.weapon;
+      if (w.rifle.root.getObjectByName('瞄具') || w.shoulder.body.getObjectByName('瞄具'))
+        throw Error('玩家的武器模型仍装有瞄具');
+      const extraSight = w.group.children.some(group => group.isGroup && group !== w.rifle.root &&
+        group.children.some(part => part.geometry?.type === 'TorusGeometry') &&
+        group.children.some(part => part.geometry?.type === 'CircleGeometry'));
+      if (extraSight) throw Error('第一人称武器的附加镜框和镜片仍在场景中');
+    }""")
+
+
 def menu(page, crouch, deep, custom):
     guide = page.locator("#key-guide")
     if guide.get_attribute("open") is None:
@@ -188,6 +200,7 @@ def check(browser):
         try:
             menu(page,crouch,deep,custom)
             start(page)
+            check_weapon_model(page)
             if crouch: crouch_checks(page,"x" if custom else "c")
             if stage!="neon-undercity":
                 weapon_controls(page,custom)

@@ -23,7 +23,7 @@
 
 首次游玩开放第一关。结算保存成功后，胜利解锁下一关，并将当局带回的宝物登记到图鉴。失败保留对战记录，带回件数和价值计为零。直接打开单关 HTML 可进行离线练习，战役进度需通过本机服务保存。
 
-战役难度由 `src/config.mjs` 根据 `campaign/levels.json` 的关卡顺序统一计算。正式战役每个清场区域安排 100 只实际守卫，场景配置各入口的局部活跃上限、敌种和补入间隔。无尽增援的同场目标为 56 只加上每过一关 2 只，对象池至少多留 32 个位置。场景按原速填写 `speed`、`chargeSpeed` 和 `rageSpeed`。第一关使用原速的 50%，每关增加原速的 2.5 个百分点，最高为原速。地形与血月等事件倍率仍在运行时叠加。警报、沙暴等增援使用 `CONFIG.beasts.population` 加上事件额外数量。这些规则只记录在内部文档。
+战役难度由 `src/config.mjs` 根据 `campaign/levels.json` 的关卡顺序统一计算。正式战役每个清场区域一次部署 100 只实际守卫，场景配置各入口、敌种与战区边界。无尽首波总数从 56 只开始，每过一关增加 2 只，其中 1 只是独立首领。第一关清空 55 只普通敌人后部署第二波 58 只普通敌人，首领的存活状态不影响开波。对象池为同时进行的遭遇、支线和召唤保留余量。场景按原速填写 `speed`、`chargeSpeed` 和 `rageSpeed`。第一关使用原速的 50%，每关增加原速的 2.5 个百分点，最高为原速。地形与血月等事件倍率仍在运行时叠加。警报、沙暴等事件在达到各自条件时部署其额外敌群。这些规则只记录在内部文档。
 
 模块预览读取当前登记顺序，独立 HTML 在打包时写入关卡序号。调整顺序后重新生成受影响的关卡。未登记的灰盒模板和独立场景使用各自的配置。
 
@@ -53,11 +53,11 @@ esbuild level-kit/vendor/three-entry.mjs --bundle --format=iife --minify --legal
 | `text`、`area`、`minimap`、`palette` | 可选。替换关卡、首领、道具、传送门和宝物名称，定制区域提示、小地图与特效色 |
 | `minimap.overlay({ ctx, px, pz, game })` | 可选。在小地图底图之上、玩家与凶兽点位之下绘制实时区域 |
 | `createEnvironment(context)` | 可选。返回有 `update(time, playing, game)` 的环境对象。可读取 `buildMap()` 返回的 `context.mapData` |
-| `createEncounter(context)` | 可选。返回有 `update(game, dt)` 和可选 `reset()` 的机制对象。`status` 使用 `{ title, detail, remaining }` 展示倒计时，或使用 `{ title, detail, value, readout }` 展示 0 至 100 的量表。`moveScale` 控制移动倍率。`hearingOnly`、`shotHearing`、`walkHearing`、`runHearing` 和 `memory` 可启用循声搜寻，`population`、`spawnEvery`、`spawnBurst` 可临时调整增援 |
+| `createEncounter(context)` | 可选。返回有 `update(game, dt)` 和可选 `reset()` 的机制对象。`status` 使用 `{ title, detail, remaining }` 展示倒计时，或使用 `{ title, detail, value, readout }` 展示 0 至 100 的量表。`moveScale` 控制移动倍率。`hearingOnly`、`shotHearing`、`walkHearing`、`runHearing` 和 `memory` 可启用循声搜寻。需要增加事件敌人时调用 `game.beasts.spawnGroup`，传入完整敌种数组与可选集结点 |
 | `createPortal(context)`、`buildBeastModel(type, helpers)` | 可选。替换传送门表现或各类凶兽模型。默认传送门有屏障与引爆效果。模型返回实体和发光部位的两个 BufferGeometry |
 | `buildRageModel(helpers)`、`onBossRage(beast, game, helpers)` | 可选。指定狂暴阶段的两个 BufferGeometry，或在首次转阶段时播放视觉和音效 |
 | `beastSurface(beast, player, level, floor, dt, game)` | 可选。接管凶兽移动后的体表支撑与高度更新，例如壁面与天花板攀爬。`beast.surfaceRoll` 供实例模型显示姿态 |
-| `stageBossSummon(x, y, z, game)` | 可选。返回 `true` 表示已接管一次增援，例如记录一枚卵的孵化位置和时间。返回 `false` 会稍后重试 |
+| `stageBossSummon(boss, count, game)` | 可选。接管首领的一整批召唤。例如环站先记录卵，再在孵化时按当前玩家位置为整群选择落点。成功接管返回 `true` |
 | `onBeastDefeated(beast, game)` | 可选。击杀已计入后调用。返回 `true` 由关卡接管常规爆裂效果，适用于延迟坠毁等演出 |
 | `beastDropHeight(beast, level)` | 可选。返回弹药、生命补给与关键物品的掉落高度，飞行敌人可将掉落留在下方地面 |
 | `onProjectileHit(game)` | 可选。敌方弹丸实际伤及玩家且玩家存活时调用，可触发视野遮挡等主题效果 |
@@ -92,10 +92,10 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | `src/beasts.mjs` | 四类凶兽的 AI、血条、对象池、实例渲染和远距降频 |
 | `src/effects.mjs`、`src/audio.mjs` | 弹丸、可选落地伤害区、传送门、粒子、曳光和合成音效 |
 | `src/pickups.mjs`、`src/ui.mjs` | 弹药、生命补给、宝物与核心拾取、HUD、小地图及结算 |
-| `src/story.mjs`、`src/objectives.mjs` | 读取关卡的区域、入口、敌种、数量与同场上限，推进门禁、护送、坚守和撤离 |
+| `src/story.mjs`、`src/objectives.mjs` | 读取关卡的区域、入口、敌种、数量与可用战区，推进门禁、护送、坚守和撤离 |
 | `src/stair-navigation.mjs` | 四种体型经双端楼梯跨层追击，按体型和入口缓存寻路场，远程体争夺高点 |
 
-普通战区在场景的 `story.sectors` 设置地点与增援入口。实验室、钟楼和古都的 `story.route` 按顺序配置清剿、交互与撤离。地面坐标写作 `[x,z]`，跨层坐标写作 `[x,y,z]`。巴黎的 `platform`、`beacon`、`rescue` 和 `climbs` 分别维护防守区、信标、登机点与攀登轨迹。时限集中于 `missionRules`。
+普通战区在场景的 `story.sectors` 设置地点与整群部署入口。实验室、钟楼和古都的 `story.route` 按顺序配置清剿、交互与撤离。地面坐标写作 `[x,z]`，跨层坐标写作 `[x,y,z]`。巴黎的 `platform`、`beacon`、`rescue` 和 `climbs` 分别维护防守区、信标、登机点与攀登轨迹。时限集中于 `missionRules`。
 
 生成入口后，`python level-kit/tests/story_browser.py` 验证各关目标连通、守卫和任务重开，`python level-kit/tests/stair_routes_browser.py` 验证四种体型的双向楼梯。使用 `python level-kit/tests/story_performance.py <基线构建根目录>` 比较同机位持续射击下的帧率和帧时间。
 
@@ -128,7 +128,7 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | 极夜冰站 极地科考型 | `rifleFrost` 控制霜层密度，模型分支控制冰凌和保温套 |
 | 沉穹古都 深海珍珠型 | `pearl` 材质控制变彩和光泽，模型分支控制青色电弧 |
 | 烬火要塞 黑曜熔铸型 | `voronoi` 控制裂纹尺度，模型分支使用潮汐高度调节发光 |
-| 失压环站 太空工业型 | 对应纹理分支控制舱号和划痕，模型分支控制观察窗能量条和全息瞄具 |
+| 失压环站 太空工业型 | 对应纹理分支控制舱号和划痕，模型分支控制观察窗能量条 |
 | 霓雨下城 赛博义体型 | 对应纹理分支控制碳纤维编织，模型分支控制光带流动和 EMP 恢复闪烁 |
 | 雨蚀天阶 玛雅玉石型 | `jadePattern` 控制羽蛇和阶梯纹，模型分支控制玉石透射、藤蔓和羽饰 |
 | 血月古堡 哥特猩红型 | `gothicMark` 控制蔷薇窗与尖拱纹，模型分支控制血露瓶及银色浮雕 |

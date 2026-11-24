@@ -26,8 +26,8 @@ const DEFAULT_CONFIG = {
     heatPerShot: 0.061, heatRecovery: 1.1, hitStop: 0.03, hearingRadius: 32,
   },
   beasts: {
-    population: 64, capacity: 96, encounterSize: 100, spawnEvery: 0.50, spawnBurst: 2,
-    spawnDistance: 21, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
+    population: 64, capacity: 96, encounterSize: 100,
+    spawnDistance: 21, safeSpawnGap: 6, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
     memory: 7, separation: 1.35,
     simulation: { farCadence: true, profile: false },
     visibility: { enabled:true, occlusion:true, occlusionRange:40 },
@@ -104,6 +104,8 @@ function merge(base, patch) {
 // 每个关卡得到独立配置，避免场景间共享数组或对象。
 export function makeConfig(overrides = {}, campaignStage = 0) {
   const config = merge(DEFAULT_CONFIG, overrides);
+  const beasts=config.beasts;
+  beasts.endlessWaveCap=beasts.capacity;
   for (const [i, stats] of config.beasts.types.entries()) {
     const [width, height] = config.beasts.appearance.scale[i];
     stats.radius *= width;
@@ -114,9 +116,13 @@ export function makeConfig(overrides = {}, campaignStage = 0) {
   if (campaignStage > 0) {
     const rules = CAMPAIGN_DIFFICULTY;
     const steps = campaignStage - 1;
-    const beasts = config.beasts;
     beasts.population = rules.firstPopulation + steps * rules.populationStep;
-    beasts.capacity = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity);
+    // 保留各关原有无尽上限。实际池另需容纳两场主线、宝库与秘室、深入敌群和首领召唤。
+    beasts.endlessWaveCap = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity);
+    beasts.capacity = Math.max(2*beasts.encounterSize,beasts.endlessWaveCap) +
+      2*beasts.encounterSize + rules.reserveCapacity;
+    if (beasts.simulation.poolCapacity != null)
+      beasts.capacity = Math.max(beasts.population, beasts.simulation.poolCapacity);
 
     // 关卡只填写原速。追击、冲撞和狂暴统一缩放，弹丸和事件倍率沿用各自配置。
     const speedScale = Math.min(1, rules.firstSpeedScale * (1 + steps * rules.speedStepFromBase));

@@ -7,7 +7,7 @@ const CONFIG = {
   player: { safeTime: 13, hurtCooldown: 0.36 },
   weapon: { recoil: 0.011, maxSpread: 0.030, hearingRadius: 22 },
   beasts: {
-    spawnDistance: 18, sight: 21, memory: 5.5, spawnEvery: 1, spawnBurst: 2,
+    spawnDistance: 18, sight: 21, memory: 5.5,
     types: [
       { hp: 56, damage: 7 },
       { hp: 144, damage: 15 },
@@ -18,7 +18,7 @@ const CONFIG = {
   pickups: { ammoDrop: 24, ammoCache: 360 },
   alarm: {
     streakKills: 5, streakWindow: 8, sustainedFire: 4, shotGap: 0.36,
-    duration: 32, cooldown: 10, extraPopulation: 18, spawnEvery: 0.26, spawnBurst: 3,
+    duration: 32, cooldown: 10, extraPopulation: 18,
   },
 };
 
@@ -54,14 +54,14 @@ const labStory = {
     {id:'service',at:[-9,-16.5],why:'需取得零号核心权限卡，在裂隙控制台解除封锁'},
   ],
   route:[
-    {kind:'fight',name:'气闸安检室',label:'清理安检室守卫',at:[0,29.8],entries:[[-4,25],[5,24]],cap:6,interval:.56,vanguard:3,mix:[0,0,0,2],range:2.4},
+    {kind:'fight',name:'气闸安检室',bounds:[[-39,22.4,39,39]],clearLanes:[[-.5,21.5,3.5,28],[-12,33.5,12,37.3]],label:'清理安检室守卫',at:[0,29.8],entries:[[-4,25],[5,24],[-23,31],[25,30],[-32,25],[33,26]],mix:[0,0,0,2],range:2.4},
     {kind:'use',label:'从值班台领取任务物品 · 安保卡',at:[2.6,26]},
     {kind:'use',label:'刷安保卡开启样本走廊',door:'security',at:[1.6,23.1]},
     {kind:'reach',label:'沿西侧样本走廊前往培养室',at:[-10,15.5]},
-    {kind:'fight',name:'西侧培养室',label:'击退从两侧培养舱赶来的守卫',at:[-23,-8],entries:[[-30,-8],[-24,-15]],cap:10,interval:.33,mix:[0,2,0,1,0]},
+    {kind:'fight',name:'西侧培养室',bounds:[[-39,-24,-13,2],[-34,-2,-11,6]],clearLanes:[[-21,-1.3,-12,1.3]],label:'击退从两侧培养舱赶来的守卫',at:[-23,-8],entries:[[-30,-8],[-24,-15]],mix:[0,2,0,1,0]},
     {kind:'use',label:'从培养舱取任务物品 · 样本封存模块',at:[-24,-9]},
     {kind:'use',label:'以封存模块解锁机房',door:'power',at:[29,-2.5]},
-    {kind:'fight',name:'服务器机房',label:'守住机柜通道，拦截三路实验体',alarm:true,at:[28,-9],entries:[[29,-15],[19,-13],[35,-6.5]],cap:14,interval:.26,mix:[0,1,0,2,0,1,2]},
+    {kind:'fight',name:'服务器机房',bounds:[[13,-39,39,6],[7,-39,30,-20]],clearLanes:[[27,-7.5,31,1]],label:'守住机柜通道，拦截三路实验体',alarm:true,at:[28,-9],entries:[[29,-15],[19,-13],[35,-6.5],[24,-29],[31,-23],[32,1]],mix:[0,1,0,2,0,1,2]},
     {kind:'use',label:'恢复机房供电并取任务物品 · 通行证',at:[29,-9]},
     {kind:'reach',label:'前往反应堆门前补给',at:[6.3,11.4]},
     {kind:'use',label:'刷通行证开启反应堆门',door:'reactor',at:[6.3,10.6]},
@@ -98,7 +98,8 @@ const WALLS = [
   ['x', -2.3, -35, -31], ['x', -2.3, -26, -20, 'glass'], ['x', -2.3, -20, -13.72],
   ['x', 2.3, -35, -31], ['x', 2.3, -26, -20, 'glass'], ['x', 2.3, -20, -13.72],
   ['x', -2.3, 13.75, 19, 'glass'], ['x', 2.3, 13.75, 19, 'glass'],
-  ['x', -4, 32, 39.6], ['x', 4, 32, 39.6],
+  // 气闸两侧保留应急通道，玩家被兽群追入缓冲区时仍可绕回货运区。
+  ['x', -4, 32, 33.4], ['x', -4, 37.4, 39.6], ['x', 4, 32, 33.4], ['x', 4, 37.4, 39.6],
   ['z', 32, -8, -3.7], ['z', 32, 3.7, 8],
   ['z', 27.7, -6.7, -3.5], ['z', 27.7, 3.5, 6.7],
   ['z', -25.4, -35, -19.1, 'baffle'], ['z', -25.4, -14.9, -4.6, 'baffle'],
@@ -549,13 +550,14 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
   const killTimes = [];
 
   const alarm = {
-    status: null, population: setup.beasts.population, spawnEvery: setup.beasts.spawnEvery, spawnBurst: setup.beasts.spawnBurst,
+    status: null,
     reset() {
       this.alarmUntil = -Infinity;
       this.cooldownUntil = -Infinity;
       this.sirenAt = Infinity;
       this.lastShot = this.fireSince = -Infinity;
       this.countedKills = 0;
+      this.alarmGroup = null;
       this.hatchOpen = false;
       killTimes.length = 0;
       this.setAlarm(false);
@@ -564,10 +566,6 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
     },
     setAlarm(active) {
       this.active = active;
-      const spawn = active ? rules : setup.beasts;
-      this.population = setup.beasts.population + (active ? rules.extraPopulation : 0);
-      this.spawnEvery = spawn.spawnEvery;
-      this.spawnBurst = spawn.spawnBurst;
       if (!active) this.status = null;
     },
     interactionHint(game) {
@@ -592,7 +590,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
       if (this.active && now >= this.alarmUntil) {
         this.setAlarm(false);
         this.cooldownUntil = now + rules.cooldown;
-        game.ui.notify('警报解除，实验体增援恢复常速', 2.8);
+        game.ui.notify('警报解除', 2.8);
       }
       if (this.active || now < this.cooldownUntil) {
         this.countedKills = game.kills;
@@ -609,13 +607,15 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
         }
         const loud = Number.isFinite(this.fireSince) && now - this.lastShot <= rules.shotGap &&
           this.lastShot - this.fireSince >= rules.sustainedFire;
-        if (loud || killTimes.length >= rules.streakKills) {
+        if (loud || killTimes.length >= rules.streakKills || this.alarmGroup) {
+          this.alarmGroup ??= Array.from({length:rules.extraPopulation}, () => game.beasts.randomType());
+          if (!game.beasts.spawnGroup(this.alarmGroup).length) return;
+          this.alarmGroup = null;
           this.setAlarm(true);
           this.alarmUntil = now + rules.duration;
           this.sirenAt = now;
           this.fireSince = -Infinity;
           killTimes.length = 0;
-          game.beasts.spawnTime = Math.min(game.beasts.spawnTime, this.spawnEvery);
           game.ui.notify(loud ? '持续枪声触发红色警报' : '连续击杀触发红色警报', 2.9);
         }
       }
@@ -625,7 +625,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
         sound.tone(615, 355, 0.74, 0.097, 'triangle', 0.66);
         this.sirenAt = now + 4.2;
       }
-      this.status = { title: '红色警报', detail: '实验体增援加快', remaining: this.alarmUntil - now };
+      this.status = { title: '红色警报', detail: game.story?.managed ? '反应堆封锁中' : '警戒群已出动', remaining: this.alarmUntil - now };
     },
   };
   alarm.reset();

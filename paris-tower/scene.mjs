@@ -3,14 +3,16 @@ import { stageBuilder, skySpecks } from '@level-kit/stage-craft.mjs';
 const height = 7.2;
 const platform = {x0:-11,x1:11,z0:-9,z1:9,y:height};
 const beacon = [0,height,2], rescue = [10,height,-3];
-const climbs = [[-1,1],[1,-1],[1,1],[-1,-1]].map(([sx,sz]) =>
-  [[sx*20,0,sz*17],[sx*16,2.4,sz*14],[sx*12.6,4.8,sz*11],[sx*9.8,height,sz*7.7]]);
+const climbs = [[-20,17],[19,-21],[20,17],[-20,-17]].map(([x,z]) => {
+  const sx=Math.sign(x), sz=Math.sign(z);
+  return [[x,0,z],[sx*16,2.4,sz*14],[sx*12.6,4.8,sz*11],[sx*9.8,height,sz*7.7]];
+});
 const story = {type:'tower', platform, beacon, rescue, climbs,
   ascent:{kind:'fight',id:'approach',name:'铁塔南梯口',at:[0,30],label:'清理铁塔南梯口',
-    entries:[[-8,24],[8,24]],cap:8,interval:.36,mix:[0,0,2]},
+    entries:[[-8,24],[8,24]],mix:[0,0,2]},
   sectors:[
-  {name:'战神广场',cap:9,interval:0.33,at:[-6,28],entries:[[-9,24],[9,24]]},
-  {name:'塔脚钢架',cap:11,interval:0.29,at:[-16,13],entries:[[-23,12],[-18,4]]},
+  {name:'战神广场',at:[-6,28],entries:[[-9,24],[9,24]]},
+  {name:'塔脚钢架',at:[-16,13],entries:[[-23,12],[-18,4]]},
 ]};
 const grid = Array.from({length:25},(_,i)=>i===0||i===24?'#'.repeat(25):'#'+'.'.repeat(23)+'#');
 function ground(x,z) {

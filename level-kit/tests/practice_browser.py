@@ -58,10 +58,24 @@ def check(browser, url, static=False):
         step("slot"+str(i))
         if i==3:
             assert page.evaluate("run.game.kit.remaining().grenade") == 1
+            page.evaluate("""()=>{
+              const g=run.game,p=g.player,a=g.level.bossSpawn;
+              Object.assign(p,{x:a.x,y:a.y,z:a.z});
+              const spawn=g.beasts.spawnGroup.bind(g.beasts);
+              window.birthGaps=[];
+              g.beasts.spawnGroup=(...args)=>{
+                const group=spawn(...args);
+                for(const b of group)birthGaps.push([b.type,Math.hypot(b.x-p.x,b.z-p.z)-b.radius-p.radius]);
+                return group;
+              };
+            }""")
         hold(key)
     for name in ["kill","boss"]:
         step(name)
-        page.evaluate("""() => { const g=run.game;g.beasts.damage(g.training.guide(g).target,10000,g,'weapon'); }""")
+        page.evaluate("""() => { const g=run.game,b=g.training.guide(g).target;
+          if(!b || birthGaps.at(-1)?.[0]!==b.type || birthGaps.at(-1)[1]<run.config.beasts.safeSpawnGap)
+            throw Error('教程目标紧贴玩家');
+          g.beasts.damage(b,10000,g,'weapon'); }""")
     step("core")
     page.evaluate("""() => { const g=run.game,t=g.pickups.keyItem;Object.assign(g.player,{x:t.x,y:t.y,z:t.z});}""")
     hold("f");step("gate")
@@ -79,9 +93,24 @@ def check(browser, url, static=False):
     page.wait_for_function("run.game.performance.shots >= 54",timeout=20000)
     page.mouse.up()
     assert page.evaluate("run.game.weapon.reserve === Infinity")
-    page.evaluate("run.game.time=58")
-    page.wait_for_function("document.querySelector('#objective').textContent.includes('第 4 波')")
-    assert page.evaluate("run.game.beasts.live <= run.config.beasts.capacity")
+    waves=page.evaluate("""()=>{
+      const {game:g,config}=run, m=g.beasts,t=g.training,result=[];
+      g.reset();g.phase='play';
+      for(let wave=1;wave<=5;wave++){
+        const group=m.pool.filter(b=>b.active);
+        if(!t.guide(g).title.startsWith('第 '+wave+' 波') ||
+          group.some(b=>Math.hypot(b.x-g.player.x,b.z-g.player.z)-b.radius-g.player.radius<config.beasts.safeSpawnGap))
+          throw Error('试验场波次或安全距异常');
+        result.push(group.length);
+        g.time+=19;
+        m.damage(group[0],1e7,g,'weapon');t.step(g);
+        if(m.live!==group.length-1 || !t.guide(g).title.startsWith('第 '+wave+' 波'))throw Error('中途补怪');
+        for(const b of group.slice(1))m.damage(b,1e7,g,'weapon');
+        t.step(g);
+      }
+      return result;
+    }""")
+    assert waves==[10,12,14,16,18],waves
     page.evaluate("document.exitPointerLock()"); page.click("#practice-restart")
     page.wait_for_function("run.game.phase==='play' && run.game.time<5")
     page.evaluate("document.exitPointerLock()"); page.click("#campaign-home")

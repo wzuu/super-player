@@ -253,24 +253,26 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     }
     ground(x, z, i) {
       const ceiling = this.level.base(x,z) + .50;
-      if (!this.floors) return this.level.surface(x,z,ceiling);
-      return this.floors[i] = this.level.foot(x,z,ceiling,this.body.radius);
+      // 移动按四足支撑高度站在矮台边缘；AI 路线和出生净空必须使用同一落脚高度。
+      const floor=this.level.foot(x,z,ceiling,this.body.radius);
+      if (this.floors) this.floors[i]=floor;
+      return floor;
     }
-    canWalk(a,b) {
-      const samples = Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(this.body.radius*.8)));
-      const body = { x:a.x, y:a.y, z:a.z, radius:this.body.radius, height:this.body.height };
+    canWalk(a,b,profile=this.body) {
+      const samples = Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(profile.radius*.8)));
+      const body = { x:a.x, y:a.y, z:a.z, radius:profile.radius, height:profile.height };
       const allowed = definition.terrain?.routeOpen;
       let open = allowed?.(a.x,a.z,this.level) ?? true;
       for (let j=1; j<=samples; j++) {
         const x=a.x+(b.x-a.x)*j/samples, z=a.z+(b.z-a.z)*j/samples;
-        const floor=this.level.foot(x,z,body.y+this.body.step,body.radius);
+        const floor=this.level.foot(x,z,body.y+profile.step,body.radius);
         const nextOpen = allowed?.(x,z,this.level) ?? true;
         // 玩家可以走出脚下刚刚上涨的岩浆，但导航不能把开放路段拉直成穿越禁行带的近路。
         // 水平移动逐轴结算。斜线掠过沟道拐角时，两个端点都可能在干地上。
         if ((open && !nextOpen) || (definition.terrain?.canEnter &&
             (!this.level.canEnter(body,x,z,floor) || !this.level.canEnter(body,x,body.z,floor) ||
              !this.level.canEnter(body,body.x,z,floor))) ||
-            Math.abs(floor-body.y)>this.body.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height)) return false;
+            Math.abs(floor-body.y)>profile.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height)) return false;
         body.x=x;body.z=z;body.y=floor;
         open=nextOpen;
       }
@@ -342,6 +344,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       if (this.target === start) return;
       this.target = start;
       this.dist.fill(-1);
+      this.connected = 0;
       if (!routes[start]) return;
       this.dist[start] = 0;
       this.queue[0] = start;
@@ -358,6 +361,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         if ((edges & 4) && routes[up] && this.dist[up] < 0) { this.dist[up] = d; this.queue[count++] = up; }
         if ((edges & 8) && routes[down] && this.dist[down] < 0) { this.dist[down] = d; this.queue[count++] = down; }
       }
+      this.connected = count;
     }
     next(x, z) {
       const i = this.index(x, z), n = this.width;
@@ -376,7 +380,11 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
   // 每种体型共享自己的目标距离场。同一格内移动不会重复计算路径。
   class Navigation extends RouteField {
     playerRoute() { return new RouteField(this.level, CONFIG.player, false, true); }
-    routeFor(type) { return new RouteField(this.level,CONFIG.beasts.types[type],false); }
+    routeFor(type, checked = false, scale = 1) {
+      const stats = CONFIG.beasts.types[type];
+      const body = checked ? {radius:stats.radius*scale,height:stats.height*scale,step:.47} : stats;
+      return new RouteField(this.level, body, false, checked);
+    }
     constructor(level) {
       const types = CONFIG.beasts.types;
       super(level, types[0], true);

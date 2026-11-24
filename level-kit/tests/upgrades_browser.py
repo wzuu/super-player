@@ -210,7 +210,7 @@ def field(page, url):
       if(g.player.hp!==30)throw Error('急救未被打断');
       g.kit.use(2,g);g.kit.step(1.51,g);
       if(g.player.hp!==60)throw Error('急救持续时间或回复量错误');
-      return g.objective.reinforcements===2 && !g.ready();
+      return g.objective.wave===1 && !g.ready();
     }""")
     page.evaluate("run.game.finish(false)")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")

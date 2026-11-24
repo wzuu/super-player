@@ -70,10 +70,7 @@ export function bossDamage(b, amount, game, hit) {
     f.next = f.transitionUntil + 1.4;
     f.winding = false;
     f.weakUntil = f.brokenUntil = f.charge = 0;
-    b.summon = Math.min(
-      rules.summon[f.stage - 1],
-      Math.max(0, (game.story?.cap ?? game.beasts.pool.length) - game.beasts.live),
-    );
+    b.summon += rules.summon[f.stage - 1];
     game.ui.notify(f.stage === 1 ? '首领破壳 · 第二阶段' : '首领狂暴 · 第三阶段', 1.5);
     game.sound.tone(125, 49, 0.45, 0.28, 'sawtooth');
     return Math.max(0, b.hp - bound);

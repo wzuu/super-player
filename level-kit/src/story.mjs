@@ -1,6 +1,6 @@
 import { createMissionNavigation } from '@level-kit/mission-navigation.mjs';
 
-// 主线使用关卡指定的位置和有限队列。无尽使用原持续增援。
+// 每次主线遭遇只集结一次。限时目标切换时，保留已经入场的敌群。
 export function createStory({ THREE, scene, level, nav, CONFIG, definition, colors }, rules) {
   const spec = definition.story;
   let route;
@@ -109,31 +109,23 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     item = null,
     group = null,
     stageTime = 0,
-    nextBatch = 0;
+    countdownSecond = 0,
+    retryAt = 0;
   const asPoint = (a) => (a?.isVector3 ? a : a.length === 3 ? xyz(a) : point(a));
   function enter(g, continuing = null) {
     item = stages[index] ?? null;
     group = continuing;
-    if (group) {
-      // 爆破后的敌人改从封锁线进入，已入场者和剩余名额仍属于原来的遭遇。
-      if (item.entries) group.entrance = item.entries.map(asPoint);
-      if (item.cap) group.tag.cap = group.cap = item.cap;
-      if (item.mix) group.mix = item.mix;
-    }
     stageTime = 0;
-    nextBatch = 0;
+    countdownSecond = 0;
+    retryAt = 0;
     director.stage = item?.id ?? item?.kind ?? 'complete';
     if (!item) {
       director.blocksExit = false;
       return;
     }
     if (item.open) close(item.open, false);
-    if (item.kind === 'boss') {
-      const site = level.bossSpawn;
-      const boss = g.beasts.spawn(3, site.x, site.z, site.y);
-      if (!boss) throw new Error('首领出生点被封锁');
-      boss.alert = CONFIG.beasts.memory;
-    }
+    if (item.kind === 'boss') startBoss(g);
+    if (item.kind === 'countdown' || item.kind === 'defend') startGroup(g);
     if (item.alarm && g.encounter) {
       g.encounter.setAlarm(true);
       g.encounter.alarmUntil = g.time + 14;
@@ -148,100 +140,91 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     index++;
     enter(g, continuing ? group : null);
   }
-  function startGroup(g, n, entrances, cap, mix, escort = false) {
-    group = {
-      left: n,
-      cap,
-      mix,
-      deployed: 0,
-      entrance: entrances.map(asPoint),
-      escort,
-      tag: { cap },
-      warning: g.time + (item.vanguard ? 0 : 0.85),
-      timer: 0,
-      tickets: 0,
+  function waitForSpace(g) {
+    // 只在整群可入场时开始计时和清场。临时通道被关卡机关封闭时仍能恢复。
+    if (!retryAt) g.ui.notify('集结通道暂时受阻，移开入口或等候通道开放', 3);
+    retryAt = g.time + 0.5;
+    return false;
+  }
+  function startBoss(g) {
+    if (g.time < retryAt) return;
+    // 大型首领应能在专属战斗区行动；环站母体无需穿过通往上一房间的矮舱门。
+    const site = level.bossSpawn;
+    const [boss] = g.beasts.spawnGroup([3], {anchors: [site], target: site,
+      accept: p => Math.abs(p.y - site.y) < 1.5 && separation(p, site) <= 14});
+    if (!boss) return waitForSpace(g);
+    boss.alert = CONFIG.beasts.memory;
+    retryAt = 0;
+  }
+  function startGroup(g) {
+    if (group) return true;
+    if (g.time < retryAt) return false;
+    const entrances = (item.climbs ? item.climbs.map(route => route[0]) : item.entries).map(asPoint);
+    const mix = item.mix ?? [0, 0, 1, 2];
+    const entries = Array.from({length: item.count}, (_, i) => ({
+      type: mix[i % mix.length],
+      // 从通道纵向列队，保留四足模型头尾之间的通行净空。
+      angle: entrances[i % entrances.length].z < g.player.z ? 0 : Math.PI,
+    }));
+    // 允许向同一战区的通道展开，不占用撤离口、出生保护区或之后清场房间的集结区域。
+    const later = stages.slice(index + 1).filter(stage => stage.kind === 'fight');
+    const laterSites = later.flatMap(stage => stage.entries.map(asPoint));
+    const withinSector = site => {
+      if (level.inSafeZone(site.x, site.z, 1.4) || (Math.abs(site.y - level.gate.y) < 2 &&
+          separation(site, level.gate) < 3)) return false;
+      if (item.clearLanes?.some(([x0,z0,x1,z1]) => site.x >= x0 && site.x <= x1 &&
+          site.z >= z0 && site.z <= z1)) return false;
+      let distance = Infinity;
+      for (const p of entrances) distance = Math.min(distance, separation(p, site));
+      if (distance > 27 || laterSites.some(p => separation(p, site) < distance + 1)) return false;
+      return !item.bounds || item.bounds.some(([x0,z0,x1,z1]) =>
+        site.x >= x0 && site.x <= x1 && site.z >= z0 && site.z <= z1);
     };
-    if (item.kind === 'fight' && spec.type !== 'lab') {
-      const t = item.target;
-      const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
-      if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药', g.pickups.cacheAmount(), true);
+    const options = {anchors: entrances, accept: withinSector};
+    if (item.climbs) {
+      // 攀登前先在可步行的塔脚集结；其后的斜梁是独立于地面寻路的路线。
+      options.target = entrances[0];
+      options.accept = (site, i) => {
+        if (!withinSector(site)) return false;
+        const foot = entrances[i % entrances.length], stats = CONFIG.beasts.types[entries[i].type];
+        const dx = foot.x - site.x, dz = foot.z - site.z;
+        const steps = Math.ceil(Math.hypot(dx, dz) / 0.65);
+        if (Math.abs(site.y - foot.y) > 0.35 || steps > 30) return false;
+        for (let j = 1; j <= steps; j++) {
+          const x = site.x + dx * j / steps, z = site.z + dz * j / steps;
+          if (level.blocked(x, z, foot.y, stats.radius, stats.height)) return false;
+        }
+        return true;
+      };
     }
-    g.ui.notify((item.warning ?? item.name ?? '通道') + '出现动静，留意橙色入口', 2);
-    for (const entrance of group.entrance) g.sound.stageEvent?.('warning', g, entrance);
-  }
-  function members(g) {
-    return group ? g.beasts.pool.filter((b) => b.active && b.storyWave === group.tag) : [];
-  }
-  function spawnAt(g, k, type, entry) {
-    const field = nav.fields[type],
-      stats = CONFIG.beasts.types[type];
-    // 环绕入口按确定顺序找有空间且连通的落点。同批次不会共用一个位置。
-    for (let j = 0; j < 74; j++) {
-      const radius = 0.65 * Math.sqrt(j),
-        angle = (j + k * 3) * 2.39996;
-      const x = entry.x + radius * Math.cos(angle),
-        z = entry.z + radius * Math.sin(angle);
-      const y = level.surface(x, z, entry.y + 0.5);
-      if (
-        level.blocked(x, z, y, stats.radius, stats.height) ||
-        (!item.climbs && field.dist[field.index(x, z)] < 0) ||
-        Math.hypot(g.player.x - x, g.player.y - y, g.player.z - z) < 3.3 ||
-        g.beasts.pool.some(
-          (b) =>
-            b.active &&
-            Math.abs(b.y - y) < 1.6 &&
-            Math.hypot(b.x - x, b.z - z) < b.radius + stats.radius + 0.25,
-        )
-      )
-        continue;
-      const b = g.beasts.spawnRegular(type, x, z, y);
-      if (b) {
-        b.alert = CONFIG.beasts.memory + 6;
-        return b;
+    const creatures = g.beasts.spawnGroup(entries, options);
+    if (creatures.length !== entries.length) return waitForSpace(g);
+    retryAt = 0;
+    group = {tag: {cap: item.count}, entrances, markedUntil: g.time + 1.25};
+    for (const [i, beast] of creatures.entries()) {
+      beast.storyWave = group.tag;
+      beast.alert = CONFIG.beasts.memory + 6;
+      beast.droneRaider = Boolean(item.escort && i % 2 === 0);
+      if (item.climbs) {
+        beast.climbRoute = item.climbs[i % entrances.length];
+        beast.climbPoint = 0;
       }
     }
-    return null;
+    if (item.kind === 'fight') {
+      director.droneDocked = Boolean(item.escort);
+      director.encounters.push({name: item.name, enteredAt: g.time, spawned: creatures.length});
+      if (spec.type !== 'lab') {
+        const t = item.target;
+        const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
+        if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药', g.pickups.cacheAmount(), true);
+      }
+    }
+    g.ui.notify((item.warning ?? item.name ?? '通道') + '的敌群已集结，留意橙色入口', 2);
+    for (const entrance of entrances) g.sound.stageEvent?.('warning', g, entrance);
+    return true;
   }
-  function pressureStage() {
-    return group.deployed < 20 ? 0 : group.deployed < 55 ? 1 : 2;
-  }
-  function deploy(g, dt) {
-    if (!group) return;
-    const warning = group.warning - g.time;
-    if (warning > 0) {
-      group.entrance.slice(0, beacons.length).forEach((p, i) => {
-        const b = beacons[i];
-        b.visible = true;
-        b.position.set(p.x, p.y + 0.1, p.z);
-        b.scale.setScalar(1 + 0.55 * Math.abs(Math.sin(warning * 8)));
-      });
-      return;
-    }
-    group.timer -= dt;
-    if (group.timer > 0 || !group.left) return;
-    // 前二十只试探，随后两批提高近场压力；接缝处不停发。
-    let active = 0;
-    for (const b of g.beasts.pool) if (b.active && b.storyWave) active++;
-    if (active >= director.cap) return;
-    const type = group.mix[group.deployed % group.mix.length];
-    const routes = item.kind === 'defend' && director.elapsed < 30 ? 2 : group.entrance.length;
-    const entryIndex = group.tickets++ % routes,
-      entry = group.entrance[entryIndex];
-    const creature = spawnAt(g, group.tickets, type, entry);
-    if (!creature) {
-      group.timer = 0.16;
-      return;
-    }
-    const opening = group.deployed + 1 < (item.vanguard ?? 0);
-    group.timer = opening ? 0.13 : (item.interval ?? 0.34) * [1.12, 1, 0.84][pressureStage()];
-    creature.storyWave = group.tag;
-    creature.droneRaider = group.escort && group.deployed % 2 === 0;
-    if (item.climbs) {
-      creature.climbRoute = item.climbs[entryIndex];
-      creature.climbPoint = 0;
-    }
-    group.left--;
-    group.deployed++;
+  function members(g) {
+    return group ? g.beasts.pool.filter(b => b.active && b.storyWave === group.tag) : [];
   }
   function build(g) {
     const mode = g.objective.mode,
@@ -279,13 +262,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     supports(mode) {
       return Boolean(spec && ['classic', 'timed', 'hold', 'escort', 'rescue'].includes(mode));
     },
-    get cap() {
-      if (!this.managed) return CONFIG.beasts.capacity;
-      if (!group) return item?.kind === 'boss' ? 9 : 14;
-      if (item.kind === 'defend' && this.elapsed < 30) return 8;
-      if (item.kind === 'fight') return Math.ceil(group.cap * [0.55, 0.78, 1][pressureStage()]);
-      return group.cap;
-    },
+    get cap() { return group?.tag.cap ?? CONFIG.beasts.capacity; },
     prepare(mode) {
       this.managed = this.supports(mode);
       const closed =
@@ -310,7 +287,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         target: s.at ? asPoint(s.at) : undefined,
       })) : [];
       this.detonated = stages.some((stage) => stage.kind === 'countdown') ? false : null;
-      // 只以必清场次估算击杀评分，倒计时和突围的未入场敌人无需等待。
+      // 只以必清场次估算击杀评分，倒计时和突围的残敌不计入撤离门槛。
       g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight' ? s.count : Number(s.kind === 'boss')), 0)
         || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
@@ -323,16 +300,21 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     get target() {
       return item?.target;
     },
-    get remaining() {
-      return group?.left ?? 0;
-    },
+    get remaining() { return 0; },
     get doorStates() {
       return Object.fromEntries(
         [...panels].filter(([id]) => id).map(([id, entries]) => [id, entries[0].barrier.active !== false]),
       );
     },
     step(dt, g) {
-      for (const b of beacons) b.visible = false;
+      for (const [i, b] of beacons.entries()) {
+        const p = group?.entrances[i];
+        b.visible = Boolean(p && g.time < group.markedUntil);
+        if (b.visible) {
+          b.position.set(p.x, p.y + 0.1, p.z);
+          b.scale.setScalar(1 + 0.55 * Math.abs(Math.sin((group.markedUntil - g.time) * 8)));
+        }
+      }
       if (demolition && blastAge < 1.25) {
         blastAge += dt;
         demolition.visible = blastAge < 1.25;
@@ -364,18 +346,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
             near(p, t, item.range ?? 13) &&
             (!item.escort || near(g.objective.drone.position, t, 10))
           ) {
-            this.droneDocked = Boolean(item.escort);
-            startGroup(g, item.count, item.entries, item.cap ?? 6, item.mix ?? [0, 0, 1, 2], item.escort);
-            this.encounters.push({ name: item.name, enteredAt: g.time, spawned: 0, cap: group.cap });
+            startGroup(g);
           }
-          if (group) {
-            deploy(g, dt);
-            this.encounters.at(-1).spawned = group.deployed;
-            if (!group.left && !members(g).length) {
-              this.encounters.at(-1).clearedAt = g.time;
-              this.droneDocked = false;
-              advance(g);
-            }
+          if (group && !members(g).length) {
+            this.encounters.at(-1).clearedAt = g.time;
+            this.droneDocked = false;
+            advance(g);
           }
           break;
         case 'reach':
@@ -387,19 +363,18 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           }
           break;
         case 'boss':
+          if (!g.beasts.boss && !g.bossDead) startBoss(g);
           if (g.bossDead && g.core) advance(g);
           break;
         case 'hold':
-          if (!group && near(p, t, 11)) startGroup(g, item.count, item.entries, 7, [0, 0, 2, 1]);
-          deploy(g, dt);
-          if (g.objective.held >= rules.holdSeconds) advance(g);
+          if (!group && near(p, t, 11)) startGroup(g);
+          if (group && g.objective.held >= rules.holdSeconds) advance(g);
           break;
         case 'countdown': {
-          if (!group) startGroup(g, item.count, item.entries, 7, [0, 0, 2]);
-          deploy(g, dt);
+          if (!startGroup(g)) { stageTime = 0; break; }
           const sec = Math.ceil(rules.demolitionSeconds - stageTime);
-          if (sec > 0 && nextBatch !== sec) {
-            nextBatch = sec;
+          if (sec > 0 && countdownSecond !== sec) {
+            countdownSecond = sec;
             g.sound.tone(820, 640, 0.09, 0.18, 'square');
           }
           if (stageTime >= rules.demolitionSeconds) {
@@ -417,8 +392,6 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           break;
         }
         case 'breakout':
-          if (!group) startGroup(g, item.count, item.entries, item.cap, item.mix);
-          deploy(g, dt);
           if (near(p, t, 2.8)) {
             g.journal?.complete(g, item.label);
             g.finish(true, '你穿过封锁线，带着物资抵达高架接应点。');
@@ -429,10 +402,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           const pl = spec.platform;
           const onDeck =
             p.x >= pl.x0 && p.x <= pl.x1 && p.z >= pl.z0 && p.z <= pl.z1 && Math.abs(p.y - pl.y) < 2.6;
+          if (!startGroup(g)) break;
           if (item.kind === 'defend' && onDeck)
             this.elapsed = Math.min(rules.rescueSeconds, this.elapsed + dt);
-          if (!group) startGroup(g, item.count, item.climbs.map((r) => r[0]), 14, [0, 0, 1, 2]);
-          deploy(g, dt);
           if (item.kind === 'defend' && this.elapsed >= rules.rescueSeconds) {
             advance(g);
             g.sound.tone(430, 700, 0.5, 0.24, 'triangle');
@@ -505,7 +477,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
               ) ?? t;
             detail =
               '剩余 ' +
-              (living.length + group.left) +
+              living.length +
               ' 只' +
               (this.droneDocked ? ' · 无人机停靠，拦截袭击者' : '');
           }
