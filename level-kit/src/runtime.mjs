@@ -121,16 +121,21 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const lookTrace = createLookTrace(training?.kind ?? definition.weaponSkin, $('look-trace-download'));
   const stickLook = new StickLook();
   const padDown = new Set(), previousButtons = new Set();
-  let padIndex = null, lockStartedAt = Infinity, skipMouse = false;
+  let padIndex = null, lockStartedAt = Infinity, pendingPointer = null;
   const recordMotion = lookTrace && ((dx,dy,time) => lookTrace.mouse(dx,dy,time,look.rotation));
   function moveLook(event) {
     if (document.pointerLockElement !== canvas || game.phase !== 'play') return;
     const pointer = event.type === 'pointermove';
     if (pointer && event.pointerType !== 'mouse') return;
-    if (!pointer && skipMouse) { skipMouse = false; return; }
+    if (!pointer && pendingPointer) {
+      // 同一次派发的兼容 MouseEvent 继承设备时间和外层位移；单独到来的后续移动仍须处理。
+      const paired = event.timeStamp === pendingPointer.timeStamp &&
+        event.movementX === pendingPointer.movementX && event.movementY === pendingPointer.movementY;
+      pendingPointer = null;
+      if (paired) return;
+    }
     const used = applyMouseLook(look.rotation,event,CONFIG.player.mouseSpeed,lockStartedAt,recordMotion);
-    // 一次指针更新只匹配一份兼容鼠标事件，之后独立的 mousemove 仍然有效。
-    if (pointer) skipMouse = used;
+    if (pointer) pendingPointer = used ? event : null;
   }
   document.addEventListener('pointermove',moveLook);
   document.addEventListener('mousemove',moveLook);
@@ -421,7 +426,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   }
 
   document.addEventListener('pointerlockchange', async (event) => {
-    skipMouse = false;
+    pendingPointer = null;
     lookTrace?.lock(document.pointerLockElement === canvas,'lockchange');
     if (document.pointerLockElement !== canvas) {
       lockStartedAt = Infinity;
