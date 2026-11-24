@@ -55,9 +55,11 @@ export function createSoundClass({ CONFIG, seededRandom,score }) {
       }
       this.ctx.resume().catch(() => {});
     }
-    toggle() {
-      this.enabled = !this.enabled;
-      if (this.ctx) this.main.gain.setTargetAtTime(this.enabled ? CONFIG.audio.volume * 0.65 : 0, this.ctx.currentTime, 0.055);
+    setOutput(volume, muted) {
+      CONFIG.audio.volume = volume;
+      this.enabled = !muted;
+      if (muted) this.stopVoices();
+      if (this.ctx) this.main.gain.setTargetAtTime(muted ? 0 : volume * .65, this.ctx.currentTime, .055);
     }
     active(active) {
       if (this.combat) this.combat.gain.setTargetAtTime(Number(active), this.ctx.currentTime, .015);
@@ -112,10 +114,14 @@ export function createSoundClass({ CONFIG, seededRandom,score }) {
       const dx = b.x - player.x, dz = b.z - player.z, yaw = player.look.rotation.y;
       // 用玩家水平朝向换算到监听者坐标，低头或受击镜头偏转不改变脚步方位。
       panner.setPosition(Math.cos(yaw)*dx - Math.sin(yaw)*dz,
-        b.y + b.height * .45 - player.y - player.eye, Math.sin(yaw)*dx + Math.cos(yaw)*dz);
+        b.y + (b.height ?? 0) * .45 - player.y - player.eye, Math.sin(yaw)*dx + Math.cos(yaw)*dz);
       panner.connect(this.combat);
       let voice;
-      if (cue === 'charge') {
+      if (cue === 'grenade') {
+        panner.refDistance = 5;
+        this.tone(155, 42, .22, .44, 'triangle', 0, panner);
+        voice = this.hiss(.3, 2150, 150, .42, 0, panner);
+      } else if (cue === 'charge') {
         if(score?.id==='shanhai-secret-realm') this.hiss(.21,250,780,.27,0,panner);
         voice = this.tone(145, 470, .26, .5, 'sawtooth', 0, panner);
       } else if (cue === 'step') {

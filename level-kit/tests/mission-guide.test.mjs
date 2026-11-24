@@ -26,7 +26,7 @@ function fixture() {
     MeshBasicMaterial: class {},
     Vector3: Vector,
   };
-  const goal = createObjective(1, { THREE, scene: { add() {} } }, { beasts: { killsToWin: 7 } });
+  const goal = createObjective(1, { THREE, scene: { add() {} } });
   const text = {
     bossName: '首领甲',
     keyItem: '通行证',
@@ -47,7 +47,7 @@ function fixture() {
   };
   return { goal, g, text, guide: () => goal.guide(g, text) };
 }
-test('经典行动遵循实际首领、掉落、击杀门槛与可交互位置', () => {
+test('经典行动只凭当前分区、首领与核心开放撤离', () => {
   const { goal, g, guide } = fixture();
   goal.reset('classic', g);
   assert.equal(guide().target, g.beasts.boss);
@@ -56,9 +56,11 @@ test('经典行动遵循实际首领、掉落、击杀门槛与可交互位置',
   g.pickups.nearKey = () => true;
   assert.equal(guide().stage, 'collect');
   g.core = true;
-  g.kills = 6;
-  assert.match(guide().detail, /1 只/);
-  g.kills = 7;
+  g.kills = 0;
+  g.story = { managed: true, blocksExit: true };
+  assert.equal(goal.ready(g), false);
+  g.story = { managed: true, blocksExit: false };
+  assert.equal(goal.ready(g), true);
   assert.equal(guide().target, g.level.gate);
   g.nearGate = () => true;
   assert.equal(guide().stage, 'interact');

@@ -451,8 +451,10 @@ function field(label, control) {
 function settings() {
   openPanel('游戏设置');
   const prefs = preferences();
-  const save = () => {
-    storePreferences(prefs);
+  const save = (id, value) => {
+    // 设置面板可能跨页保持打开，只写用户刚改的一项，保留其他窗口的最新选择。
+    prefs[id] = value;
+    storePreferences({ ...preferences(), [id]: value });
     updateVolume();
   };
   for (const [id, label, min, max, step] of [
@@ -466,9 +468,8 @@ function settings() {
     Object.assign(input, { type: 'range', min, max, step, value: prefs[id] });
     const value = element('output', '', prefs[id]);
     input.oninput = () => {
-      prefs[id] = Number(input.value);
       value.value = input.value;
-      save();
+      save(id, Number(input.value));
     };
     const group = element('span');
     group.append(input, value);
@@ -476,6 +477,7 @@ function settings() {
     input.setAttribute('aria-label', label);
   }
   for (const [id, label, choices] of [
+    ['aimMode', '右键瞄准', [['toggle', '单击切换'], ['hold', '按住开镜']]],
     [
       'difficulty',
       '难度',
@@ -500,8 +502,7 @@ function settings() {
     for (const [v, name] of choices) select.add(new Option(name, v));
     select.value = prefs[id];
     select.onchange = () => {
-      prefs[id] = select.value;
-      save();
+      save(id, select.value);
     };
     field(label, select);
   }
@@ -516,8 +517,7 @@ function settings() {
     input.type = 'checkbox';
     input.checked = prefs[id];
     input.onchange = () => {
-      prefs[id] = input.checked;
-      save();
+      save(id, input.checked);
     };
     field(label, input);
   }
@@ -538,10 +538,11 @@ function settings() {
       if (!button.hasAttribute('data-wait') || ['Tab', 'Escape'].includes(event.code)) return;
       event.preventDefault();
       event.stopPropagation();
-      const other = Object.keys(defaultKeys).find((k) => prefs.keys[k] === event.code);
-      if (other) prefs.keys[other] = prefs.keys[id];
-      prefs.keys[id] = event.code;
-      save();
+      const keys = preferences().keys;
+      const other = Object.keys(defaultKeys).find((k) => keys[k] === event.code);
+      if (other) keys[other] = keys[id];
+      keys[id] = event.code;
+      save('keys', keys);
       delete button.dataset.wait;
       for (const binding of body.querySelectorAll('[data-binding]')) {
         binding.textContent = keyName(prefs.keys[binding.dataset.binding]);
@@ -550,7 +551,7 @@ function settings() {
     field(actionLabels[i], button);
   }
 }
-const refreshSound = bindSoundControl($('mute'));
+const refreshSound = bindSoundControl({button: $('mute')});
 function updateVolume() {
   const prefs = preferences();
   refreshSound(prefs);

@@ -3,7 +3,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
     constructor(level) {
       this.level = level;
       this.nodes = {};
-      for (const name of ['menu', 'menu-title', 'menu-tag', 'menu-text', 'loot-title', 'boss-title', 'menu-status', 'guide', 'summary', 'start', 'sound', 'hud', 'area', 'objective', 'kills', 'loot',
+      for (const name of ['menu', 'menu-title', 'menu-tag', 'menu-text', 'loot-title', 'boss-title', 'menu-status', 'guide', 'summary', 'start', 'hud', 'area', 'objective', 'kills', 'loot',
         'map', 'boss', 'boss-phase', 'boss-health', 'health', 'hp', 'stamina', 'energy', 'condition', 'condition-title', 'condition-time', 'condition-meter', 'condition-detail', 'hud-announcement', 'crouch-help', 'posture', 'ammo', 'reserve', 'weapon-state', 'cross', 'message', 'injury', 'blast']) this.nodes[name] = $(name);
       this.ctx = this.nodes.map.getContext('2d');
       this.size = this.nodes.map.width;
@@ -28,7 +28,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.base.width = this.base.height = this.size;
       this.drawBase();
       this.text('menu-tag', TEXT.tag);
-      this.text('loot-title', TEXT.loot);
+      this.text('loot-title', '可选搜集');
       this.text('boss-title', TEXT.bossName);
       this.nodes.boss.setAttribute('aria-label', TEXT.bossName + '状态');
       this.nodes['boss-health'].setAttribute('aria-label', TEXT.bossName + '生命值');
@@ -63,10 +63,16 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       ctx.fillStyle = '#ffb171'; ctx.fillRect(this.px(this.level.gate.x) - 3, this.pz(this.level.gate.z) - 3, 6, 6);
       ctx.fillStyle = '#a1a086'; ctx.fillRect(this.px(this.level.bossAnchor.x) - 2, this.pz(this.level.bossAnchor.z) - 2, 4, 4);
     }
-    drawMap(game, target) {
+    drawMap(game, target, path, engaged) {
       const ctx = this.ctx;
       ctx.drawImage(this.base, 0, 0);
       definition.minimap?.overlay?.({ ctx, px: x => this.px(x), pz: z => this.pz(z), game });
+      if (path?.length) {
+        ctx.beginPath();
+        ctx.moveTo(this.px(game.player.x), this.pz(game.player.z));
+        for (const q of path) ctx.lineTo(this.px(q.x), this.pz(q.z));
+        ctx.strokeStyle = '#91ffcd'; ctx.lineWidth = 1.6; ctx.stroke();
+      }
       game.field?.minimap(ctx,x=>this.px(x),z=>this.pz(z),game);
       for(const lift of game.lifts?.lifts??[]) {
         ctx.fillStyle='#8feddb';ctx.font='bold 11px sans-serif';
@@ -96,7 +102,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         ctx.fillStyle=game.objective.escortHealth<=40?'#ff9966':'#83f4ec';
         ctx.beginPath();ctx.arc(this.px(drone.x),this.pz(drone.z),3.5,0,TAU);ctx.fill();
       }
-      if (target) {
+      if (target && !engaged) {
         const x = this.px(target.x), z = this.pz(target.z);
         ctx.save(); ctx.translate(x,z); ctx.rotate(Math.PI/4);
         ctx.strokeStyle = '#9bffde'; ctx.lineWidth = 2; ctx.strokeRect(-4,-4,8,8); ctx.restore();
@@ -188,14 +194,15 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         this.taskChangedUntil = game.time + 2.4;
         this.taskStage = task.stage;
       }
-      const changed = game.time < this.taskChangedUntil;
+      const changed = game.time < this.taskChangedUntil && !task.engaged;
       this.nodes['task-panel'].toggleAttribute('data-update', changed);
       this.nodes['task-update'].hidden = !changed;
       this.text('objective', task.title);
       let direction = '';
-      if (task.target) {
-        const dx = task.target.x - game.player.x, dz = task.target.z - game.player.z;
-        const dy = task.target.y - game.player.y, range = Math.hypot(dx, dz);
+      const waypoint = task.path ? task.waypoint : task.target;
+      if (waypoint && !task.engaged) {
+        const dx = waypoint.x - game.player.x, dz = waypoint.z - game.player.z;
+        const dy = waypoint.y - game.player.y, range = Math.hypot(dx, dz);
         const compass = ['北','东北','东','东南','南','西南','西','西北'];
         const bearing = compass[(Math.round(Math.atan2(dx, -dz) * 4 / Math.PI) + 8) % 8];
         direction = (range > 1 ? bearing + ' ' : '') + Math.round(Math.hypot(range,dy)) + ' 米' +
@@ -261,16 +268,18 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       const baseLoot=game.loot.filter(item=>!item.origin || item.origin==='main').length;
       this.text('loot', baseLoot + ' / ' + (definition.loot?.length ?? 0) +
         (game.loot.length>baseLoot ? ' +'+(game.loot.length-baseLoot) : ''));
-      this.text('kills', game.objective.mode && (game.objective.mode !== 'classic' || definition.story?.type==='lab') ? String(game.kills) : game.kills + ' / ' + CONFIG.beasts.killsToWin);
-      const task = game.training?.guide(game) ?? game.objective.guide(game, TEXT);
+      this.text('kills', String(game.kills));
+      const rawTask = game.training?.guide(game) ?? game.objective.guide(game, TEXT);
+      const task = game.story?.navigation(rawTask, game) ?? rawTask;
       game.story?.marker(task,game);
       this.showTask(task, game);
       const boss = game.beasts.boss;
       this.nodes.boss.hidden = !boss || Math.hypot(boss.x - p.x, boss.z - p.z) > 28;
       if (!this.nodes.boss.hidden) {
         const f=boss.fight;
-        this.text('boss-phase', f ? ['第一阶段','第二阶段','狂暴'][f.stage] + ' · ' +
-          (game.time<f.transitionUntil?'转阶段':game.time<f.brokenUntil?'已破甲':game.time<f.weakUntil?'弱点暴露':f.winding?'蓄力':'装甲') +
+        const state = f && (game.time<f.transitionUntil?'转阶段':game.time<f.brokenUntil?'已破甲':game.time<f.weakUntil?'弱点暴露':f.winding?'蓄力':'装甲');
+        this.nodes.boss.dataset.state = state ?? '';
+        this.text('boss-phase', f ? ['第一阶段','第二阶段','狂暴'][f.stage] + ' · ' + state +
           ' · 破甲 '+f.charge+'/'+f.rules.breakHits : boss.rage ? '狂暴' : '第一阶段');
         this.nodes['boss-health'].max=boss.maxHP;
         this.nodes['boss-health'].value = Math.max(boss.hp, 0);
@@ -287,7 +296,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       note = game.field?.hint(game) || game.lifts?.hint(p) || note;
       this.nodes.message.hidden = !note;
       if (note) this.text('message', note);
-      this.drawMap(game, task.target);
+      this.drawMap(game, task.target, task.path, task.engaged);
     }
     menu(mode, game) {
       const overlay = this.nodes.menu;

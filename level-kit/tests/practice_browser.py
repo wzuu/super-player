@@ -34,6 +34,9 @@ def check(browser, url, static=False):
     def step(name):
         page.wait_for_function("name=>run.game.training.guide(run.game).stage==='tutorial-'+name",arg=name,timeout=6000)
     step("look")
+    # 玩家可能在看到道具指引前就已用完练习手雷。
+    for _ in range(3): page.keyboard.press("2")
+    assert page.evaluate("run.game.kit.remaining().grenade") == 0
     page.mouse.move(520,320)
     page.mouse.move(580,341)
     step("walk")
@@ -52,7 +55,11 @@ def check(browser, url, static=False):
     step("empty"); page.mouse.down();step("pickup");page.mouse.up()
     # 跳过路程，拾取、伤害、核心和撤离仍走与正式游玩相同的入口。
     page.evaluate("""() => {const g=run.game,t=g.training.guide(g).target;Object.assign(g.player,{x:t.x,y:t.y,z:t.z});}""")
-    for i,key in enumerate(["q","e","1","2"]): step("slot"+str(i)); hold(key)
+    for i,key in enumerate(["q","e","1","2"]):
+        step("slot"+str(i))
+        if i==3:
+            assert page.evaluate("run.game.kit.remaining().grenade") == 1
+        hold(key)
     for name in ["kill","boss"]:
         step(name)
         page.evaluate("""() => { const g=run.game;g.beasts.damage(g.training.guide(g).target,10000,g,'weapon'); }""")

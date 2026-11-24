@@ -11,7 +11,7 @@ import { createWeaponClass } from '@level-kit/weapon.mjs';
 import { shotgunRules } from '@level-kit/weapon-classes.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 import { createUIClass } from '@level-kit/ui.mjs';
-import { preferences, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
+import { preferences, aimInstructions, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
 import { createFieldKit } from '@level-kit/field-kit.mjs';
 import { createObjective, missionRules } from '@level-kit/objectives.mjs';
 import { createStory } from '@level-kit/story.mjs';
@@ -123,6 +123,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
 
   const input = {
     down: new Set(),
+    aimPressed: false,
     fire: false,
     jump: false,
     reload: false,
@@ -130,7 +131,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     clear() {
       this.down.clear();
       this.padFire = this.fire = this.jump = this.reload = this.interact = false;
-      player.aiming = false;
+      this.aimPressed = player.aimRequested = player.aiming = false;
       player.ads = 0;
       player.positionCamera(0);
       ui.aimDot.hidden=true;
@@ -164,6 +165,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const objective = createObjective(campaignStage, visual, CONFIG);
   const modeSelect = $('mission-mode');
   CONFIG.interactLabel = keyName(prefs.keys.KeyF);
+  CONFIG.crouchLabel = keyName(prefs.keys.KeyC);
   CONFIG.deepKey = keyName(prefs.keys.KeyG);
   CONFIG.supportsHunt=Boolean(field?.cfg.hunt);
   initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign);
@@ -192,7 +194,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     kills: 0,
     performance: new BattlePerformance(),
     journal: campaign ? new BattleJournal() : null,
-    stageKillTarget: CONFIG.beasts.killsToWin,
+    stageKillTarget: CONFIG.beasts.encounterSize,
     core: false,
     bossDead: false,
     loot: [],
@@ -275,6 +277,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.endReason = reason;
       const details = this.journal?.finish(this, won, reason);
       this.phase = won ? 'win' : 'fail';
+      kit.clear();
       deck.finish();
       if (!won) {
         this.loot.length = 0;
@@ -336,6 +339,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
         if (this.phase !== 'play') return;
         if (!this.blast) {
           weapon.update(dt, input, this);
+          player.aiming = player.aimRequested && weapon.reloadLeft <= 0;
           if (encounter?.beastsDisabled) beasts.fadeHitFlashes(dt, this);
           else beasts.update(dt - frozen, player, this);
           projectiles.update(dt - frozen, player, this);
@@ -446,35 +450,35 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       game.finish(false, '主动退出');
     }
   });
-  bindSoundControl($('sound'), (current, state) => {
-    CONFIG.player.steady = current.steady;
-    CONFIG.feedback.hitShake = current.hitShake;
-    CONFIG.feedback.attackShake = current.attackShake;
-    CONFIG.feedback.directionIndicators = current.directionIndicators;
-    CONFIG.audio.volume = current.volume / 100;
-    sound.enabled = !current.muted;
-    if(!sound.enabled) sound.stopVoices();
-    if (sound.ctx) sound.main.gain.setTargetAtTime(sound.enabled ? CONFIG.audio.volume * .65 : 0, sound.ctx.currentTime, .055);
-    $('sound-state').textContent = state + ' · ' + keyName(current.keys.KeyM);
+  bindSoundControl({
+    shortcut: prefs.keys.KeyM,
+    apply(current) {
+      CONFIG.player.steady = current.steady;
+      CONFIG.feedback.hitShake = current.hitShake;
+      CONFIG.feedback.attackShake = current.attackShake;
+      CONFIG.feedback.directionIndicators = current.directionIndicators;
+      sound.setOutput(current.volume / 100, current.muted);
+    },
   });
 
   const keyMap = new Map(Object.entries(prefs.keys).map(([action, code]) => [code, action]));
   if (prefs.keys.ShiftLeft === 'ShiftLeft' && !keyMap.has('ShiftRight'))
     keyMap.set('ShiftRight', 'ShiftLeft');
   const capturedKeys = new Set(Object.keys(prefs.keys));
-  const names = (ids) => ids.map((id) => keyName(prefs.keys[id])).join(' / ');
-  const guide = $('guide').querySelectorAll('dt');
-  guide[0].textContent = names(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
-  guide[2].textContent = names(['ShiftLeft', 'Space']);
-  guide[3].textContent = names(['KeyR', 'KeyF']) + ' / Esc';
-  guide[4].textContent = names(['KeyC']);
-  guide[5].textContent = names(['KeyQ', 'KeyE']);
-  guide[6].textContent = names(['Digit1', 'Digit2']);
-  guide[7].textContent = names(['KeyV']);
+  for (const label of $('guide').querySelectorAll('[data-keys]')) {
+    label.textContent = label.dataset.keys.split(' ').map(id => keyName(prefs.keys[id])).join(' / ');
+  }
+  $('aim-help').textContent = aimInstructions(prefs.aimMode);
+  $('deep-help').hidden = !field?.cfg.deep;
+  if (definition.weaponSkin === 'buried-tomb')
+    $('crouch-help').querySelector('dd').append('沙暴中配合停火可压低声响。');
   function pressAction(code) {
     if (code === 'KeyG') field?.deepen(game);
     if (code === 'KeyI' && !weapon.reloadLeft && !player.aiming && !player.sprinting) weapon.inspectTime = 2;
-    if (code === 'KeyV') player.thirdPerson = !player.thirdPerson;
+    if (code === 'KeyV') {
+      player.aimRequested = player.aiming = false;
+      player.thirdPerson = !player.thirdPerson;
+    }
     if (code === 'KeyR') input.reload = true;
     if (code === 'Space') input.jump = true;
     if (code === 'KeyF') input.interact = true;
@@ -500,15 +504,24 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('mousedown', (event) => {
     if (game.phase !== 'play' || document.pointerLockElement !== canvas || ![0,2].includes(event.button)) return;
     event.preventDefault();
-    if (event.button === 2) player.aiming = true;
+    if (event.button === 2) {
+      if (!input.aimPressed) player.aimRequested = prefs.aimMode === 'hold' || !player.aimRequested;
+      input.aimPressed = true;
+    }
     else input.fire = true;
   });
   document.addEventListener('mouseup', (event) => {
     if (event.button === 0) input.fire = false;
-    if (event.button === 2) player.aiming = false;
+    if (event.button === 2) {
+      input.aimPressed = false;
+      if (prefs.aimMode === 'hold') player.aimRequested = false;
+    }
   });
   window.addEventListener('blur', input.clear.bind(input));
-  window.addEventListener('pagehide', () => {
+  window.addEventListener('pagehide', event => {
+    // BFCache 恢复属于同一局，保留暂停时的投掷物。
+    pause();
+    if (!event.persisted) kit.clear();
     sound.active(false);
     sound.ctx?.suspend().catch(()=>{});
   });

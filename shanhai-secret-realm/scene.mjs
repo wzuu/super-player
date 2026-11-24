@@ -3,9 +3,9 @@ const CONFIG = {
   graphics: { maxPixelRatio: 1.25, bloomScale: 0.63 },
   audio: { ambient: { activeGain: 0.20, pauseGain: 0.10, frequency: 420, filter: 'lowpass' } },
   player: { walk: 5.65, sprint: 9, hurtCooldown: 0.42 },
-  weapon: { fireRate: 10, magazine: 60, reloadTime: 1.8, baseSpread: 0.0045, maxSpread: 0.033, recoil: 0.012 },
+  weapon: { fireRate: 10, reloadTime: 1.8, baseSpread: 0.0045, maxSpread: 0.033, recoil: 0.012 },
   beasts: {
-    killsToWin: 150, sight: 22, memory: 6,
+    sight: 22, memory: 6,
     types: [
       { hp: 51, speed: 7.85, damage: 7, windup: 0.32, recovery: 1.05 },
       { hp: 143, damage: 16, windup: 0.78 },
@@ -13,7 +13,7 @@ const CONFIG = {
       { hp: 790, damage: 23, summonCount: 7 },
     ],
   },
-  pickups: { ammoDrop: 17, ammoCache: 60 },
+  pickups: { ammoDrop: 26, ammoCache: 180 },
   moon: { period: 120, duration: 20, warning: 8, nightfall: 58, speed: 1.14, damage: 1.30, ammo: 12, health: 9 },
   lava: { depth: -0.40, damage: 14, cooldown: 0.55 },
 };
@@ -852,8 +852,8 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'荒冢墓园',at:[-8,25],entries:[[-16,24],[0,18]]},
-    {name:'古城祭坛',at:[4,-2],entries:[[-9,-8],[13,-7]]},
+    {name:'荒冢墓园',cap:9,interval:0.33,at:[-8,25],entries:[[-16,24],[0,18]]},
+    {name:'古城祭坛',cap:11,interval:0.29,at:[4,-2],entries:[[-9,-8],[13,-7]]},
   ]},
   weaponSkin: 'shanhai-secret-realm',
   pageTitle: '上古秘境 | 第二关',

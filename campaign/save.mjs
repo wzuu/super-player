@@ -194,11 +194,14 @@ export async function connectCampaign(level, onUpgradeBlocked) {
       state[group] = ids;
     }
   };
+  const purchases = new Map();
   document.getElementById('shop-buy').onclick = async (event) => {
     if (shop.disabled) return;
     const button = event.currentTarget,
       id = document.getElementById('shop-item').value;
     const selected = draft;
+    const purchase = purchases.get(id) ?? { token: crypto.randomUUID() };
+    purchases.set(id, purchase);
     button.disabled = true;
     shop.disabled = true;
     const start = document.getElementById('start');
@@ -208,10 +211,14 @@ export async function connectCampaign(level, onUpgradeBlocked) {
         if (selected) applyChoice(state, selected, snapshot);
         if (items[id] && !isUnlocked(items[id], store.levels, snapshot.cleared)) throw Error('尚未解锁');
         requisition(state, id, snapshot.earned, items,equippedSkin ?? level);
-      });
-      if (draft === selected) draft = null;
+        purchase.selection = selected;
+      }, purchase);
+      if (draft === purchase.selection) draft = null;
       await renderGear();
+      purchases.delete(id);
       shopStatus.textContent = stock[id].name + '兑换成功';
+      // 只有本页收到成功结果且已刷新库存才回收收据，其他标签的未确认兑换继续可重试。
+      await store.writeGear({ acknowledgePurchase: purchase.token }).catch(() => {});
     } catch (error) {
       shopStatus.textContent = error.message;
     } finally {

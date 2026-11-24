@@ -114,6 +114,8 @@
   #condition p { margin: 4px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }
   #posture { color: var(--cyan); font-size: 10px; margin-inline-start: auto; white-space: nowrap; }
   #boss progress { --fill: var(--red); margin-bottom: 0; }
+  #boss[data-state="弱点暴露"] #boss-phase { color: #ffe75e; }
+  #boss[data-state="已破甲"] #boss-phase { color: #89ffdd; font-weight: 700; }
   .boss-meter {position:relative}
   .boss-meter::after {content:'';position:absolute;inset:0;pointer-events:none;
     background:linear-gradient(to right,transparent calc(35% - 1px),#eff9ff 35%,transparent calc(35% + 1px),
@@ -277,7 +279,6 @@
     <div class="ammo-label" id="rifle-label">机关枪</div>
     <div class="ammo-line"><output id="ammo">60</output><span id="reserve">/ 300</span></div>
     <div id="weapon-state"></div>
-    <small id="sound-state"></small>
   </section>
 </div>
 <output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
@@ -291,14 +292,19 @@
       <div class="mission-choice"><label for="mission-mode">行动目标</label><select id="mission-mode" aria-describedby="mission-rule"></select>
         <p id="mission-rule"></p></div>
       <details id="key-guide"><summary>按键说明</summary><dl class="controls" id="guide">
-        <div><dt>WASD</dt><dd>移动</dd></div>
-        <div><dt>鼠标左键 / 右键</dt><dd>射击 / 按住红点瞄准</dd></div>
-        <div><dt>Shift / 空格</dt><dd>冲刺 / 跳跃</dd></div>
-        <div><dt>R / F / Esc</dt><dd>提前换弹（空仓自动） / 交互 / 暂停</dd></div>
-        <div id="crouch-help" hidden><dt>C</dt><dd>按住蹲伏</dd></div>
-        <div><dt>Q / E</dt><dd>主动技能</dd></div>
-        <div><dt>1 / 2</dt><dd>携带道具</dd></div>
-        <div><dt>V</dt><dd>第一人称 / 肩后视角</dd></div>
+        <div><dt data-keys="KeyW KeyA KeyS KeyD"></dt><dd>移动</dd></div>
+        <div><dt>鼠标左键</dt><dd>持续射击</dd></div>
+        <div><dt>鼠标右键</dt><dd id="aim-help"></dd></div>
+        <div><dt data-keys="ShiftLeft Space"></dt><dd>冲刺 / 跳跃</dd></div>
+        <div><dt data-keys="KeyR KeyF"></dt><dd>提前换弹（空仓自动） / 交互</dd></div>
+        <div><dt>Esc</dt><dd>暂停并释放鼠标</dd></div>
+        <div id="crouch-help" hidden><dt>按住 <span data-keys="KeyC"></span></dt><dd>蹲伏，降低视点和身体高度，减速通过低矮通道。</dd></div>
+        <div><dt data-keys="KeyQ KeyE"></dt><dd>主动技能</dd></div>
+        <div><dt data-keys="Digit1 Digit2"></dt><dd>携带道具</dd></div>
+        <div><dt data-keys="KeyV"></dt><dd>切换视角（第一人称 / 肩后）</dd></div>
+        <div><dt data-keys="KeyI"></dt><dd>检视武器</dd></div>
+        <div><dt data-keys="KeyM"></dt><dd>切换音效</dd></div>
+        <div id="deep-help" hidden><dt data-keys="KeyG"></dt><dd>确认深入</dd></div>
       </dl></details>
       <div id="summary" hidden></div>
       </div><section id="loadout-pane" aria-labelledby="kit-title">
@@ -319,7 +325,6 @@
         <button id="practice-restart" type="button" hidden>重开练习</button>
         <a id="campaign-home" class="action-link" href="../" hidden>返回首页</a>
         <button id="retry-save" type="button" hidden>重试保存</button>
-        <button id="sound" type="button" aria-pressed="true">音效开启</button>
       </div>
       <p id="menu-status" role="status">正在加载关卡</p>
       </footer>

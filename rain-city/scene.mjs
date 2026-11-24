@@ -564,20 +564,20 @@ export default {
   story:{
     type:'rain',
     sectors:[
-      {name:'地铁口下沉广场',at:[0,27],entries:[[-7,24],[8,21]]},
-      {name:'钟楼北广场',at:[0,-13],entries:[[-10,-16],[11,-20]]},
+      {name:'地铁口下沉广场',cap:10,interval:0.34,at:[0,27],entries:[[-7,24],[8,21]]},
+      {name:'钟楼北广场',cap:16,interval:0.26,at:[0,-13],entries:[[-10,-16],[11,-20]]},
     ],
     // 高架桥下的撤离点三面有实体围挡，隔离门打开后只从南面进入。
     walls:[[null,-3.9,-24,.42,7.6,4.6],[null,3.9,-24,.42,7.6,4.6],
       [null,0,-27.8,8.2,.42,4.6],['barricade',0,-20.2,8.2,.5,4.6]],
     route:[
-      {kind:'fight',name:'地铁口下沉广场',label:'清理广场出口',at:[0,29],entries:[[-7,24],[8,21]],count:7,cap:4,mix:[0,0,2]},
-      {kind:'fight',name:'钟楼南街',label:'打通钟楼南街',at:[1,8],entries:[[-7,6],[10,4]],count:9,cap:6,mix:[0,1,2]},
+      {kind:'fight',name:'地铁口下沉广场',label:'清理广场出口',at:[0,29],entries:[[-7,24],[8,21]],cap:10,interval:.34,mix:[0,0,2]},
+      {kind:'fight',name:'钟楼南街',label:'打通钟楼南街',at:[1,8],entries:[[-7,6],[10,4]],cap:16,interval:.26,mix:[0,1,2]},
       {kind:'hold',at:[1.6,-14],label:'守住钟楼裂隙',entries:[[-12,-14],[11,-19],[-8,-21]]},
       {kind:'use',at:[0,-19],label:'在高架隔离门布设爆破装置'},
       {kind:'countdown',at:[8,-15],label:'撤到东侧路障后方',charge:[0,-20.2],door:'barricade',entries:[[-9,-13],[12,-16]]},
       {kind:'breakout',at:[0,-25.5],label:'穿过炸开的隔离门，抵达高架接应点',
-        count:18,cap:9,mix:[0,0,1,2],entries:[[-12,-21],[12,-21],[-8,-9]]},
+        cap:9,interval:.28,mix:[0,0,1,2],entries:[[-12,-21],[12,-21],[-8,-9]]},
     ],
   },
   weaponSkin: 'rain-city',

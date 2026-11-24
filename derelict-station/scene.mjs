@@ -908,8 +908,8 @@ function alienModel(type,{THREE,shapes,mergeGeometries},rage=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'南停靠舱',at:[-8,20],entries:[[-15,21],[0,14]]},
-    {name:'西侧农业舱',at:[-26,-6],entries:[[-32,-9],[-21,-3]]},
+    {name:'南停靠舱',cap:7,interval:0.39,at:[-8,20],entries:[[-15,21],[0,14]]},
+    {name:'西侧农业舱',cap:9,interval:0.37,at:[-26,-6],entries:[[-32,-9],[-21,-3]]},
   ]},
   weaponSkin: 'derelict-station',
   pageTitle:'失压环站 | 第八关',

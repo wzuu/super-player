@@ -13,7 +13,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export function createFieldOperations(context, campaign) {
   const { THREE, level, nav, scene, shapes, definition, campaignStage, CONFIG } = context;
-  const cfg = fieldConfig(definition.weaponSkin, campaignStage);
+  const cfg = fieldConfig(definition.weaponSkin, campaignStage, CONFIG.beasts.encounterSize);
   if (!cfg) return null;
   const eye = new THREE.Vector3(),
     line = new THREE.Vector3();
@@ -142,10 +142,16 @@ export function createFieldOperations(context, campaign) {
     handle = piece(shapes.box, 0x79f5d6, at(lever, 0, 1.19, 0), 0.19, 0.49, 0.16, true);
     handle.rotation.z = -0.4;
   }
-  const device = site([level.bossSpawn.x + 5, level.bossSpawn.z], 0.55, 2);
+  const pulseAt = definition.story?.pulseAt;
+  const device = pulseAt ? { x: pulseAt[0], y: level.base(...pulseAt), z: pulseAt[1] }
+    : site([level.bossSpawn.x + 5, level.bossSpawn.z], 0.55, 2);
   if (device) {
     stamp('cylinder', 'wall', 0x566274, at(device, 0, 0.4, 0), 0.85, 0.8, 0.85);
     stamp('cylinder', 'glow', 0x64dcfc, at(device, 0, 0.89, 0), 0.62, 0.23, 0.62);
+    if (pulseAt) {
+      stamp('cylinder', 'wall', 0x355768, at(device, 0, 1.36, 0), .18, .8, .18);
+      stamp('cylinder', 'glow', 0x64dcfc, at(device, 0, 1.83, 0), .62, .18, .62);
+    }
   }
   const traps = [];
   const ringGeometry = new THREE.RingGeometry(0.96, 1, 32);
@@ -288,13 +294,17 @@ export function createFieldOperations(context, campaign) {
   }
   function deployWave(g, tag) {
     if (!field.waitingGuards || g.time < field.spawnAt) return;
+    // 子体可能复用刚阵亡守卫的对象槽，按当前对象池计数。
+    field.guards = g.beasts.pool.filter((b) => b.active && b.fieldGroup === tag);
+    const free = field.guardCount - field.guards.length;
+    if (free <= 0) return;
     const arrivals = guards(
       g,
       tag === 'deep' ? deepRoom.front : vault.front,
-      field.waitingGuards,
+      Math.min(2, free, field.waitingGuards),
       tag,
       tag === 'deep',
-      field.guardCount - field.waitingGuards,
+      field.waveSize - field.waitingGuards,
     );
     for (const b of arrivals) if (tag === 'deep') b.traitSpeed *= 1.23;
     field.guards.push(...arrivals);
@@ -303,7 +313,8 @@ export function createFieldOperations(context, campaign) {
   }
   function beginWave(g, tag, count) {
     field.guards = [];
-    field.guardCount = field.waitingGuards = count;
+    field.waveSize = field.waitingGuards = count;
+    field.guardCount = cfg.guardCap + (tag === 'deep' ? 3 : 0);
     field.spawnAt = g.time;
     deployWave(g, tag);
   }
@@ -540,7 +551,7 @@ export function createFieldOperations(context, campaign) {
         this.legend = treasure(g, deepRoom.center, '传奇·' + cfg.relic, 1550, 'legendary');
         this.deep = 'reward';
       }
-      if (this.deep === 'reward' && this.legend && !this.legend.active) {
+      if (this.deep === 'reward' && g.loot.some(item => item.origin === 'legendary')) {
         this.deep = 'exit';
         exitBeacon.visible = true;
       }
@@ -589,12 +600,14 @@ export function createFieldOperations(context, campaign) {
           ' · 打开宝库后门，限一次' +
           (cfg.mechanism === 1 ? ' · 当心四米冲击区' : cfg.mechanism === 2 ? ' · 当心蒸汽区' : '')
         );
-      if (near(p, device) && g.beasts.boss?.active)
-        return this.deviceAt > g.time ? '场地机关冷却中' : use + ' 释放场地脉冲 · 范围七米，注意避开中心';
+      if (near(p, device) && g.beasts.boss?.active) {
+        if (this.deviceAt > g.time) return '破甲脉冲冷却 ' + Math.ceil(this.deviceAt-g.time) + ' 秒';
+        return near(g.beasts.boss, device, 7) ? use + ' 释放脉冲破甲 · 注意冲击伤害' : '将首领引到青色脉冲柱七米内';
+      }
       if (secret && !this.secretOpen && near(p, secret.front, 1.8))
         return '墙板后有回声 · ' + use + ' 查看异色接缝';
       if (vault && this.vaultStage === 'idle' && near(p, vault.front, 4))
-        return '可选 · ' + use + ' 闯入' + cfg.name + '，守卫有两波，后门机关可开捷径';
+        return '可选搜集 · ' + use + ' 闯入' + cfg.name + '，守卫有两波，后门机关可开捷径';
       return '';
     },
     deepen(g) {
@@ -612,7 +625,7 @@ export function createFieldOperations(context, campaign) {
       g.pickups.deepSupplies = true;
       for (const item of g.pickups.objects)
         if (item.active && ['health', 'ammo', 'grenade', 'sample'].includes(item.kind)) item.active = false;
-      g.pickups.add('ammo', deepRoom.front.x, deepRoom.front.z, deepRoom.front.y, '深入配给', 30, true);
+      g.pickups.add('ammo', deepRoom.front.x, deepRoom.front.z, deepRoom.front.y, '深入配给', CONFIG.weapon.pellets ? 80 : 600, true);
       g.journal?.mark(g, '选择深入');
       g.ui.notify('原撤离点已关闭 · 突破深层宝库', 2);
     },
@@ -640,11 +653,14 @@ export function createFieldOperations(context, campaign) {
         return true;
       }
       if (near(p, device) && g.beasts.boss?.active && g.time >= this.deviceAt) {
-        this.deviceAt = g.time + 18;
         const b = g.beasts.boss;
-        if (dist(b, device) < 8) breakBoss(b, g);
+        if (!near(b, device, 7) || !breakBoss(b, g)) {
+          g.ui.notify('等待首领装甲恢复，并引入脉冲范围', 1.5);
+          return true;
+        }
+        this.deviceAt = g.time + 18;
         blastArea(g, device, 7, 46);
-        g.ui.notify('场地机关已释放 · 冷却十八秒', 1.5);
+        g.ui.notify('脉冲破甲 · 集中攻击核心', 1.5);
         return true;
       }
       if (secret && !this.secretOpen && near(p, secret.front, 1.8)) {
@@ -699,6 +715,11 @@ export function createFieldOperations(context, campaign) {
     },
     minimap(ctx, px, pz, g) {
       if (!this.enabled) return;
+      if (device && g.beasts.boss?.active) {
+        ctx.fillStyle = '#64dcfc'; ctx.font = 'bold 10px sans-serif';
+        ctx.fillText('脉冲',px(device.x)+2,pz(device.z)-3);
+        ctx.fillRect(px(device.x)-2,pz(device.z)-2,4,4);
+      }
       if (vault) {
         ctx.strokeStyle = '#edba67';
         ctx.strokeRect(px(vault.center.x) - 3, pz(vault.center.z) - 3, 6, 6);

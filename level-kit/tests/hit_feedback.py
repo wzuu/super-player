@@ -61,8 +61,10 @@ def check_hit_feedback(page):
 def check_emp_feedback(page):
     page.evaluate("""() => {
       const {game:g,config}=run, {encounter:emp,ui,player:p,sound}=g;
+      p.aimRequested=p.aiming=true;p.ads=1;
       g.time=emp.next;emp.update(g,0);ui.update(.1,g);
       if(!emp.hudOffline || !ui.directions.hidden)throw Error('真实 EMP 未中断方向提示');
+      if(getComputedStyle(ui.aimDot).visibility!=='hidden' || getComputedStyle(ui.ring).visibility!=='hidden')throw Error('EMP 应隐藏开镜红点与换弹环');
       const heard=[],hurt=sound.hurt;
       sound.hurt=function(type){heard.push(type);return hurt.call(this,type)};
       p.escaped=true;p.hurtDelay=0;p.hp=config.player.health*.31;
@@ -73,5 +75,6 @@ def check_emp_feedback(page):
       sound.hurt=hurt;
       g.time=emp.ends+.01;emp.update(g,0);ui.update(.1,g);
       if(emp.hudOffline || ui.directions.hidden || ui.damageArcs.some(node=>!node.hidden))throw Error('恢复供电时不补播断电期间的受击');
+      if(ui.aimDot.hidden || getComputedStyle(ui.aimDot).visibility==='hidden')throw Error('EMP 恢复后应看见当前瞄准红点');
     }""")
     print("PASS 霓雨下城 EMP 期间方向隐藏、受击声音、危血与供电恢复", flush=True)

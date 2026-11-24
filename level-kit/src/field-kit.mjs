@@ -1,7 +1,9 @@
 import { supplies,applyBranches } from '@level-kit/gear.mjs';
+import { createFieldGrenades } from '@level-kit/field-grenades.mjs';
 
 export function createFieldKit(config, keys, visual) {
   const { THREE, scene } = visual;
+  const grenades = createFieldGrenades(config, visual);
   const marker = new THREE.Mesh(
     new THREE.CylinderGeometry(0.35, 0.44, 0.18, 8),
     new THREE.MeshBasicMaterial({ color: 0xffa947 }),
@@ -77,18 +79,7 @@ export function createFieldKit(config, keys, visual) {
         b.statusEffects.set('confused', { until: g.time + (b.type === 3 ? 1 : 3), angle: Math.PI / 2 }),
       );
     },
-    grenade(g) {
-      const p = g.player,
-        yaw = p.look.rotation.y;
-      const x = p.x - Math.sin(yaw) * 4,
-        z = p.z - Math.cos(yaw) * 4;
-      const impact = { blastOrigin: { x, z } };
-      area(g,x,p.y,z,5,b=>{
-        g.weapon.combat.element(b,'fire',g);
-        if(b.active) g.beasts.damage(b,config.beasts.types[0].hp*2,g,'equipment',impact);
-      });
-      burst(g, x, p.y, z);
-    },
+    grenade: grenades.launch,
     medkit(g) {
       if (g.player.hp >= config.player.health || healing > 0) return false;
       healing = 1.5;
@@ -109,6 +100,10 @@ export function createFieldKit(config, keys, visual) {
     },
   };
   return {
+    clear() {
+      grenades.clear();
+      marker.visible = false;
+    },
     reset(loadout) {
       kit = loadout ?? {
         skills: ['roll', null],
@@ -119,7 +114,7 @@ export function createFieldKit(config, keys, visual) {
       applyBranches(config.weapon,baseWeapon,kit.mods);
       cooldown = {};
       healing = roll = invulnerable = 0;
-      marker.visible = false;
+      this.clear();
       nextHud = 0;
     },
     remaining() {
@@ -140,13 +135,14 @@ export function createFieldKit(config, keys, visual) {
         return g.ui.notify('槽位空置、冷却中或物资已用尽', 1);
       const effect = effects[id] ?? effects.cache;
       if (effect(g) === false) return g.ui.notify('当前无法使用此装备', 1);
-        g.training?.did('slot'+slot);
+      g.training?.did('slot'+slot);
       if (slot < 2) cooldown[id] = g.time + supplies[id].cooldown;
       else kit.counts[id]--;
-      burst(g, g.player.x, g.player.y, g.player.z);
+      if (id !== 'grenade') burst(g, g.player.x, g.player.y, g.player.z);
       g.ui.notify(supplies[id]?.name ?? '战备箱', 1);
     },
     step(dt, g) {
+      grenades.step(dt, g);
       const p = g.player;
       if (roll > 0) {
         const distance = (Math.min(dt, roll) * 5) / 0.3,

@@ -460,12 +460,12 @@ export class WeaponCombat {
       this.skin==='ember-fortress' ? 'fire' : this.skin==='polar-station' ? 'ice' : '';
     if(element) this.react(target,element,game,'weapon');
   }
-  element(target,element,game,source='equipment') {
+  element(target,element,game,source='equipment',impact) {
     // 先结清旧层已到期的持续伤害，再读取或消耗状态。
     if(target.statusEffects.size) this.updateTarget(target,game);
-    if(target.active) this.react(target,element,game,source);
+    if(target.active) this.react(target,element,game,source,impact);
   }
-  react(target,element,game,source) {
+  react(target,element,game,source,impact) {
     const now=game.time, effects=target.statusEffects;
     const steam=()=>game.encounter?.inSteam?.(target.x,target.z,target.y,game);
     let rule,stacks=1;
@@ -495,10 +495,10 @@ export class WeaponCombat {
         previous=next;
       }
     } else if(rule.radius) {
-      area(this,target,rule.radius,game,b=>game.beasts.damage(b,amount*(b.type===3 ? .6 : 1),game,source),rule.limit);
+      area(this,target,rule.radius,game,b=>game.beasts.damage(b,amount*(b.type===3 ? .6 : 1),game,source,impact),rule.limit);
       if(rule.id==='vapor' && Math.hypot(game.player.x-target.x,game.player.z-target.z)<3.5) this.mistUntil=now+.65;
     }
-    game.beasts.damage(target,amount*(target.type===3 ? .6 : 1),game,source);
+    game.beasts.damage(target,amount*(target.type===3 ? .6 : 1),game,source,impact);
     this.announceReaction?.(rule,game);
   }
   onKill(target, hit, game) {

@@ -12,14 +12,7 @@ export function initBriefing(stage, config, text, keys, campaign) {
     const finish = '，在撤离点按 ' + config.interactLabel + ' 引爆。';
     const rules = {
       hunt: '沿足迹和叫声搜索猎物，在时限内击倒，再携带徽印前往撤离区。',
-      classic:
-        '累计击杀 ' +
-        config.beasts.killsToWin +
-        ' 只凶兽，击败' +
-        text.bossName +
-        '并取得' +
-        text.keyItem +
-        finish,
+      classic: '逐区清除守卫，击败' + text.bossName + '并取得' + text.keyItem + finish,
       hold: '在撤离区累计坚守 ' + missionRules.holdSeconds + ' 秒' + finish,
       escort: '保护勘探无人机的生命值，跟随它抵达撤离区' + finish,
       rescue:

@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS secret_rooms (
 CREATE TABLE IF NOT EXISTS quartermaster (
     slot INTEGER PRIMARY KEY CHECK(slot=1), revision INTEGER NOT NULL, state TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pending_purchases (
+    id TEXT PRIMARY KEY
+);
 CREATE TABLE IF NOT EXISTS weapon_loadout (
     slot INTEGER PRIMARY KEY CHECK(slot = 1),
     skin TEXT NOT NULL
@@ -130,15 +133,25 @@ def gear_snapshot(db):
 
 
 def write_gear(db, data):
+    if isinstance(data, dict) and set(data) == {"acknowledgePurchase"}:
+        receipt = str(UUID(str(data["acknowledgePurchase"])))
+        with db:
+            db.execute("DELETE FROM pending_purchases WHERE id=?", (receipt,))
+        return {"saved": True}
     if not isinstance(data, dict) or not whole_number(data.get("revision")) or not isinstance(data.get("state"), dict):
         raise ValueError("军需存档格式无效")
+    receipt = str(UUID(str(data["purchaseId"]))) if "purchaseId" in data else None
     with db:
         db.execute("BEGIN IMMEDIATE")
+        if receipt and db.execute("SELECT 1 FROM pending_purchases WHERE id=?", (receipt,)).fetchone():
+            return {"saved": True}
         snapshot = gear_snapshot(db)
         if snapshot["revision"] != data["revision"]:
             return {"saved": False}
         db.execute("INSERT OR REPLACE INTO quartermaster VALUES(1,?,?)",
                    (snapshot["revision"] + 1, json.dumps(data["state"], separators=(",", ":"))))
+        if receipt:
+            db.execute("INSERT INTO pending_purchases VALUES(?)", (receipt,))
     return {"saved": True}
 
 

@@ -147,6 +147,8 @@ def run(browser,url):
     }""")
     assert fov["hurt"]+0.1<fov["aimed"] and abs(fov["recovered"]-fov["aimed"])<.001,fov
     page.mouse.up(button="right")
+    assert page.evaluate("run.game.player.aimRequested && run.game.player.aiming")
+    page.mouse.click(480,320,button="right")
     page.wait_for_function("!run.game.weapon.group.visible")
     page.evaluate("Object.assign(run.game.weapon,{ammo:1,reserve:4})")
     page.keyboard.press("r")
@@ -256,13 +258,15 @@ def run(browser,url):
       const before=w.reloadLeft;
       document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyR',bubbles:true}));
       g.step(.016);document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyR',bubbles:true}));
-      return {duration:w.reloadTotal,before,after:w.reloadLeft,visible:!ring.hidden&&!document.querySelector('#aim-dot').hidden,
+      return {duration:w.reloadTotal,before,after:w.reloadLeft,visible:!ring.hidden&&document.querySelector('#aim-dot').hidden&&g.player.aimRequested&&!g.player.aiming,
         ratio:parseFloat(ring.style.getPropertyValue('--remaining')),actual:w.reloadLeft/w.reloadTotal};
     }""")
     assert abs(timer["duration"]-1.8*.78)<.001 and timer["visible"],timer
     assert timer["after"]<timer["before"] and abs(timer["ratio"]-timer["actual"])<.001,timer
-    page.wait_for_function("run.game.weapon.ammo===6 && document.querySelector('#reload-ring').hidden")
+    page.wait_for_function("run.game.weapon.ammo===6 && document.querySelector('#reload-ring').hidden && run.game.player.ads>.9")
     page.mouse.up(button="right")
+    page.mouse.click(480,320,button="right")
+    page.wait_for_function("!run.game.player.aiming")
     rifle=sample_volley(page)
     assert len(rifle["high"]["lengths"])==1 and rifle["high"]["lengths"][0]>15,rifle
     assert set(rifle["high"]["sparks"])=={"spark"} and rifle["high"]["tint"]!=pellet["high"]["tint"],rifle

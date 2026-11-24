@@ -496,12 +496,15 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       for (const corpse of this.corpses) corpse.until=0;
       this.nav.rebuild(player.x, player.z); this.hash.clear();
       if (game?.training?.kind === 'tutorial' || game?.objective.mode==='hunt' || game?.story?.managed) {this.render();return;}
+      const anchor = definition.initialPopulationAnchor;
+      if (anchor) this.nav.rebuild(...anchor);
       const spawn = this.level.bossSpawn;
       if (!game?.training) this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
       for (let i = 1; i < Math.min(CONFIG.beasts.population, this.pool.length); i++) {
         const type = this.randomType(), site = this.spawnSite(type, player, true, null);
         if (site !== -1) this.spawnRegular(type, this.nav.x(site), this.nav.z(site));
       }
+      if (anchor) this.nav.rebuild(player.x, player.z);
       this.refreshHash(); this.render();
     }
     randomType() {
@@ -648,9 +651,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');
       }
       const bonusAmmo = game.encounter?.bonusAmmo ?? 0;
-      if (bonusAmmo > 0 || type === 3 || game.weapon.reserve < 46 || game.kills % 2 === 0) {
-        const amount = Math.ceil((CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1) * (game.variation?.ammo ?? 1));
-        game.pickups.add('ammo', b.x + 0.17, b.z, dropY, '机关枪弹药', amount);
+      if (bonusAmmo > 0 || type === 3 || game.weapon.reserve < CONFIG.weapon.magazine || game.kills % 2 === 0) {
+        const rounds = (CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1) * (game.variation?.ammo ?? 1);
+        const amount = Math.ceil(CONFIG.weapon.pellets ? rounds / 6 : rounds);
+        game.pickups.add('ammo', b.x + 0.17, b.z, dropY, CONFIG.weapon.pellets ? '霰弹' : '步枪弹药', amount);
       }
       if (type !== 3 && game.kills % CONFIG.pickups.grenadeEvery === 0) {
         game.pickups.add('grenade', b.x-.20, b.z, dropY, '手雷', 1);

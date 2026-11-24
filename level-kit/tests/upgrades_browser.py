@@ -145,7 +145,8 @@ def field(page, url):
         page.wait_for_function("!document.querySelector('#shop-item').disabled")
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
-    assert page.evaluate("run.game.weapon.ammo") == 75
+    assert page.evaluate("run.game.weapon.ammo") == 150
+    page.wait_for_function("document.querySelector('#ammo').textContent === '150'")
     assert page.evaluate("Math.abs(run.config.weapon.reloadTime - 1.8*1.16) < .0001 && Math.abs(run.config.weapon.fireRate-8.8)<.0001")
     assert page.evaluate("run.config.graphics.particleScale") == .3
     assert page.evaluate("[run.config.feedback.hitShake, run.config.feedback.directionIndicators]") == [.4, False]

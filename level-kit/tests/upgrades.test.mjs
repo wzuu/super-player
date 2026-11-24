@@ -42,7 +42,7 @@ test('限时撤离从拿到核心才开始倒计时，坚守计时只在撤离�
     position = { set() {} };
   }
   const THREE = { Mesh, OctahedronGeometry: class {}, MeshBasicMaterial: class {} };
-  const objective = createObjective(9, { THREE, scene: { add() {} } }, { beasts: { killsToWin: 150 } });
+  const objective = createObjective(9, { THREE, scene: { add() {} } });
   const game = {
     player: {},
     level: { spawn: { x: 0, y: 0, z: 0 } },

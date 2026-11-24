@@ -17,7 +17,7 @@ const unit = (value) => Math.max(0, Math.min(1, value));
 
 export function battleGrade(game, won, stats) {
   const mode = game.objective.mode;
-  const goal = Math.max(1, game.stageKillTarget ?? 150);
+  const goal = Math.max(1, game.stageKillTarget ?? 100);
   let score;
   if (mode === 'endless') {
     const waves = 1 + Math.floor(game.time / 45);

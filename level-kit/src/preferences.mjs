@@ -38,6 +38,7 @@ export const actionLabels = [
 ];
 export const defaults = {
   sensitivity: 1,
+  aimMode: 'toggle',
   fov: 73,
   volume: 80,
   muted: false,
@@ -72,6 +73,7 @@ export function preferences() {
   for (const name of ['muted', 'steady', 'metrics', 'gamepad', 'directionIndicators', 'recordReplay'])
     if (typeof raw[name] === 'boolean') prefs[name] = raw[name];
   if (['auto', 'high', 'medium', 'low'].includes(raw.quality)) prefs.quality = raw.quality;
+  if (raw.aimMode === 'hold') prefs.aimMode = 'hold';
   if (['assist', 'standard', 'hard'].includes(raw.difficulty)) prefs.difficulty = raw.difficulty;
   const saved = Object.keys(defaultKeys).filter(id => typeof raw.keys?.[id] === 'string' && raw.keys[id]);
   const used = new Set(saved.map(id => raw.keys[id]));
@@ -96,22 +98,33 @@ export function keyName(code) {
     .replace('Space', '空格');
 }
 
-export function bindSoundControl(button, apply = () => {}) {
-  let binding;
+export function aimInstructions(mode) {
+  return mode === 'hold' ? '按住右键开镜，松开退镜' : '单击右键开镜，再次单击退镜';
+}
+
+export function bindSoundControl({ button, apply = () => {}, shortcut }) {
+  let binding, temporaryMute;
   function refresh(prefs = preferences()) {
-    binding = prefs.keys.KeyM;
-    const state = prefs.muted ? '已静音' : '音效开启';
-    button.textContent = state + ' · ' + keyName(prefs.keys.KeyM);
-    button.setAttribute('aria-pressed', String(!prefs.muted));
-    apply(prefs, state);
+    if (temporaryMute !== undefined) prefs = { ...prefs, muted: temporaryMute };
+    binding = shortcut ?? prefs.keys.KeyM;
+    if (button) {
+      button.textContent = (prefs.muted ? '已静音' : '音效开启') + ' · ' + keyName(binding);
+      button.setAttribute('aria-pressed', String(!prefs.muted));
+    }
+    apply(prefs);
   }
   function toggle() {
     const prefs = preferences();
-    prefs.muted = !prefs.muted;
-    try { storePreferences(prefs); } catch { /* 此页面仍立即切换 */ }
+    prefs.muted = !(temporaryMute ?? prefs.muted);
+    try {
+      storePreferences(prefs);
+      temporaryMute = undefined;
+    } catch {
+      temporaryMute = prefs.muted;
+    }
     refresh(prefs);
   }
-  button.addEventListener('click', toggle);
+  button?.addEventListener('click', toggle);
   document.addEventListener('keydown', event => {
     if (event.repeat || event.defaultPrevented || event.isComposing || event.altKey || event.metaKey || event.ctrlKey ||
         event.target.closest?.('input, select, textarea, [contenteditable="true"], #panel[open]') ||

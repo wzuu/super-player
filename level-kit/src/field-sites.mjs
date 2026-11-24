@@ -107,7 +107,7 @@ const sites = {
     '速写标记着第一架救援机降落的位置。',
   ],
 };
-export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1) {
+export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
   if (!data) return null;
   const [vault, secret, name, switchName, relic, lore] = data;
@@ -138,13 +138,14 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1) {
     switchName,
     relic,
     lore,
-    guards: 4 + Math.floor(stage / 3),
+    guards: Math.ceil(encounterSize * 0.4),
+    guardCap: 6 + Math.floor(stage / 4),
     value,
     treasure,
     guardTypes: [1, 2, 0, 0],
-    reinforcements: 3 + Math.floor(stage / 4),
+    reinforcements: Math.floor(encounterSize * 0.6),
     hazards: themes[stage - 1] ?? themes[0],
-    deepGuards: 16 + Math.floor(stage / 2),
+    deepGuards: encounterSize,
     huntHP: 650,
     huntSeconds: 165,
     huntGuardResponse: 'rage',

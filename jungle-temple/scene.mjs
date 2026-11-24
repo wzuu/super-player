@@ -2,9 +2,8 @@ const CONFIG = {
   map: { cell: 4, fog: 0.018, navCell: 1.25 },
   graphics: { maxPixelRatio: 1.25, bloomScale: 0.66, rain: 640, fireflies: 90 },
   audio: { ambient: { filter: 'bandpass', frequency: 1920, q: 0.60, activeGain: 0.14, pauseGain: 0.07 } },
-  weapon: { fireRate: 10, magazine: 60, reloadTime: 1.8, baseSpread: 0.0045, maxSpread: 0.031, recoil: 0.012 },
+  weapon: { fireRate: 10, reloadTime: 1.8, baseSpread: 0.0045, maxSpread: 0.031, recoil: 0.012 },
   beasts: {
-    killsToWin: 150,
     types: [
       { hp: 58, speed: 7.29, height: 1.02, radius: 0.41 },
       { hp: 168, height: 1.69, radius: 0.64, chargeSpeed: 14.3, windup: 0.76 },
@@ -1172,8 +1171,8 @@ function jungleBeast(type, { THREE, shapes, mergeGeometries }, rage = false) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'河岸石阶',at:[-9,29],entries:[[-17,25],[0,22]]},
-    {name:'西侧瀑布池',at:[-25,6],entries:[[-32,11],[-22,-3]]},
+    {name:'河岸石阶',cap:9,interval:0.33,at:[-9,29],entries:[[-17,25],[0,22]]},
+    {name:'西侧瀑布池',cap:11,interval:0.30,at:[-25,6],entries:[[-32,11],[-22,-3]]},
   ]},
   weaponSkin: 'jungle-temple',
   pageTitle: '雨蚀天阶 | 第十关',

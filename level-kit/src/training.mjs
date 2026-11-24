@@ -1,4 +1,4 @@
-import { actionLabels, defaultKeys, keyName } from '@level-kit/preferences.mjs';
+import { aimInstructions, keyName } from '@level-kit/preferences.mjs';
 
 export function createTraining(config, prefs) {
   if (!document.body.hasAttribute('data-practice')) return null;
@@ -9,10 +9,9 @@ export function createTraining(config, prefs) {
     capacity: range ? 18 : 8,
     spawnEvery: 1,
     spawnBurst: 2,
-    killsToWin: 2,
   });
   Object.assign(config.weapon, { magazine: range ? 24 : 6, reloadTime: range ? 0.32 : 0.75 });
-  config.player.crouch = { height: 1.05, speed: 0.58 };
+  config.player.crouch = { height: 1.05, eye: 0.96, speed: 0.58 };
   config.player.safeTime = range ? 3 : 0;
   if (!range) {
     Object.assign(config.beasts.types[0], { hp: 24, damage: 1 });
@@ -27,7 +26,7 @@ export function createTraining(config, prefs) {
     ['jump', '按 ' + bind('Space') + ' 跳跃'],
     ['crouch', '按住 ' + bind('KeyC') + ' 蹲伏'],
     ['pause', '按 Esc 释放鼠标，再选择继续战斗'],
-    ['aim', '按住鼠标右键开镜瞄准'],
+    ['aim', aimInstructions(prefs.aimMode)],
     ['shoot', '按鼠标左键射击一次，观察弹匣读数'],
     ['reload', '按 ' + bind('KeyR') + ' 提前换弹'],
     ['empty', '持续射击至空仓，等待自动换弹完成'],
@@ -35,7 +34,7 @@ export function createTraining(config, prefs) {
     ['slot0', '按 ' + bind('KeyQ') + ' 使用翻滚'],
     ['slot1', '按 ' + bind('KeyE') + ' 使用冲击波'],
     ['slot2', '按 ' + bind('Digit1') + ' 使用急救包，观察生命恢复'],
-    ['slot3', '按 ' + bind('Digit2') + ' 投出练习手雷'],
+    ['slot3', '瞄准空地，按 ' + bind('Digit2') + ' 投出手雷，观察抛物线和延时爆炸'],
     ['kill', '击败标记的训练目标'],
     ['boss', '击败教学首领'],
     ['core', '靠近首领掉落的关键物，按 ' + bind('KeyF') + ' 拾取'],
@@ -61,6 +60,9 @@ export function createTraining(config, prefs) {
       pickup = g.pickups.add('ammo', spawn.x, spawn.z - 4, spawn.y, '练习弹药', 12, true);
     }
     if (id === 'slot2') p.hp = Math.min(p.hp, 65);
+    // 允许玩家提前试用道具，到教学步骤时至少有一次实操机会。
+    const supply = id === 'slot2' ? 'medkit' : id === 'slot3' ? 'grenade' : null;
+    if (supply && !g.kit.remaining()[supply]) g.kit.supply(supply);
     if (id === 'kill' || id === 'boss') {
       const pos = g.level.bossSpawn;
       target = g.beasts.spawn(id === 'boss' ? 3 : 0, pos.x, pos.z, pos.y);
@@ -77,10 +79,7 @@ export function createTraining(config, prefs) {
       mods: {},
     },
     controls:
-      Object.keys(defaultKeys)
-        .map((id, i) => actionLabels[i] + ' ' + bind(id))
-        .join(' · ') +
-      ' · 左键射击 · 右键开镜 · Esc 暂停。低矮通道可蹲伏，机关与关键物使用交互键。' +
+      '鼠标左键射击。' + aimInstructions(prefs.aimMode) + '。按住 ' + bind('KeyC') + ' 蹲伏通过低矮通道，按 ' + bind('KeyF') + ' 操作机关与关键物。' +
       '遇到红色自爆体先拉开距离，在它膨胀时击杀。蓝环护盾体保护身边的同伴，瞄准核心可破盾。绿色孵化体蓄能时，射击可打断孵化和治疗。' +
       '战场图鉴列有元素反应，毒镖步枪配合手雷可触发毒爆。' +
       (prefs.gamepad
