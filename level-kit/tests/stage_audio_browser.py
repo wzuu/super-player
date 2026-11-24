@@ -44,6 +44,9 @@ def verify(page,address,stage):
       else if(id==='orbital-brood-ring') {tick(22);tick(27);tick(38);}
       else if(id==='lantern-shrine-escape') {tick(2);tick(5);tick(18);}
       else if(id==='neon-northline-escape') {tick(8);tick(11);tick(17);}
+      else if(id==='sunken-rooftop-recovery') {tick(9);tick(14);tick(36);}
+      else if(id==='frost-sample-escort') {tick(10);tick(15);tick(27);}
+      else if(id==='steam-service-rail') {tick(7);tick(10);tick(14);}
       else if(id==='storm-city-overpass') {tick(begin+3);}
       else if(id==='buried-tomb') {tick(88);tick(91);tick(109);}
       else if(id==='polar-station') {

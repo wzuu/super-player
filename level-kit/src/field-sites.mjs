@@ -121,6 +121,15 @@ const sites = {
   'neon-northline-escape': [
     [-23,23],[28,10],'诊所器材库','闭合夜市电闸','首班电车票','纸票保留着北线开通当日的检票孔。',
   ],
+  'sunken-rooftop-recovery': [
+    [28,18],[-23,-13],'祭器仓','合上测压阀','蓝珊瑚航章','铜章背面刻着打捞船的旧编号。',
+  ],
+  'frost-sample-escort': [
+    [-36,25],[-36,14],'极地器材库','转动暖风旋柄','考察队袖章','一枚绣有冰湖等深线的旧袖章。',
+  ],
+  'steam-service-rail': [
+    [-9,22],[7,-45],'工艺备料间','拉下轨道检验柄','黄铜车号牌','牌面仍留着交车时的手工冲印。',
+  ],
 };
 export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
@@ -147,6 +156,9 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     ['路灯维修瓶','排水压力管','废弃货架'],
     ['灯油陶罐','染坊蒸汽壶','松木料架'],
     ['备用燃料瓶','冷却管线','吊装电池'],
+    ['潜水气瓶','回收水管','装具吊篮'],
+    ['钻探油桶','采暖主管','备件吊箱'],
+    ['机油筒','分流蒸汽管','校准吊架'],
   ];
   const value = 450 + stage * 25;
   const treasure = [{ name: '宝库·' + name, value }];

@@ -122,6 +122,11 @@ def verify(browser,ids):
     for stage in ids:
         page.goto((ROOT/stage/'index.html').as_uri())
         page.wait_for_function("!!window.run",polling=100)
+        if page.evaluate("!!run.game.objective.convoy"):
+            page.add_script_tag(path=ROOT/'level-kit/tests/convoy_checks.js')
+            print(stage,page.evaluate('checkConvoy()'),flush=True)
+            assert not errors,errors
+            continue
         expected = {
             'underground-lab': {'objectiveCounts':[1,11], 'encounters':[4,30,24]},
             'orbital-brood-ring': {'objectiveCounts':[10,12], 'encounters':[24,29]},

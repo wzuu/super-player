@@ -1,4 +1,4 @@
-"""用战役首页和隔离页面键鼠实走突围。两条路各用独立存档。"""
+"""从首页用页面键鼠实走突围和护送。每次出发使用独立存档。"""
 import argparse
 import json
 import os
@@ -28,11 +28,23 @@ CASES={
 }
 
 
+ESCORT={
+    'sunken-rooftop-recovery': ('珊瑚祭器',[5,8,5,7,5,4],'drowned-city','escort'),
+    'frost-sample-escort': ('封存冰藻',[4,6,3,7,6,6],'polar-station','classic'),
+    'steam-service-rail': ('黄铜校准规',[4,6,4,7,7,5],'brass-factory','classic'),
+}
+
+
 def play(browser,url,stage,out,collect):
     page,errors,before=open_campaign(browser,url,stage)
-    direct,side,reward,counts=CASES[stage]
-    page.add_script_tag(path=ROOT/'level-kit/tests/breakout_play.js')
-    page.evaluate('opts=>window.walk=playBreakout(opts)',{'via':side if collect else direct,'reward':reward if collect else None,'stage':stage})
+    escort=ESCORT.get(stage)
+    if escort:
+        reward,counts,*original=escort
+        direct=side=[]
+    else:
+        direct,side,reward,counts=CASES[stage]
+    page.add_script_tag(path=ROOT/'level-kit/tests/armed_route_play.js')
+    page.evaluate('opts=>window.walk=playArmedRoute(opts)',{'via':side if collect else direct,'reward':reward if collect else None,'stage':stage})
     perf={}
     def capture(name):
         page.evaluate("""name=>{
@@ -70,7 +82,8 @@ def play(browser,url,stage,out,collect):
     report['performance']={**perf,'browser':browser.version}
     print(stage,json.dumps(report,ensure_ascii=False),flush=True)
     (out/(stage+'-play.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
-    assert report['phase']=='win' and report['live']>0 and report['shots']>0,report
+    assert report['phase']=='win' and (escort or report['live']>0) and report['shots']>0,report
+    if escort:assert len(report['docks'])==2 and report['escort']['escorted'] and report['escort']['escortHealth']>0,report
     assert perf.get('frames')==30 and (out/(stage+'-transition.png')).exists(),report
     assert (reward in report['loot'])==collect and [v['deployed'] for v in report['peaks'].values()]==counts,report
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')",polling=100)
@@ -81,8 +94,8 @@ def play(browser,url,stage,out,collect):
     if len(saved['levels'])>len(before)+1:assert saved['levels'][len(before)+1]['unlocked']
     record=page.request.get(url+'/api/battles').json()['battles'][0]
     detail=page.request.get(url+'/api/report',params={'id':record['id']}).json()
-    assert record['level']==stage and record['won'] and detail['report']['actionName']=='突围',detail
-    original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
+    assert record['level']==stage and record['won'] and detail['report']['actionName']==('护送' if escort else '突围'),detail
+    if not escort:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
               'neon-northline-escape':('neon-undercity','timed')}[stage]
     page.locator('a.mission-action[href$="/'+original[0]+'/"]').click(force=True)
     page.wait_for_function("mode=>document.querySelector('#mission-mode')?.value===mode",arg=original[1],polling=100)
@@ -92,7 +105,7 @@ def play(browser,url,stage,out,collect):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
-    parser.add_argument('stage',choices=CASES)
+    parser.add_argument('stage',choices=[*CASES,*ESCORT])
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--collect',action='store_true')
     args=parser.parse_args()
