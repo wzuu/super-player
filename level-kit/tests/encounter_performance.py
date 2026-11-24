@@ -31,7 +31,7 @@ BIRTHS = """()=>{
   window.measuredGroups=new Map();
   m.spawnGroup=(...args)=>{
     const x=g.player.x,z=g.player.z,begin=performance.now(),members=original(...args),ms=performance.now()-begin;
-    if(members.length===100)pending.push({members,count:members.length,ms,
+    if(members.length)pending.push({members,count:members.length,ms,
       gap:Math.min(...members.map(b=>Math.hypot(b.x-x,b.z-z)))});
     return members;
   };
@@ -56,7 +56,8 @@ PREPARE = """([fallbackName,fallbackX,fallbackZ])=>{
       p.look.rotation.set(-.04,0,0,'YXZ');
       p.hurtDelay=1000;
       window.room=name;
-      const members=g.beasts.pool.filter(b=>b.active&&b.storyWave);
+      const members=g.beasts.pool.filter(b=>b.active && (s.isCurrentGuard?.(b)??b.storyWave));
+      window.measuredTag=members[0]?.storyWave;
       window.initialGap=members.length?Math.min(...members.map(b=>Math.hypot(b.x-p.x,b.z-p.z))):Infinity;
       return;
     }
@@ -70,7 +71,7 @@ PREPARE = """([fallbackName,fallbackX,fallbackZ])=>{
 }"""
 EXERCISE = """([expected,peakOnly])=>{
   const g=run.game,s=g.story,p=g.player,l=g.level,nav=run.nav,dt=.04;
-  const eye=run.camera.position.clone(),dir=eye.clone(),r=nav.routeFor(0);
+  const eye=run.camera.position.clone(),dir=eye.clone();
   let peak=0, maxGap=0, gap=0, first=null, nextKill=0, activeTime=0, nearestSpawn=Infinity;
   const spawn=g.beasts.spawnRegular.bind(g.beasts);
   g.beasts.spawnRegular=(type,x,z,y,...rest)=>{
@@ -88,10 +89,11 @@ EXERCISE = """([expected,peakOnly])=>{
       g.step(dt);
       const log=s.encounters.find(e=>e.name===window.room);
       if(log?.clearedAt) {
-        if(!Number.isFinite(nearestSpawn))nearestSpawn=window.initialGap;
         if(log.spawned!==expected)throw Error('实际入场数不符 '+log.spawned);
         const earlier=window.measuredGroups?.get(window.measuredTag);
         if(earlier)nearestSpawn=Math.min(nearestSpawn,earlier.gap);
+        // 旧构建没有出生探针时使用现场样本。已经驻防的敌人在进入战区时可能就在近旁。
+        if(!Number.isFinite(nearestSpawn))nearestSpawn=window.initialGap;
         if(nearestSpawn<3.29)throw Error('在玩家脚下出生 '+nearestSpawn);
         return {spawned:log.spawned,peak,firstSeconds:+first.toFixed(2),
           longestGapSeconds:+maxGap.toFixed(2),durationSeconds:+activeTime.toFixed(2),
@@ -120,10 +122,11 @@ EXERCISE = """([expected,peakOnly])=>{
         g.beasts.damage(target,1e7,g);
         nextKill=t+.75;
       }
-      if(gap>1.5 && alive.length){
-        // 向掩体另一侧走出射界，而非隔墙击倒。
-        const b=alive[0];r.rebuild(b.x,b.z);const k=r.next(p.x,p.z);
-        const dx=r.x(k)-p.x,dz=r.z(k)-p.z,d=Math.hypot(dx,dz)||1;
+      const destination=alive.length?alive[0]:s.target;
+      if(gap>1.5 && destination){
+        // 绕到掩体另一侧接敌。检修段清完后还须实际走到梯口。
+        const target=s.navigation({target:destination},g).waypoint??destination;
+        const dx=target.x-p.x,dz=target.z-p.z,d=Math.hypot(dx,dz)||1;
         l.move(p,dx/d*.12,dz/d*.12,.46);
       }
     }
@@ -184,7 +187,8 @@ if __name__=="__main__":
         try:
             for stage in ROOMS:
                 if args.baseline:measure(browser,args.baseline,stage,100)
-                result=measure(browser,ROOT,stage,100)
-                assert result["peak"] == result["spawned"] == 100,result
+                expected = 24 if stage == "underground-lab" else 100
+                result=measure(browser,ROOT,stage,expected)
+                assert result["peak"] == result["spawned"] == expected,result
         finally:
             browser.close()

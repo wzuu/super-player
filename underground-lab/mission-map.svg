@@ -71,8 +71,8 @@
   <text x="390" y="582" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">西侧安保室 · 清房后取卡</text>
   <path d="M356 653 h24" fill="none" stroke="#819598" stroke-width="1" />
   <text x="390" y="657" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">南气闸 · 出生点，门前领取固定补给</text>
-  <text x="426" y="525" fill="#23383d" font-family="system-ui, sans-serif" font-size="18">每段普通遭遇共 100 只</text>
-  <text x="426" y="552" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">入口巡逻 2　尽头门卫 23　近侧房 43　远侧房 32</text>
+  <text x="426" y="525" fill="#23383d" font-family="system-ui, sans-serif" font-size="18">主路三段共 58 只普通守卫</text>
+  <text x="426" y="552" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">安检 4　运输 30　检修 24　可选档案室 10</text>
   <text x="426" y="611" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">安保卡和电闸控制主路。击败首领立即结算。</text>
   <text x="28" y="710" fill="#23383d" font-family="system-ui, sans-serif" font-size="19">高程剖面</text>
   <path d="M36 738 H161 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 H352 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 H650" fill="none" stroke="#00746a" stroke-width="2.5" />

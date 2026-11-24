@@ -60,7 +60,7 @@ function playLaboratoryCampaign(browserControls) {
     const yaw = browserControls?.yaw ?? p.look.rotation.y;
     // 和玩家绕过紫色掉落一样，按左右平移从拾取半径外侧经过。
     for (const item of g.pickups.objects) {
-      if (!item.active || item.style !== 'precious' || distance(p, item) > config.pickups.grab + 1.1)
+      if (!item.active || item.style !== 'precious' || (browserControls?.path==='archive' && item.name==='冷藏档案室样本箱') || distance(p, item) > config.pickups.grab + 1.1)
         continue;
       const ox = p.x - item.x,
         oz = p.z - item.z,
@@ -205,6 +205,17 @@ function playLaboratoryCampaign(browserControls) {
       if ((state === 'use' && target && distance(p, target) < 2.55) || g.pickups.nearKey(p))
         input.interact = true;
     }
+    let sampleBox=null;
+    if(browserControls?.path==='archive' && s.encounters.length===3 && state!=='boss' &&
+      !g.loot.some(o=>o.name==='冷藏档案室样本箱')){
+      const archive=g.encounter;
+      sampleBox=g.pickups.objects.find(o=>o.active && o.name==='冷藏档案室样本箱');
+      const goal=archive.hatchOpen ? sampleBox??g.beasts.pool.find(e=>e.active && e.archiveTag) : {x:22,y:0,z:-27};
+      if(goal){
+        dest=route(goal)??goal;
+        input.interact=!archive.hatchOpen && Boolean(archive.interactionHint(g));
+      }
+    }
     if (enemy) {
       const d = distance(p, enemy);
       aim(
@@ -214,6 +225,11 @@ function playLaboratoryCampaign(browserControls) {
       input.fire = true;
       if (!dest) dest = strafe(creatures, step);
     } else if (dest) aim(0, Math.atan2(p.x - dest.x, p.z - dest.z));
+    if(sampleBox && distance(p,sampleBox)<2.2){
+      const dx=sampleBox.x-p.x,dz=sampleBox.z-p.z;
+      aim(Math.atan2(sampleBox.y+.4-p.y-p.eye,Math.hypot(dx,dz)),Math.atan2(-dx,-dz));
+      input.interact=true;
+    }
     const med = g.pickups.objects
       .filter((i) => i.active && i.permanent && i.kind === 'health' && distance(p, i) < 16)
       .sort((a, b) => distance(p, a) - distance(p, b))[0];

@@ -173,6 +173,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     const [boss] = g.beasts.spawnGroup([3], {anchors: [site], target: site,
       accept: p => Math.abs(p.y - site.y) < 1.5 && separation(p, site) <= 14});
     if (!boss) return waitForSpace(g);
+    if (item.summon && boss.fight) boss.fight.rules.summon = item.summon;
     boss.alert = CONFIG.beasts.memory;
     retryAt = 0;
   }

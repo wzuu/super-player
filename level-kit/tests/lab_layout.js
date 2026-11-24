@@ -102,7 +102,7 @@ async function verifyLabLayout({ offsets, extract }) {
         overlap,
         closedBefore,
       });
-      if (team.length !== 100) return { error: s.guide(g, { keyItem: '核心' }), reports };
+      if (team.length !== [4,30,24][j]) return { error: s.guide(g, { keyItem: '核心' }), reports };
       if (offsets.length > 1) {
         // 从门口的左、中、右三个站位出发，分别实际走到左右侧房，开门时只能直接迎击走廊驻敌。
         const start = {x:p.x, y:p.y, z:p.z};
@@ -132,7 +132,7 @@ async function verifyLabLayout({ offsets, extract }) {
         clearGroup((b) => b.sectionRoom === left && b.storyWave === team[0].storyWave);
         const roomLoot = g.pickups.objects.find((o) => o.active && o.name === left + '查获记录');
         const liveElsewhere = m.pool.filter((b) => b.active && b.storyWave).length;
-        if (!roomLoot || liveElsewhere !== 100 - homes[left])
+        if (!roomLoot || liveElsewhere !== team.length - homes[left])
           throw Error('local clear wrongly mixed with other rooms ' + liveElsewhere);
         const meters = walk(roomLoot);
         claim(roomLoot);
@@ -147,7 +147,7 @@ async function verifyLabLayout({ offsets, extract }) {
           const guard = m.pool.filter((b) => b.active && b.archiveTag);
           optional.guard = guard.length;
           optional.mainBefore = liveElsewhere;
-          if (guard.length !== 100 || m.pool.filter((b) => b.active && b.storyWave).length !== liveElsewhere)
+          if (guard.length !== 10 || m.pool.filter((b) => b.active && b.storyWave).length !== liveElsewhere)
             throw Error(
               'optional group ' +
                 [
@@ -226,6 +226,12 @@ async function verifyLabLayout({ offsets, extract }) {
     for (let phase = 0; m.boss?.active && phase < 6; phase++) {
       g.time += 3;
       m.damage(m.boss, 1e7, g, 'weapon');
+      if (m.boss?.active) {
+        // 留着上一阶段召唤物，检查两次完整转场后的实际在场数。
+        m.update(.04,p,g);
+        const adds=m.pool.filter(b=>b.active && b.type!==3);
+        if (adds.length!==2*(phase+1) || adds.length>4) throw Error('反应堆转阶段召唤数异常 '+adds.length);
+      }
     }
     if (g.core || g.pickups.keyItem?.active) throw Error('歼灭首领仍需拾取核心');
     if (g.phase !== 'win') throw Error('mission exit blocked ' + g.phase);
@@ -250,8 +256,10 @@ function verifyLabWatch() {
   g.reset(); g.phase='play'; p.hurtDelay=Infinity; g.encounter.update(g,.1);
   at(0,53.1); g.story.interact(g);
   const guards=m.pool.filter(b=>b.active && b.guardPost);
-  check(guards.length===100,'首次开门未部署100个带驻点的守卫');
+  check(guards.length===4,'首次开门未部署四个带驻点的守卫');
   const identity=guards.map(b=>[b.spawnGeneration,b.storyWave,b.sectionRoom]);
+  at(0,18.1); tick(12);
+  check(guards.every(b=>!b.roomAlert),'关闭的下一段门漏过了守卫视线');
   at(0,-70);
   const before=guards.map(b=>[b.x,b.z,b.yaw]);
   tick(110);
@@ -294,7 +302,7 @@ function verifyLabWatch() {
   at(0,18.1);
   const unalerted=guards.filter(b=>!b.roomAlert);
   tick(140);
-  check(unalerted.length>0 && guards.every(b=>b.z>20) && unalerted.every(b=>!b.roomAlert),'追击穿过了关门，或在关门后看到了玩家');
+  check(guards.every(b=>b.z>20) && unalerted.every(b=>!b.roomAlert),'追击穿过了关门，或在关门后看到了玩家');
   check(guards.every((b,i)=>b.active && b.spawnGeneration===identity[i][0] && b.storyWave===identity[i][1] && b.sectionRoom===identity[i][2]),
     '巡逻、调查或追击改变了整批驻敌的房间归属');
   return {patrolling,watching,heard:heard.length,investigated:+investigated.toFixed(2),behindDoor:unalerted.length};

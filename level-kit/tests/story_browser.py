@@ -123,7 +123,7 @@ def verify(browser,ids):
         page.goto((ROOT/stage/'index.html').as_uri())
         page.wait_for_function("!!window.run",polling=100)
         expected = {
-            'underground-lab': {'objectiveCounts':[43,43], 'encounters':[100,100,100]},
+            'underground-lab': {'objectiveCounts':[1,11], 'encounters':[4,30,24]},
             'orbital-brood-ring': {'objectiveCounts':[10,12], 'encounters':[24,29]},
             'moonlit-stained-glass-keep': {'objectiveCounts':[9,11], 'encounters':[20,28]},
         }.get(stage)
@@ -386,7 +386,7 @@ def verify(browser,ids):
             assert len(layout['approaches']) == 9, layout
             assert len(layout['reports']) == 9 and len(layout['rooms']) == 6, layout
             for sample in layout['reports']:
-                assert sorted(sample['homes'].values()) == [2,23,32,43] and sample['gap'] >= 6, sample
+                assert sorted(sample['homes'].values()) == ([1,1,1,1],[2,8,9,11],[1,7,8,8])[sample['j']] and sample['gap'] >= 6, sample
                 assert sample['closedBefore'] and not sample['blocked'] and not sample['overlap'], sample
             print('PASS laboratory formation, approach and room rewards',layout,flush=True)
             print('PASS laboratory watch, hearing, pursuit and closed gate', page.evaluate('() => verifyLabWatch()'), flush=True)
