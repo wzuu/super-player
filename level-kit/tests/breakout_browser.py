@@ -1,0 +1,109 @@
+"""用战役首页和隔离页面键鼠实走突围。两条路各用独立存档。"""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+from tempfile import TemporaryDirectory
+
+from playwright.sync_api import sync_playwright
+from campaign_browser import ROOT
+from campaign_play import open_campaign
+
+CASES={
+    'storm-city-overpass': (
+        [[0,26],[1,7],[0,-4],[20,-4],[38,-13],[38,-35]],
+        [[-3,26],[-31,26],[-34,7],[-31,-4],[18,-4],[38,-13],[38,-35]],
+        '修表匠的怀表',[4,8,5,6,9,6]),
+    'lantern-shrine-escape': (
+        [[-23,40],[9,40],[9,26],[25,26],[26,5],[9,4],[9,-21],[-22,-23],[-22,-50],[14,-52]],
+        [[-23,40],[-16,36],[-15,20],[-16,29],[-15,18],[7,17],[9,-21],[-22,-23],[-22,-50],[14,-52]],
+        '织坊锦样',[3,9,4,4,7,6,4]),
+    'neon-northline-escape': (
+        [[3,35],[26,34],[27,5],[4,1],[-21,-3],[-22,-17],[-22,-35],[-22,-42]],
+        [[-4,33],[-24,33],[-24,15],[-24,3],[-20,-7],[-22,-17],[-22,-35],[-22,-42]],
+        '义肢校准盒',[4,5,8,8,5,7]),
+}
+
+
+def play(browser,url,stage,out,collect):
+    page,errors,before=open_campaign(browser,url,stage)
+    direct,side,reward,counts=CASES[stage]
+    page.add_script_tag(path=ROOT/'level-kit/tests/breakout_play.js')
+    page.evaluate('opts=>window.walk=playBreakout(opts)',{'via':side if collect else direct,'reward':reward if collect else None,'stage':stage})
+    perf={}
+    def capture(name):
+        page.evaluate("""name=>{
+            const g=run.game;
+            for(let i=0;i<(name==='entry'?1:5);i++)g.step(.025);
+            while(g.phase==='play' && g.time<g.attackPauseUntil)g.step(.008);
+            if(name!=='combat'){
+                g.story.marker(null,g);
+                for(const id of ['task-panel','map'])document.getElementById(id).style.visibility='hidden';
+            }
+            window.drawPlayFrame(1000+g.time*1000);
+        }""",name)
+        page.screenshot(path=out/(stage+'-'+name+'.png'))
+        if name=='combat':
+            perf.update(page.evaluate("""async ()=>{
+              const {game,renderer}=run,gl=renderer.getContext(),ext=gl.getExtension('WEBGL_debug_renderer_info');
+              const intervals=[],live=game.beasts.live;
+              for(let i=0;i<33;i++){
+                const t=performance.now();game.step(.008);
+                window.drawPlayFrame(1000+game.time*1000);
+                await new Promise(window.testRefresh);
+                if(i>=3)intervals.push(performance.now()-t);
+              }
+              intervals.sort((a,b)=>a-b);
+              return {live,p50:intervals[15],p95:intervals[28],frames:intervals.length,viewport:[innerWidth,innerHeight],
+                gpu:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)};
+            }"""))
+        page.evaluate("()=>{for(const id of ['task-panel','map'])document.getElementById(id).style.removeProperty('visibility')}")
+    capture('entry')
+    while True:
+        result=page.evaluate('walk.advance()')
+        if 'shot' in result:capture(result['shot'])
+        if 'done' in result:break
+    report=result['done']
+    report['performance']={**perf,'browser':browser.version}
+    print(stage,json.dumps(report,ensure_ascii=False),flush=True)
+    (out/(stage+'-play.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
+    assert report['phase']=='win' and report['live']>0 and report['shots']>0,report
+    assert perf.get('frames')==30 and (out/(stage+'-transition.png')).exists(),report
+    assert (reward in report['loot'])==collect and [v['deployed'] for v in report['peaks'].values()]==counts,report
+    page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')",polling=100)
+    page.goto(url+'/')
+    page.reload()
+    saved=page.request.get(url+'/api/progress').json()
+    assert saved['battleCount']==len(before)+1 and all(l['cleared'] for l in saved['levels'][:len(before)+1])
+    if len(saved['levels'])>len(before)+1:assert saved['levels'][len(before)+1]['unlocked']
+    record=page.request.get(url+'/api/battles').json()['battles'][0]
+    detail=page.request.get(url+'/api/report',params={'id':record['id']}).json()
+    assert record['level']==stage and record['won'] and detail['report']['actionName']=='突围',detail
+    original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
+              'neon-northline-escape':('neon-undercity','timed')}[stage]
+    page.locator('a.mission-action[href$="/'+original[0]+'/"]').click(force=True)
+    page.wait_for_function("mode=>document.querySelector('#mission-mode')?.value===mode",arg=original[1],polling=100)
+    assert not errors,errors
+    page.close()
+
+
+if __name__=='__main__':
+    parser=argparse.ArgumentParser()
+    parser.add_argument('stage',choices=CASES)
+    parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--collect',action='store_true')
+    args=parser.parse_args()
+    args.output.mkdir(parents=True,exist_ok=True)
+    with TemporaryDirectory() as storage:
+        server=subprocess.Popen([sys.executable,'-X','utf8','-u','server.py','--port','0','--db',str(Path(storage)/'play.sqlite')],
+                                cwd=ROOT,stdout=subprocess.PIPE,encoding='utf8')
+        try:
+            url=re.search(r'http://127\.0\.0\.1:\d+',server.stdout.readline()).group()
+            with sync_playwright() as pw, pw.chromium.launch(channel=os.getenv('GAME_TEST_BROWSER','chrome'),headless=True) as browser:
+                play(browser,url,args.stage,args.output,args.collect)
+        finally:
+            server.terminate()
+            server.wait(timeout=10)

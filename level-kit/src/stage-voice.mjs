@@ -17,6 +17,9 @@ const voices = {
   'paris-tower': ['triangle', 88, 510, 180, 790, 2.6],
   'orbital-brood-ring': ['sine', 118, 660, 235, 930, 2.2],
   'moonlit-stained-glass-keep': ['triangle', 164, 246, 110, 493, 3.8],
+  'storm-city-overpass': ['sawtooth', 105, 390, 142, 620, 2.8],
+  'lantern-shrine-escape': ['triangle', 196, 294, 147, 588, 3.3],
+  'neon-northline-escape': ['sine', 123, 554, 185, 830, 2.4],
 };
 export function stageVoice(id) {
   const data = voices[id];

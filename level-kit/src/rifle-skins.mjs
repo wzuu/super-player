@@ -1,5 +1,20 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'lantern-shrine-escape': {
+    name:'染织町巡夜型',detail:'靛色机匣与朱漆护木，浅金刻纹沿木托收边。',
+    base:'#595778',trim:'#ae6250',dark:'#413746',light:'#d5b38b',
+    backdrop:'#3f3746',key:'#f5d8b4',fill:'#ad9bc0',metalness:.43,roughness:.56,
+  },
+  'neon-northline-escape': {
+    name:'北线检修型',detail:'枪身沿用铁道青灰漆，护木带有琥珀色检修标识。',
+    base:'#496970',trim:'#d49a54',dark:'#374352',light:'#8fc9cd',
+    backdrop:'#253843',key:'#def1ea',fill:'#85bbd1',metalness:.57,roughness:.41,
+  },
+  'storm-city-overpass': {
+    name:'排涝队勤务型',detail:'青灰防雨涂层，护木和机匣饰有橙黄救援标记。',
+    base:'#596e73',trim:'#c29361',dark:'#374950',light:'#e2bf88',
+    backdrop:'#293e45',key:'#d8e5ed',fill:'#a8c9ce',metalness:.48,roughness:.47,
+  },
   'moonlit-stained-glass-keep': {
     name:'玫瑰窗仪仗型',detail:'深紫烤漆、磨砂银饰和点状琥珀色玻璃镶嵌。',
     base:'#675d77',trim:'#b8ada5',dark:'#403947',light:'#e7b883',

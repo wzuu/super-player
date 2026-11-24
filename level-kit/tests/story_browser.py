@@ -126,6 +126,9 @@ def verify(browser,ids):
             'underground-lab': {'objectiveCounts':[1,11], 'encounters':[4,30,24]},
             'orbital-brood-ring': {'objectiveCounts':[10,12], 'encounters':[24,29]},
             'moonlit-stained-glass-keep': {'objectiveCounts':[9,11], 'encounters':[20,28]},
+            'storm-city-overpass': {'objectiveCounts':[38], 'encounters':[38]},
+            'lantern-shrine-escape': {'objectiveCounts':[37], 'encounters':[37]},
+            'neon-northline-escape': {'objectiveCounts':[37], 'encounters':[37]},
         }.get(stage)
         result=page.evaluate("""expected => {
           const {game:g,nav,config:c}=run, choose=document.getElementById('mission-mode');

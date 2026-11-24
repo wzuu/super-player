@@ -7,12 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from uuid import uuid4
 
 from playwright.sync_api import sync_playwright
-from campaign_browser import ROOT, LEVELS, expose_game
-from lab_live_browser import watch_page
-from lab_pressure_browser import LOCK
+from campaign_browser import ROOT
+from campaign_play import open_campaign
 
 CASES = {
     'orbital-brood-ring': ('休眠舱日志','休眠舱',[-17,-17],[24,29]),
@@ -21,36 +19,7 @@ CASES = {
 
 
 def play(browser,url,stage,out,collect):
-    page=browser.new_page(viewport={'width':1280,'height':720})
-    errors=[]
-    watch_page(page,errors,False)
-    page.add_init_script(LOCK+"""
-      if(document.location.pathname!=='/') {
-        window.requestAnimationFrame=cb=>{window.drawPlayFrame=cb;return 1;};
-        let seed=6107;Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
-      }
-      localStorage.setItem('super-player:preferences:v1',JSON.stringify({muted:true,difficulty:'standard'}));
-    """)
-    page.route(re.compile('/'+stage+r'/(?:index\.html)?(?:\?.*)?$'),lambda route:expose_game(route,manual_steps=True))
-    page.goto(url+'/')
-    page.get_by_role('button',name='直接开始',exact=True).click()
-    page.locator('#continue').wait_for()
-    # 只预置前置关卡通关记录。本关通过正常首页、战斗和战报写入。
-    before=[]
-    for level in LEVELS:
-        if level['id']==stage: break
-        before.append(level['id'])
-        entry={'id':str(uuid4()),'level':level['id'],'won':True,'kills':1,'endedAt':1000+len(before),'durationMs':1000,'loot':[]}
-        r=page.request.post(url+'/api/battles',headers={'Origin':url},data=entry)
-        assert r.ok,r.text()
-    page.reload()
-    page.locator('a.mission-action[href$="/'+stage+'/"]').click(force=True)
-    page.wait_for_function('!!window.run',polling=100)
-    page.locator('#start').click()
-    page.wait_for_function("run.game.phase==='play'",polling=100)
-    page.keyboard.press('Escape')
-    assert page.evaluate("run.game.phase")== 'pause'
-    page.locator('#start').click()
+    page,errors,before=open_campaign(browser,url,stage)
     reward,room,at,numbers=CASES[stage]
     page.add_script_tag(content=(ROOT/'level-kit/tests/annihilation_play.js').read_text(encoding='utf8'))
     page.evaluate("opts=>window.walk=playAnnihilation(opts)",{'rewardName':reward,'roomName':room,'roomAt':at,'takeReward':collect})

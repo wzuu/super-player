@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="734" viewBox="0 0 900 734" role="img" aria-labelledby="title desc">
+<title id="title">灯巷神社撤离平面与高程</title><desc id="desc">木织机、石桥、鸟居依次标识三处转向。织坊可折返；东侧药铺可沿河岸回到桥头。</desc>
+<rect width="900" height="734" fill="#172632"/><g fill="#e4eff4" font-family="system-ui,sans-serif">
+<text x="28" y="39" font-size="23">灯巷神社撤离　｜　突围路线</text>
+<text x="470" y="39" font-size="15">北 ↑</text>
+<text x="530" y="83" font-size="20">驻防与接敌方向</text>
+<rect x="137" y="517" width="64" height="96" fill="#455b65"/>
+<rect x="137" y="485" width="184" height="56" fill="#455b65"/>
+<rect x="273" y="381" width="56" height="112" fill="#455b65"/>
+<rect x="177" y="421" width="48" height="72" fill="#455b65"/>
+<rect x="177" y="397" width="104" height="48" fill="#455b65"/>
+<rect x="321" y="433" width="60" height="40" fill="#455b65"/>
+<rect x="353" y="353" width="40" height="88" fill="#455b65"/>
+<rect x="273" y="341" width="120" height="48" fill="#455b65"/>
+<rect x="281" y="269" width="40" height="80" fill="#455b65"/>
+<rect x="165" y="237" width="156" height="40" fill="#455b65"/>
+<rect x="153" y="141" width="48" height="120" fill="#455b65"/>
+<rect x="153" y="117" width="184" height="48" fill="#455b65"/>
+<rect x="289" y="81" width="80" height="76" fill="#455b65"/>
+<polyline points="169,569 169,509 301,509 301,349 301,257 177,257 177,145 333,141 333,113" fill="none" stroke="#7de1cc" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="none"/>
+<polyline points="201,509 201,421 301,421" fill="none" stroke="#e9ca7c" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<polyline points="301,453 369,453 369,373 301,373" fill="none" stroke="#e9ca7c" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="169" cy="505" r="9.3" fill="#973f39"/>
+<text x="169" y="509" text-anchor="middle" font-size="12">1</text>
+<text x="534" y="119" font-size="15">1. 木户前哨　3 只</text>
+<circle cx="245" cy="505" r="9.3" fill="#973f39"/>
+<text x="245" y="509" text-anchor="middle" font-size="12">2</text>
+<text x="534" y="147" font-size="15">2. 低街巡游　9 只</text>
+<circle cx="205" cy="429" r="9.3" fill="#973f39"/>
+<text x="205" y="433" text-anchor="middle" font-size="12">3</text>
+<text x="534" y="175" font-size="15">3. 织坊看守　4 只</text>
+<circle cx="373" cy="397" r="9.3" fill="#973f39"/>
+<text x="373" y="401" text-anchor="middle" font-size="12">4</text>
+<text x="534" y="203" font-size="15">4. 药铺来敌　4 只</text>
+<circle cx="301" cy="369" r="9.3" fill="#973f39"/>
+<text x="301" y="373" text-anchor="middle" font-size="12">5</text>
+<text x="534" y="231" font-size="15">5. 桥前伏兵　7 只</text>
+<circle cx="181" cy="209" r="9.3" fill="#973f39"/>
+<text x="181" y="213" text-anchor="middle" font-size="12">6</text>
+<text x="534" y="259" font-size="15">6. 石阶拦路鬼　6 只</text>
+<circle cx="257" cy="141" r="9.3" fill="#973f39"/>
+<text x="257" y="145" text-anchor="middle" font-size="12">7</text>
+<text x="534" y="287" font-size="15">7. 参道后队　4 只</text>
+<rect x="186" y="558" width="6" height="6" fill="#95c0ff"/>
+<rect x="210" y="506" width="6" height="6" fill="#95c0ff"/>
+<rect x="278" y="462" width="6" height="6" fill="#95c0ff"/>
+<rect x="206" y="410" width="6" height="6" fill="#95c0ff"/>
+<rect x="362" y="374" width="6" height="6" fill="#95c0ff"/>
+<rect x="298" y="266" width="6" height="6" fill="#95c0ff"/>
+<rect x="174" y="182" width="6" height="6" fill="#95c0ff"/>
+<rect x="318" y="126" width="6" height="6" fill="#95c0ff"/>
+<rect x="185" y="422" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="381" y="402" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="279.0" y="310" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<path d="M205 423l6 6 -6 6 -6 -6z" fill="#f7d26e"/>
+<circle cx="169" cy="569" r="6" fill="#a4e4f4"/>
+<text x="178" y="562" font-size="15">起点</text>
+<circle cx="333" cy="113" r="6" fill="#8ce4b6"/>
+<text x="342" y="106" font-size="15">撤离</text>
+<text x="530" y="337" font-size="20">路线与物资</text>
+<text x="530" y="370" font-size="15">青线　主路　　 金虚线　可选通路</text>
+<text x="530" y="401" font-size="15">蓝方块　弹药　　深色块　实体掩体</text>
+<text x="530" y="432" font-size="15">金菱形　织坊锦样</text>
+<text x="530" y="480" font-size="15">存活进入撤离区即胜。</text>
+<text x="530" y="506" font-size="15">战利品可跳过，沿途可原路退回。</text>
+<text x="532" y="536" font-size="15">侧视　地面相对高度（米）</text>
+<path d="M535 581H852" stroke="#6f8592" stroke-dasharray="3 4"/>
+<polyline points="544,581.0 639,573.0 734,546.0 829,536.2" stroke="#7de1cc" stroke-width="3" fill="none"/>
+<circle cx="544" cy="581.0" r="3" fill="#b0edda"/><text x="532" y="624" font-size="13">木户</text>
+<circle cx="639" cy="573.0" r="3" fill="#b0edda"/><text x="627" y="624" font-size="13">石桥</text>
+<circle cx="734" cy="546.0" r="3" fill="#b0edda"/><text x="722" y="624" font-size="13">石阶</text>
+<circle cx="829" cy="536.2" r="3" fill="#b0edda"/><text x="817" y="624" font-size="13">避难门</text>
+<text x="28" y="647" font-size="19">沿主路的地面高程</text>
+<text x="28" y="678" font-size="15">低街 0 m → 桥拱 +1.15 m → 杉林石阶 +5 m → 山门 +6.4 m</text>
+<text x="28" y="707" font-size="15">织坊可折返；东侧药铺可沿河岸回到桥头。</text>
+</g></svg>
