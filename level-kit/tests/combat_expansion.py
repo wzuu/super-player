@@ -160,12 +160,31 @@ def verify_simulation_cadence(page):
 
 def verify_boss_feedback(page):
     page.evaluate("""() => {
-      const {game:g}=run, w=g.weapon;
+      const {game:g,camera}=run, w=g.weapon;
       document.querySelector('#mission-mode').value='endless';g.reset();g.phase='play';
       const b=g.beasts.boss, f=b.fight;
       w.origin.set(b.x,b.y+1,b.z+5);
       w.end.set(b.x,b.y+b.height*.86,b.z);w.dir.set(0,0,-1);
       if(w.hitTarget(b,g)!==1 || f.charge)throw Error('装甲命中误报弱点');
+      const m=g.beasts,mark=m.contactMark;
+      camera.position.set(b.x,b.y+1,b.z+7);camera.lookAt(b.x,b.y+1,b.z);camera.updateMatrixWorld(true);
+      m.render(0,g.time);
+      const index=m.bodyBatch(3,b.nearLOD,b.farLOD), flash=m.modelBatches[index][0].geometry.attributes.beastFlash;
+      if(!mark.visible || mark.count!==1 || mark.material.color.getHex()!==0xb78c66 || flash.getX(0)!==0)
+        throw Error('有效命中缺少局部反馈或整个首领闪白');
+      const first=Array.from(mark.instanceMatrix.array.slice(12,15));
+      w.end.x+=.19;
+      w.hitTarget(b,g);m.render(0,g.time);
+      if(first.some((v,i)=>v!==mark.instanceMatrix.array[12+i]))throw Error('同次多弹丸叠加命中标记');
+      w.end.x-=.19;
+      g.time+=.1;m.render(0,g.time);
+      if(mark.visible)throw Error('局部标记未在下一次步枪射击前消退');
+      f.transitionUntil=g.time+.4;
+      const protectedHP=b.hp;
+      w.hitTarget(b,g);m.render(0,g.time);
+      if(b.hp!==protectedHP || !mark.visible || mark.material.color.getHex()!==0x80878b)
+        throw Error('免伤反馈与实际扣血不一致');
+      g.time=f.transitionUntil;
       f.weakUntil=g.time+3;
       if(w.hitTarget(b,g)!==2 || f.charge!==1)throw Error('发光核心未计入破甲');
       const device=g.field.device;

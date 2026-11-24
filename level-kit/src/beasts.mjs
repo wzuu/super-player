@@ -483,6 +483,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.ai = new BeastAI(level, nav, this);
       this.traits = new FoeTraits(campaignStage,CONFIG);
       this.bossTint=coreTint;
+      this.contactOffset=new V3();
+      this.contactMark=dynamicMesh(new THREE.RingGeometry(.065,.095,12),
+        new THREE.MeshBasicMaterial({color:0xb78c66,transparent:true,depthWrite:false}),1);
+      this.contactMark.name='boss-hit-contact';
       this.bossMarks=dynamicMesh(new THREE.RingGeometry(.78,1,24),
         new THREE.MeshBasicMaterial({side:THREE.DoubleSide,depthWrite:false}),3);
       const badges = {
@@ -625,6 +629,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.live++;
       if (type === 3) {
         this.boss = b;
+        b.contactAt=-Infinity;
         if (campaignStage && !this.currentGame?.training) createBossFight(b,CONFIG,campaignStage);
       }
       return b;
@@ -665,8 +670,15 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if(type===1 && definition.weaponSkin==='brass-factory') game.sound.stageEvent('impact',game,b);
       b.knockX = dir.x * (type === 3 ? 0.8 : 3.7); b.knockZ = dir.z * (type === 3 ? 0.8 : 3.7);
       if (!game.encounter?.hearingOnly) b.alert = CONFIG.beasts.memory;
-      if (!hit?.quietImpact) game.effects.impact(at, hit?.pellet, ichor);
-      return this.damage(b, damage, game, source, hit);
+      if (type!==3 && !hit?.quietImpact) game.effects.impact(at, hit?.pellet, ichor);
+      const hp=b.hp, killed=this.damage(b, damage, game, source, hit);
+      if (type===3 && !killed && source==='weapon' && game.time!==b.contactAt) {
+        // 同枪多弹丸只在实际命中点留下一个短标记。转阶段完全挡下的命中用暗灰色。
+        b.contactAt=game.time;
+        this.contactOffset.set(at.x-b.x,at.y-b.y,at.z-b.z).addScaledVector(dir,-.025);
+        this.contactMark.material.color.setHex(b.hp<hp ? 0xb78c66 : 0x80878b);
+      }
+      return killed;
     }
     damage(b, amount, game, source = 'environment', hit = null) {
       if (game.phase !== 'play' || !b.active || !(amount > 0)) return false;
@@ -810,7 +822,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const roll=b.surfaceRoll+(disabled ? 0 : Math.cos(walk)*.062);
       const y=b.y+bob+(b.surfaceRoll ? b.height*.5*(1-Math.cos(b.surfaceRoll)) : 0);
       const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
-      const flash=Math.min(1,b.flash*12), light=disabled ? .31 : b.rage ? 3.2 : b.mode==='windup' ? 2.85 : appearance.eyeLight;
+      const flash=type===3 ? 0 : Math.min(1,b.flash*12), light=disabled ? .31 : b.rage ? 3.2 : b.mode==='windup' ? 2.85 : appearance.eyeLight;
       body.geometry.attributes.beastFlash.setX(i,flash);
       setInstance(body,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,null,b.yaw,action,roll);
       workColor.setScalar(light);
@@ -829,7 +841,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const near=c.nearLOD && CONFIG.beasts.appearance.detailEnabled && (c.type===3 || this.detail.corpseSlots>0);
       if (near && c.type!==3) this.detail.corpseSlots--;
       const batch=this.bodyBatch(form,near,c.farLOD), i=this.counts[batch]++;
-      const [body,eye]=this.modelBatches[batch], flash=Math.max(0,1-5*fall);
+      const [body,eye]=this.modelBatches[batch], flash=c.type===3 ? 0 : Math.max(0,1-5*fall);
       const scale=c.scale,light=1-fall;
       setInstance(body,i,x,y,z,scale,scale,scale,null,c.yaw,0,roll);
       workColor.setScalar(light);
@@ -920,6 +932,15 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.chargeMarks.visible = chargeMarks > 0;
       let marks=0;
       const boss=this.boss, fight=boss?.fight;
+      const age=t-(boss?.contactAt ?? -Infinity);
+      this.contactMark.visible=Boolean(boss?.active && age>=0 && age<.09);
+      if(this.contactMark.visible) {
+        stamp.position.set(boss.x,boss.y,boss.z).add(this.contactOffset);
+        stamp.quaternion.copy(camera.quaternion);stamp.scale.setScalar(1);
+        stamp.updateMatrix();this.contactMark.setMatrixAt(0,stamp.matrix);
+        this.contactMark.material.opacity=.72*(1-age/.09);
+        updateMesh(this.contactMark,1);
+      }
       if (fight?.winding) {
         workColor.setHex(0xff9144);
         const radius=2.2+fight.stage*.5;

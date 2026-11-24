@@ -10,6 +10,10 @@ export function createMissionNavigation(nav) {
     return field.canWalk(a,b);
   }
   function build(p, target) {
+    // 桥面与同层平台可直接通行时保留真实高度，避免二维网格把终点投到楼下。
+    const onPlatform=q=>Math.abs(q.y-level.surface(q.x,q.z,level.base(q.x,q.z)+.65))>.65;
+    const layered=onPlatform(p)||onPlatform(target);
+    if (layered && walkable(p,target)) return [{x:target.x,y:target.y,z:target.z}];
     field.rebuild(target.x, target.z);
     let cell = field.index(p.x, p.z);
     if (field.dist[cell] < 0 || !walkable(p, point(cell))) {
@@ -30,6 +34,7 @@ export function createMissionNavigation(nav) {
       nodes.push(point(cell));
     }
     if (walkable(nodes.at(-1), target)) nodes.push({ x: target.x, y: target.y, z: target.z });
+    else if (layered) return [];
     const corners = [];
     let start = p, i = 0;
     while (i < nodes.length) {
@@ -42,8 +47,9 @@ export function createMissionNavigation(nav) {
     }
     return corners;
   }
-  return (p, target) => {
-    const key = [field.index(p.x, p.z), field.index(target.x, target.z), level.terrainRevision].join('/');
+  return (p, target, stage='') => {
+    const key = [stage, field.index(p.x,p.z), field.index(target.x,target.z), Math.round(p.y*2),
+      Math.round(target.y*2), level.terrainRevision].join('/');
     if (key !== previous || path.length && !walkable(p, path[0])) {
       previous = key;
       path = build(p, target);

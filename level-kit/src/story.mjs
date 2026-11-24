@@ -1,9 +1,11 @@
 import { createMissionNavigation } from '@level-kit/mission-navigation.mjs';
+import { createGroundDirections } from '@level-kit/ground-directions.mjs';
 
 // 每次主线遭遇只集结一次。限时目标切换时，保留已经入场的敌群。
 export function createStory({ THREE, scene, level, nav, CONFIG, definition, colors }, rules) {
   const spec = definition.story;
   let route;
+  const groundDirections=createGroundDirections(THREE,scene,level);
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
   const xyz = (a) => new THREE.Vector3(...a);
   const separation = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -521,16 +523,18 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const p = g.player;
       const engaged = g.time - p.lastHurt < 1.2 || g.beasts.pool.some(b =>
         b.active && b.playerVisible && b.alert > 0 && Math.hypot(b.x-p.x,b.y-p.y,b.z-p.z) <= 13);
-      if (engaged && task.target.kind !== 'ammo') return { ...task, engaged };
-      // 桥上、塔内等分层目标保留高度和升降机标记。二维网格只用于当前地面层。
-      const ground = q => level.surface(q.x, q.z, level.base(q.x,q.z) + CONFIG.player.step);
-      if (Math.abs(ground(p)-p.y) > .65 || Math.abs(ground(task.target)-task.target.y) > .65) return task;
+      // 交战区的浮标仍可提示当前威胁；地面的路线指向房间或大厅，不在每只移动敌人间跳动。
+      let target=task.target;
+      if (engaged && target.storyWave && item?.kind==='fight') target=item.target;
+      if (engaged && target.fight && item?.kind==='boss') target=level.bossAnchor;
       route ??= createMissionNavigation(nav);
-      const path = route(p, definition.navigationApproach?.(p, task.target, level) ?? task.target);
-      return path.length || spec.turnDirections ? { ...task, path, waypoint: path[0] } : task;
+      const path=route(p,definition.navigationApproach?.(p,target,level) ?? target,task.stage);
+      const guidance={...task,engaged:engaged && target.kind!=='ammo'};
+      return path.length || spec.turnDirections ? {...guidance,path,waypoint:path[0]} : guidance;
     },
     marker(task, g) {
       const t = task?.path ? task.waypoint : task?.target;
+      groundDirections(g.phase==='play' && !g.encounter?.hudOffline ? task?.path : null,g);
       sign.visible = Boolean(t && !task.engaged && !g.encounter?.hudOffline && g.phase === 'play');
       if (sign.visible) {
         sign.position.set(t.x, t.y + (t.height ?? 1.3) + 0.45, t.z);

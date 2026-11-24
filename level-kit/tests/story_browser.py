@@ -358,7 +358,7 @@ def verify(browser,ids):
               const guard=g.beasts.pool.find(b=>b.active&&b.storyWave);
               if(!guard)throw Error('街区交战尚未开始');
               guard.alert=6;guard.playerVisible=true;
-              if(!guide().engaged)throw Error('南街近敌仍显示路标');
+              if(!guide().engaged)throw Error('南街近敌未进入交战状态');
               guard.x=p.x+19;
               if(guide().engaged||!guide().waypoint)throw Error('南街远敌阻止导航');
               return {metres:Math.round(first.metres+side.metres+second.metres),detourCorners:side.corners,streetCorners:second.corners};
@@ -403,9 +403,42 @@ def verify(browser,ids):
               const threat=g.beasts.spawn(0,p.x-3,p.z,p.y);
               if(!threat)throw Error('近场测试怪无法生成');
               threat.playerVisible=true;threat.alert=8;
-              if(!guide().engaged)throw Error('近身威胁时主线未淡化');
+              const arrows=run.scene.getObjectByName('ground-directions');
+              function markers(){
+                const task=guide();s.marker(task,g);
+                return Array.from({length:arrows.count},(_,i)=>{
+                  const matrix=arrows.instanceMatrix.array.subarray(i*16,i*16+16);
+                  const [x,y,z]=matrix.subarray(12,15);
+                  if(Math.abs(l.surface(x,z,y+.2)+.046-y)>.022 || l.blocked(x,z,y-.046,.39,.15))
+                    throw Error('地面箭头悬空或穿入障碍 '+[x,y,z]);
+                  return [x,y,z];
+                });
+              }
+              if(!guide().engaged || !markers().length)throw Error('近身交战丢失地面指引');
+              const [x,y,z]=markers()[0];
+              g.projectiles.pool(x,y-.046,z,1);
+              if(markers().some(a=>Math.hypot(a[0]-x,a[2]-z)<1.85))throw Error('地面路线覆盖酸池');
+              g.projectiles.reset();
+              const coversMarker=()=>markers().some(a=>Math.hypot(a[0]-x,a[2]-z)<.1);
+              const hazard={p:pos(x,z),falling:g.time+.4,data:{radius:2}};
+              g.field.traps.push(hazard);
+              if(coversMarker())throw Error('地面路线覆盖坠落物预警');
+              g.field.traps.pop();
+              const charge={active:true,type:1,mode:'windup',x:x-1,z,fx:1,fz:0,
+                chargeMarkCount:1,chargeMarkLength:2,chargeHeights:[y,y]};
+              g.beasts.pool.push(charge);
+              if(coversMarker())throw Error('地面路线覆盖冲锋带');
+              charge.chargeHeights=[y+4,y+4];
+              if(!coversMarker())throw Error('楼上冲锋带遮住楼下路线');
+              g.beasts.pool.pop();
+              p.lastHurt=g.time;
               threat.x=p.x-19;
+              if(!guide().engaged || !markers().length)throw Error('刚刚受击后地面路线消失');
+              p.lastHurt=-Infinity;
               if(guide().engaged||!guide().waypoint)throw Error('远敌压住了导航');
+              g.phase='pause';s.marker(guide(),g);
+              if(arrows.visible || arrows.count)throw Error('暂停还在绘制导航');
+              g.phase='play';
               g.beasts.damage(threat,1e7,g);
               const boxes=['封存逆变器样本','零号实验体日志'];
               let sideWalk=0;
