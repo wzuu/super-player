@@ -19,6 +19,7 @@ export function createTraining(config, prefs) {
   }
   let stage, baseline, pauseSeen, used, directions, target, pickup;
   const moveKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
+  const aimHint = aimInstructions(prefs.aimMode);
   const tasks = [
     ['look', '移动鼠标或右摇杆转向'],
     ['walk', '向四个方向移动 · ' + moveKeys.map(bind).join(' / ')],
@@ -26,7 +27,7 @@ export function createTraining(config, prefs) {
     ['jump', '按 ' + bind('Space') + ' 跳跃'],
     ['crouch', '按住 ' + bind('KeyC') + ' 蹲伏'],
     ['pause', '按 Esc 释放鼠标，再选择继续战斗'],
-    ['aim', aimInstructions(prefs.aimMode)],
+    ...(aimHint ? [['aim', aimHint]] : []),
     ['shoot', '按鼠标左键射击一次，观察弹匣读数'],
     ['reload', '按 ' + bind('KeyR') + ' 提前换弹'],
     ['empty', '持续射击至空仓，等待自动换弹完成'],
@@ -79,7 +80,8 @@ export function createTraining(config, prefs) {
       mods: {},
     },
     controls:
-      '鼠标左键射击。' + aimInstructions(prefs.aimMode) + '。按住 ' + bind('KeyC') + ' 蹲伏通过低矮通道，按 ' + bind('KeyF') + ' 操作机关与关键物。' +
+      '鼠标左键射击。' + (aimHint ? aimHint + '。' : '') +
+      '按住 ' + bind('KeyC') + ' 蹲伏通过低矮通道，按 ' + bind('KeyF') + ' 操作机关与关键物。' +
       '遇到红色自爆体先拉开距离，在它膨胀时击杀。蓝环护盾体保护身边的同伴，瞄准核心可破盾。绿色孵化体蓄能时，射击可打断孵化和治疗。' +
       '战场图鉴列有元素反应，毒镖步枪配合手雷可触发毒爆。' +
       (prefs.gamepad

@@ -11,7 +11,7 @@ import { createWeaponClass } from '@level-kit/weapon.mjs';
 import { shotgunRules } from '@level-kit/weapon-classes.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 import { createUIClass } from '@level-kit/ui.mjs';
-import { preferences, aimInstructions, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
+import { RED_DOT_AIM_ENABLED, preferences, aimInstructions, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
 import { createFieldKit } from '@level-kit/field-kit.mjs';
 import { createObjective, missionRules } from '@level-kit/objectives.mjs';
 import { createStory } from '@level-kit/story.mjs';
@@ -468,7 +468,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   for (const label of $('guide').querySelectorAll('[data-keys]')) {
     label.textContent = label.dataset.keys.split(' ').map(id => keyName(prefs.keys[id])).join(' / ');
   }
-  $('aim-help').textContent = aimInstructions(prefs.aimMode);
+  if (RED_DOT_AIM_ENABLED) {
+    const row = $('aim-control');
+    row.content.querySelector('dd').textContent = aimInstructions(prefs.aimMode);
+    row.replaceWith(row.content);
+  }
   $('deep-help').hidden = !field?.cfg.deep;
   if (definition.weaponSkin === 'buried-tomb')
     $('crouch-help').querySelector('dd').append('沙暴中配合停火可压低声响。');
@@ -504,15 +508,15 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('mousedown', (event) => {
     if (game.phase !== 'play' || document.pointerLockElement !== canvas || ![0,2].includes(event.button)) return;
     event.preventDefault();
-    if (event.button === 2) {
+    if (event.button === 0) input.fire = true;
+    else if (RED_DOT_AIM_ENABLED) {
       if (!input.aimPressed) player.aimRequested = prefs.aimMode === 'hold' || !player.aimRequested;
       input.aimPressed = true;
     }
-    else input.fire = true;
   });
   document.addEventListener('mouseup', (event) => {
     if (event.button === 0) input.fire = false;
-    if (event.button === 2) {
+    if (event.button === 2 && RED_DOT_AIM_ENABLED) {
       input.aimPressed = false;
       if (prefs.aimMode === 'hold') player.aimRequested = false;
     }

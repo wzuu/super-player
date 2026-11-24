@@ -173,13 +173,18 @@ def run(browser, url, static, database):
       return [actual.keys.KeyW,actual.keys.KeyM,actual.recordReplay];
     }""")
     assert migrated[0] == "KeyM" and migrated[1] != "KeyM" and migrated[2] is False
+    # 已有玩家保留两种历史瞄准偏好，调整其他设置时应能原样回读。
+    saved_mode = "toggle" if static else "hold"
+    page.evaluate("""async mode => {
+      const {preferences,storePreferences}=await import('./level-kit/src/preferences.mjs');
+      storePreferences({...preferences(), aimMode:mode});
+    }""", saved_mode)
     page.click("#mute")
     assert "已静音" in page.locator("#mute").inner_text()
     page.click("#settings-open")
     replay = page.get_by_label("录制战术回放")
     assert not replay.is_checked()
-    assert page.get_by_label("右键瞄准").input_value() == "toggle"
-    page.get_by_label("右键瞄准").select_option("hold")
+    assert not page.get_by_label("右键瞄准").is_visible()
     replay.check()
     peer = context.new_page()
     peer.goto(url)
@@ -193,15 +198,15 @@ def run(browser, url, static, database):
     page.keyboard.press("y")
     retained = page.evaluate("""async () => {
       const {preferences}=await import('./level-kit/src/preferences.mjs');
-      const p=preferences();return [p.volume,p.metrics,p.keys.KeyI,p.keys.KeyM];
+      const p=preferences();return [p.volume,p.metrics,p.keys.KeyI,p.keys.KeyM,p.aimMode];
     }""")
-    assert retained == [47, True, "KeyJ", "KeyY"], retained
+    assert retained == [47, True, "KeyJ", "KeyY", saved_mode], retained
     page.keyboard.press("Escape")
     page.click("#continue")
     page.wait_for_function("!!window.run")
     assert page.locator("#sound, #sound-state").count() == 0
     assert not page.evaluate("run.game.sound.enabled")
-    assert "按住右键" in page.locator("#aim-help").text_content()
+    assert not page.locator("#aim-help").is_visible()
     peer = page.context.new_page()
     peer.goto(url)
     peer.evaluate("""async () => {

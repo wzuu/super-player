@@ -49,7 +49,6 @@ def check(browser, url, static=False):
     step("crouch"); hold("c")
     step("pause"); page.evaluate("document.exitPointerLock()")
     page.wait_for_function("run.game.phase==='pause'");page.click("#start")
-    step("aim"); page.mouse.down(button="right");page.wait_for_timeout(220);page.mouse.up(button="right")
     step("shoot"); page.mouse.down();page.wait_for_timeout(200);page.mouse.up()
     step("reload"); hold("r")
     step("empty"); page.mouse.down();step("pickup");page.mouse.up()

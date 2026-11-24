@@ -1,3 +1,6 @@
+// 暂停开放红点瞄准，保留玩家已保存的操作方式供恢复时使用。
+export const RED_DOT_AIM_ENABLED = false;
+
 export const defaultKeys = {
   KeyW: 'KeyW',
   KeyA: 'KeyA',
@@ -99,6 +102,7 @@ export function keyName(code) {
 }
 
 export function aimInstructions(mode) {
+  if (!RED_DOT_AIM_ENABLED) return '';
   return mode === 'hold' ? '按住右键开镜，松开退镜' : '单击右键开镜，再次单击退镜';
 }
 
