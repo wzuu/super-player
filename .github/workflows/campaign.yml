@@ -11,6 +11,9 @@ permissions:
 jobs:
   test-build:
     runs-on: ubuntu-latest
+    outputs:
+      home_sha256: ${{ steps.digests.outputs.home }}
+      lab_sha256: ${{ steps.digests.outputs.lab }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -37,6 +40,11 @@ jobs:
       - run: python level-kit/tests/static_campaign.py dist
         env:
           GAME_TEST_BROWSER: chromium
+      - name: Record game entry checksums
+        id: digests
+        run: |
+          sha256sum dist/index.html dist/underground-lab/index.html |
+            awk 'NR == 1 {print "home=" $1} NR == 2 {print "lab=" $1}' >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v5
         with:
           path: ${{ github.event_name == 'pull_request' && 'dist' || vars.PAGES_DEMO_ENABLED == 'true' && 'dist' || 'ops/offline' }}
@@ -83,6 +91,8 @@ jobs:
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: [test-build, gameplay]
+    outputs:
+      page_url: ${{ steps.publish.outputs.page_url }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -97,3 +107,22 @@ jobs:
       - name: Publish
         id: publish
         uses: actions/deploy-pages@v5
+
+  verify-public-game:
+    if: vars.PAGES_DEMO_ENABLED == 'true'
+    needs: [test-build, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: python -m pip install playwright==1.65.2
+      - run: python -m playwright install --with-deps chromium
+      - name: Play the published campaign
+        env:
+          GAME_TEST_BROWSER: chromium
+          PAGES_URL: ${{ needs.deploy.outputs.page_url }}
+          HOME_SHA256: ${{ needs.test-build.outputs.home_sha256 }}
+          LAB_SHA256: ${{ needs.test-build.outputs.lab_sha256 }}
+        run: python -u level-kit/tests/pages_browser.py "$PAGES_URL" --home-sha256 "$HOME_SHA256" --level-sha256 "$LAB_SHA256"
