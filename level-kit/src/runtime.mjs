@@ -652,10 +652,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   function animate(now) {
     requested = 0;
     if (document.hidden) return;
-    if (!training && (game.phase==='ready' || game.phase==='play')) {
-      const deadline=performance.now()+2;
-      beasts.detailParts.prepareMaterial(renderer,scene,camera,composer.readBuffer);
-      beasts.prepareSpawnRoutes(deadline);
+    if(!training) {
+      const menu=game.phase==='ready' || game.phase==='pause';
+      // 驱动可能同步编译/上传整份材质。只在菜单中预热，玩家操作帧保留可中断的寻路准备。
+      if(menu)beasts.detailParts.prepareMaterial(renderer,scene,camera,composer.readBuffer);
+      if(menu || game.phase==='play')beasts.prepareSpawnRoutes(performance.now()+2);
     }
     const dt = lastFrame === null ? 0 : Math.max(0, (now - lastFrame) / 1000);
     lastFrame = Math.max(lastFrame ?? now, now);

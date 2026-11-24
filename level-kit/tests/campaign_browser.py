@@ -235,7 +235,9 @@ def check_frame_timing(browser, url, fps):
         timings = page.evaluate("""fps => {
             const g = run.game, w = g.weapon;
             const start = performance.now();
-            gameFrame(start);
+            // 结清点击开始到注入首帧之间的前台时间，再从同一个时刻采样。
+            let previous;
+            do { previous = g.time; gameFrame(start); } while (g.time > previous && g.phase === 'play');
             g.time = 119;
             w.ammo = 0;
             w.reload(g);

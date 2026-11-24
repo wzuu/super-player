@@ -29,6 +29,8 @@ def verify(page,address,stage):
       s.ctx.createPanner=()=>{const n=pan(),set=n.setPosition.bind(n);
         n.setPosition=(x,y,z)=>{points.push([x,y,z]);set(x,y,z);};return n;};
       s.resetStage();s.stopVoices();
+      // 开放战区在开局已经驻防。监听器装好后重开整局，连同对象池一起复位并接收开局预警。
+      if(id==='rain-city'||id==='paris-tower')g.reset();
       const tick=(t)=>{g.time=t;e?.update?.(g,.02);s.updateThreats(g);};
       const begin=g.time+.25;
       tick(begin);
@@ -48,8 +50,6 @@ def verify(page,address,stage):
       } else if(['sakura-night-town','brass-factory','haunted-midway','neon-undercity'].includes(id)) {
         const t=e.next;tick(t-.5);tick(t+.05);tick(t+(id==='sakura-night-town'?22:18));
       } else {
-        // 雨城与巴黎的真实第一道遭遇入口。任务导演选择路径、提前鸣警并生成敌群。
-        g.story.reset(g);
         const t=g.story.target;Object.assign(p,{x:t.x,y:t.y,z:t.z});
         g.story.step(.1,g);g.time+=1.6;g.story.step(.1,g);s.updateThreats(g);
       }

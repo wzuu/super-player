@@ -113,8 +113,8 @@ def cold_grid(browser):
         try:
             result=page.evaluate("""() => {
               const {game:g,camera}=run,m=g.beasts,v=m.visibility,centers=[];
-              // 沿用整帧压测的室内布兵，固定朝向大厅南侧实体隔墙，确保有真实的遮挡命中。
-              camera.position.set(-6,1.65,18);camera.lookAt(-6,1.65,-15);
+              // 在安检走廊内从南向北看 z=20 隔墙的实体段，保留门洞和观察玻璃的可见性。
+              camera.position.set(-7,1.65,25);camera.lookAt(-7,1.65,-15);
               // 记录一次真实提交中首次触达的每个格子，计时只重复原版候选墙列表的构建。
               v.cells.clear();
               const candidates=v.candidates;
