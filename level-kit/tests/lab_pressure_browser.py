@@ -19,6 +19,9 @@ LOCK = """
   Object.defineProperty(document,'pointerLockElement',{get:()=>lock});
   Element.prototype.requestPointerLock=function(){lock=this;document.dispatchEvent(new Event('pointerlockchange'));return Promise.resolve();};
   document.exitPointerLock=()=>{lock=null;document.dispatchEvent(new Event('pointerlockchange'));};
+  document.addEventListener('pointermove',e=>{
+    if(window.recentering)e.stopImmediatePropagation();
+  },true);
   document.addEventListener('mousemove',e=>{
     if(window.recentering){window.recentering=false;e.stopImmediatePropagation();}
   },true);
