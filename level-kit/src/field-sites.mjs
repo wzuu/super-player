@@ -139,6 +139,15 @@ const sites = {
   'tower-observation-defense': [
     [-37,-8],[38,-15],'观景寄存室','启动升降绞盘','观景纪念券','穿孔边缘仍留着蓝色的检票印。',
   ],
+  'rift-temple-valley': [
+    [-35,5],[39,-12],'竹林藏卷室','转动玉轮','山谷石印','印面刻着供案与断桥的位置。',
+  ],
+  'caldera-rift-works': [
+    [-44,0],[25,-25],'铸炉备件库','转动炉压阀','黄铜温标','铜片上标出了旧炉的温度。',
+  ],
+  'midnight-midway-backstage': [
+    [41,16],[-8,-38],'布景寄存间','转动幕帘绞盘','剧团徽印','票根背面盖着最后一夜的剧团印章。',
+  ],
 };
 export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
@@ -171,6 +180,9 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     ['灯油坛','引水铜管','柱廊石楣'],
     ['祭火油瓮','水磨压管','悬挂石梁'],
     ['备用油箱','空压机管','塔架配重'],
+    ['松油陶坛','石匠压管','断桥吊石'],
+    ['铸炉油桶','冷却管','转运吊篮'],
+    ['舞台油罐','烟幕压管','布景配重'],
   ];
   const value = 450 + stage * 25;
   const treasure = [{ name: '宝库·' + name, value }];

@@ -61,8 +61,10 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       for (let i = 36; i < size; i += 36) {
         ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
       }
-      ctx.fillStyle = '#ffb171'; ctx.fillRect(this.px(this.level.gate.x) - 3, this.pz(this.level.gate.z) - 3, 6, 6);
-      ctx.fillStyle = '#a1a086'; ctx.fillRect(this.px(this.level.bossAnchor.x) - 2, this.pz(this.level.bossAnchor.z) - 2, 4, 4);
+      if(!definition.story?.rifts){
+        ctx.fillStyle = '#ffb171'; ctx.fillRect(this.px(this.level.gate.x) - 3, this.pz(this.level.gate.z) - 3, 6, 6);
+        ctx.fillStyle = '#a1a086'; ctx.fillRect(this.px(this.level.bossAnchor.x) - 2, this.pz(this.level.bossAnchor.z) - 2, 4, 4);
+      }
     }
     drawMap(game, target, path, engaged) {
       const ctx = this.ctx;
@@ -75,6 +77,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         ctx.strokeStyle = '#91ffcd'; ctx.lineWidth = 1.6; ctx.stroke();
       }
       game.field?.minimap(ctx,x=>this.px(x),z=>this.pz(z),game);
+      if(game.story?.managed)game.story.rifts?.minimap(ctx,x=>this.px(x),z=>this.pz(z));
       for(const lift of game.lifts?.lifts??[]) {
         ctx.fillStyle='#8feddb';ctx.font='bold 11px sans-serif';
         ctx.fillText(lift.y>game.player.y+1?'↑':lift.y<game.player.y-1?'↓':'↕',this.px(lift.x),this.pz(lift.z));

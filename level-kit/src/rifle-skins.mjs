@@ -1,5 +1,20 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'rift-temple-valley': {
+    name:'石匠巡谷型',detail:'青灰机匣配玉色刻线，护木饰有褐金回纹。',
+    base:'#777e70',trim:'#a59a6d',dark:'#414e4b',light:'#c3cfaa',
+    backdrop:'#424e49',key:'#dcd1b4',fill:'#8dc5b2',metalness:.34,roughness:.62,
+  },
+  'caldera-rift-works': {
+    name:'熔铸检修型',detail:'烟紫色隔热罩衬有铜红护边，弹仓侧面留有炉温刻痕。',
+    base:'#836a6c',trim:'#c28761',dark:'#4e424c',light:'#edbb91',
+    backdrop:'#514349',key:'#f0cdad',fill:'#a099ad',metalness:.58,roughness:.47,
+  },
+  'midnight-midway-backstage': {
+    name:'后台巡场型',detail:'紫灰枪身沿用舞台侧幕的底色，护木有金色票孔纹。',
+    base:'#82758c',trim:'#bd9282',dark:'#483e53',light:'#e1c29f',
+    backdrop:'#463d52',key:'#f3d6c8',fill:'#aba4c6',metalness:.43,roughness:.54,
+  },
   'tower-observation-defense': {
     name:'塔架值勤型',detail:'铆接护木配有古铜色护箍，与观景台桁架同色。',
     base:'#827368',trim:'#bda177',dark:'#494951',light:'#e4cc9f',

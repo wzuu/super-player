@@ -50,6 +50,9 @@ def verify(page,address,stage):
       else if(id==='dune-signal-terrace') {tick(14);tick(18);tick(30);}
       else if(id==='waterfall-temple-defense') {tick(12);tick(16);tick(29);}
       else if(id==='tower-observation-defense') {tick(24);tick(28);tick(35);}
+      else if(id==='rift-temple-valley') {tick(22);tick(28);tick(45);}
+      else if(id==='caldera-rift-works') {tick(21);tick(31);tick(58);}
+      else if(id==='midnight-midway-backstage') {tick(3);tick(7);tick(14);}
       else if(id==='storm-city-overpass') {tick(begin+3);}
       else if(id==='buried-tomb') {tick(88);tick(91);tick(109);}
       else if(id==='polar-station') {

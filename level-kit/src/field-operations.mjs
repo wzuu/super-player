@@ -55,8 +55,14 @@ export function createFieldOperations(context, campaign) {
   }
   function roomSite(desired) {
     const savedItems = [...(definition.loot ?? []), ...(definition.ammo ?? [])];
+    const rifts=definition.story?.rifts;
+    const interactions=rifts ? [...rifts.cases,...rifts.gates].map(site=>site.at)
+      .concat((definition.loot??[]).map(([x,z])=>[x,z]),rifts.shortcut?[rifts.shortcut.latch]:[]) : [];
     return site(desired, 2.35, 8, (p) => {
       if (savedItems.some(([x, z]) => Math.abs(x - p.x) < 2.5 && Math.abs(z - p.z) < 2.8)) return false;
+      // 宝库门前四米可以交互。玩家取任务弹、收藏或拉闩时要能单独选择自己的目标。
+      if(interactions.some(([x,z])=>Math.hypot(x-p.x,z-(p.z+2.05))<6.8 ||
+          (Math.abs(x-p.x)<2.6 && Math.abs(z-p.z)<3)))return false;
       // 前后门外都预留通路。贴墙放置可能把门口封进死角，也会挡住原有路线。
       const clear = (x, z) =>
         nav.dist[nav.index(x, z)] >= 0 &&

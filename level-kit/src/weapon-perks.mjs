@@ -173,6 +173,9 @@ function perk(onHit = NONE, onKill = NONE, passive = NONE) {
 }
 
 export const weaponPerks = {
+  'rift-temple-valley': perk(),
+  'caldera-rift-works': perk(),
+  'midnight-midway-backstage': perk(),
   'orbital-brood-ring': perk(),
   'moonlit-stained-glass-keep': perk(),
   'storm-city-overpass': perk(),

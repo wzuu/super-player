@@ -122,6 +122,11 @@ def verify(browser,ids):
     for stage in ids:
         page.goto((ROOT/stage/'index.html').as_uri())
         page.wait_for_function("!!window.run",polling=100)
+        if page.evaluate("!!run.game.story.rifts"):
+            page.add_script_tag(path=ROOT/'level-kit/tests/rifts_checks.js')
+            print(stage,page.evaluate('checkRifts',stage),flush=True)
+            assert not errors,errors
+            continue
         if page.evaluate("!!run.game.story.defense"):
             page.add_script_tag(path=ROOT/'level-kit/tests/defense_checks.js')
             print(stage,page.evaluate('checkDefense()'),flush=True)

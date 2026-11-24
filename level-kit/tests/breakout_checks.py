@@ -2,7 +2,7 @@
 import os
 from playwright.sync_api import sync_playwright
 from campaign_routes_browser import ROOT, scenario_page
-from breakout_browser import CASES
+from breakout_browser import CASES, RIFTS
 
 
 def check(browser,stage,seed):
@@ -60,3 +60,8 @@ if __name__=='__main__':
     with sync_playwright() as pw,pw.chromium.launch(channel=os.getenv('GAME_TEST_BROWSER','chrome'),headless=True) as browser:
         for stage in CASES:
             for seed in (23,8787):check(browser,stage,seed)
+        for stage in RIFTS:
+            for seed in (23,8787):
+                with scenario_page(browser,ROOT,stage,seed) as page:
+                    page.add_script_tag(path=ROOT/'level-kit/tests/rifts_checks.js')
+                    print(stage,seed,page.evaluate('checkRifts',stage),flush=True)
