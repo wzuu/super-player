@@ -94,7 +94,8 @@ function verifyPlayerDoors() {
   exercise('安检走廊隔离门',gate,'z',-1,()=>{
     const s=g.story;
     pos(p,s.target);
-    check(s.interact(g) && s.stage==='fight' && m.pool.filter(b=>b.active&&b.storyWave).length===100,
+    check(s.interact(g) && s.stage==='fight' && s.encounters[0]?.spawned===4 &&
+      m.pool.filter(b=>b.active && s.isCurrentGuard(b)).length===4,
       '玩家开门时守卫必须全部就位');
   });
   reset(); clearLabArchive(g);
