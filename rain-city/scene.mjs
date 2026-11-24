@@ -122,7 +122,7 @@ function buildRainCity({ CONFIG, THREE, GRID, TAU, shapes, scene, brighter, canv
 
     function shell(material, x, z, w, d, lo, hi, color, climb = false) {
       box(material, x, (lo + hi) / 2, z, w, hi - lo, d, color);
-      level.box(x, z, w, d, lo, hi, climb);
+      return level.box(x, z, w, d, lo, hi, climb);
     }
 
     function vehicle(x, z, y, axis, color) {
@@ -162,20 +162,23 @@ function buildRainCity({ CONFIG, THREE, GRID, TAU, shapes, scene, brighter, canv
     }
 
     function shop(x, z, row) {
-      const front = x - 3.5, back = x + 3.5, edge = 3.0;
-      shell('wall', back, z, 0.26, 6.25, 0, 3.42, 0x8194aa);
+      const front=x-3.5, back=x+(row===15 ? 5.5 : 3.5), edge=row===15 ? 4.4 : 3;
+      const center=(front+back)/2, width=back-front, eave=row===15 ? 4.2 : 3.34;
+      // 仅将有实墙的立面交给视野裁剪，橱窗玻璃、开口及屋顶各保留自身可视性。
+      const opaqueWall=(...args)=>level.viewOccluders.push(shell('wall',...args));
+      opaqueWall(back, z, 0.26, edge*2+.25, 0, eave+.08, 0x8194aa);
       for (const side of [-1, 1]) {
-        shell('wall', x, z + side * edge, 7.1, 0.24, 0, 3.42, 0x8194aa);
-        shell('wall', front, z + 2.62 * side, 0.28, 0.72, 0, 3.42, 0x9fb1c2);
-        shell('steel', front, z + 1.87 * side, 0.26, 0.80, 0, 0.85, 0x6f7f90);
-        box('glass', front, 1.44, z + side * 1.98, 0.10, 1.09, 0.78, 0xb5c9d7);
-        level.box(front, z + side * 1.98, 0.10, 0.78, 0.85, 1.99);
+        opaqueWall(center, z + side * edge, width+.10, 0.24, 0, eave+.08, 0x8194aa);
+        opaqueWall(front, z + (edge-.38)*side, 0.28, 0.72, 0, eave+.08, 0x9fb1c2);
+        shell('steel', front, z + (edge-1.13)*side, 0.26, 0.80, 0, 0.85, 0x6f7f90);
+        box('glass', front, 1.44, z + side*(edge-1.02), 0.10, 1.09, 0.78, 0xb5c9d7);
+        level.box(front, z + side*(edge-1.02), 0.10, 0.78, 0.85, 1.99);
       }
-      shell('wall', x, z, 7.61, 6.49, 3.34, 3.59, 0x98a3ad);
-      shell('wall', front, z, 0.31, 6.2, 2.42, 3.34, 0xa3b6c1);
-      box('paint', x, 0.018, z, 6.97, 0.035, 5.76, 0x536f87);
+      shell('wall', center, z, width+.61, 2*edge+.49, eave, eave+.25, 0x98a3ad);
+      opaqueWall(front, z, 0.31, 2*edge+.2, row===15 ? 3.65 : 2.42, eave, 0xa3b6c1);
+      box('paint', center, 0.018, z, width-.03, 0.035, 2*edge-.24, 0x536f87);
       box('glow', x - 2.15, 3.24, z, 0.16, 0.045, 3.94, row === 12 ? pink : cyan);
-      shell('steel', x + 2.18, z + 1.82, 0.88, 1.6, 0, 0.84, 0x75808b);
+      shell('steel', back - 1.32, z + edge-1.18, 0.88, 1.6, 0, 0.84, 0x75808b);
       for (let i = -1; i <= 1; i++) box('dark', x + 2.78, 1.35 + i * 0.38, z - 1.75, 0.57, 0.12, 1.75, 0x7d8c9a);
       sign(row === 9 ? '夜线电器' : row === 12 ? '霓虹药房' : '星港便利', 4.05, front - 0.16, 2.92, z, -Math.PI / 2,
         row === 12 ? ['#fa589a', '#ffc3df'] : ['#52f5e9', '#b0fff8']);
@@ -560,19 +563,25 @@ const CONFIG = {
   beasts: { types: [undefined, undefined, { hazardLife: 4.5 }], bossFight:{hpScale:14.3,windup:1.5} },
 };
 
+// 下沉街正面留出两侧撤步带，东侧补给店有独立的清场与带出收益。
+const subwayStreet={name:'地铁排水街',at:[0,29],entries:[[0,27],[0,20]],
+  parts:[{name:'排水街正面',count:100,bounds:[-12.5,14.2,12.5,37],anchor:[0,24]}]};
+const clockStreet={name:'钟楼南街',at:[11,12],entries:[[13,8],[28,12]],
+  parts:[{name:'钟楼南街阵列',count:92,bounds:[0,-8,24.2,18],anchor:[12,8]},
+    {name:'星港便利',count:8,bounds:[25.1,8.3,32.7,15.6],anchor:[27.6,12],
+      reward:{name:'星港备件箱',value:145,at:[27,12.6]}}]};
 export default {
   story:{
     type:'rain',
     sectors:[
-      {name:'地铁口下沉广场',at:[0,27],entries:[[-7,24],[8,21]]},
-      {name:'钟楼北广场',at:[0,-13],entries:[[-10,-16],[11,-20]]},
+      subwayStreet, clockStreet,
     ],
     // 高架桥下的撤离点三面有实体围挡，隔离门打开后只从南面进入。
     walls:[[null,-3.9,-24,.42,7.6,4.6],[null,3.9,-24,.42,7.6,4.6],
       [null,0,-27.8,8.2,.42,4.6],['barricade',0,-20.2,8.2,.5,4.6]],
     route:[
-      {kind:'fight',name:'地铁口下沉广场',label:'清理广场出口',at:[0,29],entries:[[-7,24],[8,21]],mix:[0,0,2]},
-      {kind:'fight',name:'钟楼南街',label:'打通钟楼南街',at:[1,8],entries:[[-7,6],[10,4]],mix:[0,1,2]},
+      {...subwayStreet,kind:'fight',label:'清理地铁排水街',mix:[0,0,2]},
+      {...clockStreet,kind:'fight',label:'打通钟楼南街',mix:[0,1,2]},
       {kind:'hold',at:[1.6,-14],label:'守住钟楼裂隙',mix:[0,0,2,1],entries:[[-12,-14],[11,-19],[-8,-21]]},
       {kind:'use',at:[0,-19],label:'在高架隔离门布设爆破装置'},
       {kind:'countdown',encounter:'demolition',at:[8,-15],label:'撤到东侧路障后方',charge:[0,-20.2],door:'barricade',clearLanes:[[-3.8,-28,3.8,-13]],mix:[0,0,1,2],entries:[[-9,-13],[12,-16],[-12,-21],[12,-21],[-8,-9]]},

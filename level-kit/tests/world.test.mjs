@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createGrid, createWorld, SpatialHash } from '../src/world.mjs';
+import { startGroundAttack, strikeGround, stepGroundWave } from '../src/boss-ground.mjs';
 import { createMissionNavigation } from '../src/mission-navigation.mjs';
 import { createRecovery } from '../src/recovery.mjs';
 import { makeConfig } from '../src/config.mjs';
@@ -92,6 +93,41 @@ const GRID = createGrid(Array(7).fill('.......'), 2);
 const { Level, Navigation } = createWorld({ CONFIG, GRID, V3: Vector, definition: {},
   clamp: (v, min, max) => Math.min(max, Math.max(min, v)) });
 
+test('下层首领挥砍不能打上层平台边沿，同层起跳仍中挥砍，落地时仍会遇到冲击波', () => {
+  const level = new Level();
+  level.box(1.5, 4.8, 2, 4, 2.8, 3, true);
+  const boss = {x:.3, y:0, z:0, height:CONFIG.beasts.types[3].height, fight:{stage:0}};
+  const hits = [];
+  const player = {x:.3, y:3, z:3.8, radius:CONFIG.player.radius, hurt:amount => hits.push(amount)};
+  const game = {time:0, beasts:{air:new Vector(), line:new Vector()}};
+  assert.equal(level.surface(player.x, player.z, 3.08), 0);
+  assert.equal(level.playerFloor(player.x, player.z, 3.052, player.radius, 3.025), 3);
+  startGroundAttack(boss, player, level, 'sweep');
+  strikeGround(boss, game, player, level);
+  assert.deepEqual(hits, []);
+
+  const upperBoss = {...boss, x:1.5, y:3, z:5.8, fight:{stage:0}};
+  startGroundAttack(upperBoss, player, level, 'sweep');
+  strikeGround(upperBoss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  hits.length = 0;
+
+  // 同一投影位置，在下层起跳，身高仍在扇区范围内。
+  player.y = .9;
+  strikeGround(boss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  startGroundAttack(boss, player, level, 'slam');
+  strikeGround(boss, game, player, level);
+  game.time = 3.4 / 11;
+  stepGroundWave(boss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  player.y = 0;
+  game.time = 3.8 / 11;
+  stepGroundWave(boss, game, player, level);
+  stepGroundWave(boss, game, player, level);
+  assert.deepEqual(hits, [15, 14]);
+});
+
 test('跳台斜角按水平足迹支撑，未标记能攀爬的墙只承接真实从上方着地的角色', () => {
   const level=new Level(), r=CONFIG.player.radius;
   const platform=level.box(0,0,1.95,.86,0,.9,true);
@@ -172,6 +208,13 @@ test('百只整群按当前玩家净距、完整模型和门体连通性规划�
   const preview=manager.planGroup(entries,options);
   assert.equal(preview.length,100);
   assert.equal(manager.live,0);
+  // 同坐标锚点的不同对象和按槽过滤的通用接口必须得到完全相同的最近合法格。
+  const independent=entries.map(e=>({...e,anchor:{...options.anchors[0]}}));
+  assert.deepEqual(manager.planGroup(independent,{accept:()=>true}),preview);
+  const partition=(site,i)=>i%2===0 ? site.z>1 : site.z<-1;
+  const strict=manager.planGroup(independent,{accept:partition});
+  assert.equal(strict.length,100);
+  assert.deepEqual(manager.planGroup(independent,{accept:partition,acceptGroup:i=>i%2}),strict);
   Object.assign(player,{x:preview[0].x,z:preview[0].z}); // 预警后玩家跑到原来打算投放的位置。
   const group=manager.spawnGroup(entries,options);
   assert.equal(group.length,100);
@@ -202,6 +245,41 @@ test('百只整群按当前玩家净距、完整模型和门体连通性规划�
   assert.equal(manager.currentGame.patrolRemaining,2);
   assert.equal(manager.live,103);
   assert.equal(manager.hash.query(-40,-40,40,40,[]).length,103);
+  assert.deepEqual(manager.spawnGroup(Array(30).fill({type:0,regular:false})),[]);
+  assert.equal(manager.live,103);
+});
+
+test('出生网格分帧准备期间开关隔门，最终净空与实时重建一致',()=>{
+  const level=new Level(), gate=level.box(0,0,.4,22,0,4);
+  const nav=new Navigation(level), warm=nav.routeFor(0,true,1.25,true);
+  assert.equal(warm.prepare(-1),false);
+  level.setBarrier(gate,null,false);
+  while(warm.warmCell<warm.walkable.length)warm.prepare(-1);
+  level.setBarrier(gate,null,true);
+  while(!warm.prepare(-1)){}
+  level.setBarrier(gate,null,false);
+  warm.rebuild(-5,3);
+  const cold=nav.routeFor(0,true,1.25);cold.rebuild(-5,3);
+  for(const prop of ['edges','walkable','floors','dist'])assert.deepEqual(warm[prop],cold[prop]);
+});
+
+test('合并格桶查询后仍与原五点足底采样逐点等高',()=>{
+  const level=new Level();
+  level.box(0,0,1.4,1.1,0,.34,true);
+  level.box(.72,.8,.6,.9,0,.86,true);
+  level.box(-.9,0,.32,.41,0,.46,false);
+  const panel=level.box(-.7,-.8,.35,.3,0,.27,true);
+  for(const closed of [true,false]){
+    level.setBarrier(panel,null,closed);
+    for(const r of [.34,.65,1.05])for(const ceiling of [.31,.47,1.3]){
+      const d=r+.021;
+      for(let i=-12;i<=12;i++)for(let j=-11;j<=11;j++){
+        const x=i*.13,z=j*.17;
+        const expected=Math.max(...[[x,z],[x-d,z],[x+d,z],[x,z-d],[x,z+d]].map(([a,b])=>level.surface(a,b,ceiling)));
+        assert.equal(level.foot(x,z,ceiling,r),expected);
+      }
+    }
+  }
 });
 
 test('涨潮时玩家路标绕过禁行低沟，退潮后恢复直接路线', () => {

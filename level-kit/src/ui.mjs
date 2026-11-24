@@ -272,7 +272,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.text('weapon-state', w.reloadLeft > 0 ? '换弹中 ' + (Math.ceil(w.reloadLeft * 10) / 10).toFixed(1) + ' 秒' : w.ammo === 0 && w.reserve === 0 ? '弹药耗尽' : '');
       this.nodes.cross.style.setProperty('--gap', (7 + w.heat * 12 + (p.sprinting ? 5 : 0)).toFixed(1) + 'px');
       const baseLoot=game.loot.filter(item=>!item.origin || item.origin==='main').length;
-      this.text('loot', baseLoot + ' / ' + (definition.loot?.length ?? 0) +
+      this.text('loot', baseLoot + ' / ' + ((definition.loot?.length ?? 0) + (game.story?.roomTreasureCount ?? 0)) +
         (game.loot.length>baseLoot ? ' +'+(game.loot.length-baseLoot) : ''));
       this.text('kills', String(game.kills));
       const rawTask = game.training?.guide(game) ?? game.objective.guide(game, TEXT);
@@ -291,11 +291,13 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         this.nodes['boss-health'].value = Math.max(boss.hp, 0);
       }
       let note = !blast && this.noticeTime > 0 ? this.notice : '';
+      const reward=game.pickups.nearbyReward(p);
       if (game.pickups.nearKey(p)) note = '按 F 拾取' + TEXT.keyItem;
       else if (game.nearGate()) {
         if (game.ready() && !game.blast) note = '按 F 引爆' + TEXT.portal;
         else if (!note && !game.blast) note = task.title;
-      } else if (!note && !blast) {
+      } else if (reward && !blast) note='按 F 拾取'+reward.name;
+      else if (!note && !blast) {
         note = game.encounter?.interactionHint?.(game) ??
           (p.protected(game) ? TEXT.safe + ' / ' + Math.max(0, Math.ceil(CONFIG.player.safeTime - game.time)) + ' 秒' : '');
       }

@@ -18,17 +18,38 @@ function overlaps(a, b) {
 
 // 每个锚点共享一份依距离排序的网格。拥挤时沿当前可达区域扩展，玩家净距始终固定。
 function orderedCells(field, anchor) {
-  const cells = Array.from({length:field.dist.length}, (_, i) => i);
-  if (anchor) {
-    const distance = Float32Array.from(cells, i => (field.x(i)-anchor.x)**2 + (field.z(i)-anchor.z)**2);
-    cells.sort((a,b) => distance[a]-distance[b]);
-  } else {
+  if (!anchor) {
+    const cells=Array.from({length:field.dist.length},(_,i)=>i);
     for (let i=cells.length-1; i>0; i--) {
       const j = Math.floor(Math.random()*(i+1));
       [cells[i], cells[j]] = [cells[j], cells[i]];
     }
+    return cells;
   }
-  return cells;
+  // 通常只会用到锚点附近百余格；按半径扩展，窄道或拥挤时仍能枚举整张图。
+  // 复用原有单精度距离，等距仍按原网格下标，位置与全图稳定排序一致。
+  const cells=[], distances=new Float32Array(field.dist.length), last=distances.length-1;
+  const max=Math.hypot(Math.max(Math.abs(field.x(0)-anchor.x),Math.abs(field.x(last)-anchor.x)),
+    Math.max(Math.abs(field.z(0)-anchor.z),Math.abs(field.z(last)-anchor.z)));
+  let radius=0,previous=-1;
+  function extend(){
+    radius=radius ? radius*2 : field.cell*6;
+    const limit=radius>=max ? Infinity : Math.fround(radius*radius);
+    const extent=radius+field.cell;
+    const first=field.index(anchor.x-extent,anchor.z-extent),end=field.index(anchor.x+extent,anchor.z+extent);
+    const width=end%field.width-first%field.width, shell=[];
+    for(let row=first;row<=end;row+=field.width)for(let col=0;col<=width;col++){
+      const i=row+col,d=Math.fround((field.x(i)-anchor.x)**2+(field.z(i)-anchor.z)**2);
+      if(d>previous && d<=limit){distances[i]=d;shell.push(i);}
+    }
+    shell.sort((a,b)=>distances[a]-distances[b] || a-b);
+    for(const i of shell)cells.push(i);
+    previous=limit;
+  }
+  return {
+    at(offset){while(offset>=cells.length && previous!==Infinity)extend();return cells[offset];},
+    *[Symbol.iterator](){for(let i=0,item;(item=this.at(i))!==undefined;i++)yield item;},
+  };
 }
 
 function reachableField(field, target, playerProfile, required) {
@@ -124,15 +145,28 @@ export function planBeastGroup(manager, entries, options, config, allowSite) {
       return true;
     }
     if (anchor && trySite(anchor.x,anchor.z,field.index(anchor.x,anchor.z),anchor.y ?? level.base(anchor.x,anchor.z))) continue;
-    let order = orders.get(anchor);
-    if (!order) {
-      order = orderedCells(field,anchor);
-      orders.set(anchor,order);
+    // 剧情的不同成员可以各持一份同坐标锚点。排序取决于坐标，不取决于对象身份。
+    const orderKey=anchor ? anchor.x+','+anchor.z : '';
+    let search=orders.get(orderKey);
+    if (!search) {
+      search={cells:orderedCells(field,anchor), cursors:new Map()};
+      orders.set(orderKey,search);
     }
+    const order=search.cells;
+    // 只有调用方能保证同一组的额外过滤完全等价。通用按索引筛选仍从首格尝试。
+    const filter=accept ? options.acceptGroup?.(index) : 0;
+    const cursor=key+':'+angle;
+    let cursors;
+    if(filter!==undefined && entry.angle!==undefined){
+      cursors=search.cursors.get(filter);
+      if(!cursors)search.cursors.set(filter,cursors=new Map());
+    }
+    let offset=cursors?.get(cursor) ?? 0;
     let found=false;
-    for (const i of order) {
-      if (trySite(field.x(i),field.z(i),i)) {found=true;break;}
+    for(let i;(i=order.at(offset))!==undefined;offset++){
+      if (trySite(field.x(i),field.z(i),i)) {found=true;offset++;break;}
     }
+    cursors?.set(cursor,offset);
     // 窄道还可沿墙朝向、在相邻格心之间排布；仍须通过相同的足底、门禁和净距校验。
     if (!found) {
       const d = field.cell*.34;

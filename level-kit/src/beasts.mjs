@@ -1,3 +1,4 @@
+import { drawGroundAttack } from '@level-kit/boss-ground.mjs';
 import { createBeastBatches } from '@level-kit/beast-model-batches.mjs';
 import { BeastDetailBudget } from '@level-kit/beast-lod.mjs';
 import { stageTactic } from '@level-kit/tactics.mjs';
@@ -189,7 +190,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (clear && b.cooldown <= 0 && b.mode === 'move' && !p.protected(game)) {
         const charge = b.type === 1 && distance > 2.2 && distance < 12 && Math.abs(y - b.y) < 1.1;
         const shot = b.type === 2 && distance > 3.4 && distance < type.reach;
-        if (contact || (game.time - b.heardAt < 0.37 && (charge || shot))) {
+        if ((contact && !b.fight) || (game.time - b.heardAt < 0.37 && (charge || shot))) {
           if (charge) this.chargeWindup(b, p, game, dx/distance, dz/distance);
           else {
             b.mode = 'windup'; b.phaseTime = shot ? 0.45 : type.windup ?? 0.24;
@@ -251,7 +252,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         if (b.type === 1 && distance > 2.2 && distance < 12 && yDiff < 1.1) {
           this.chargeWindup(b, p, game, towardX, towardZ); return;
         }
-        if (b.type !== 2 && distance < type.reach + 0.16 && yDiff < (b.type === 3 ? 1.6 : 0.95)) {
+        if (b.type !== 2 && !b.fight && distance < type.reach + 0.16 && yDiff < (b.type === 3 ? 1.6 : 0.95)) {
           b.chargeMarkLength = 0;
           b.mode = 'windup'; b.phaseTime = type.windup ?? 0.24; b.fx = towardX; b.fz = towardZ; return;
         }
@@ -266,6 +267,10 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         if (next !== this.nav.index(b.x, b.z)) {
           aimX = this.nav.x(next) - b.x; aimZ = this.nav.z(next) - b.z;
         }
+      } else if (b.fight?.started && distance>2.3) {
+        // 看得见玩家时切向其移动前方；墙后、楼梯和特殊通路仍沿本关导航行进。
+        const lead=Math.min(.90,distance*.095);
+        aimX=dx+b.fight.vx*lead; aimZ=dz+b.fight.vz*lead;
       } else if (b.type === 2 && distance < 8.5) {
         aimX = -towardX - towardZ * b.lane * 0.48;
         aimZ = -towardZ + towardX * b.lane * 0.48;
@@ -412,7 +417,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
             const d = Math.sqrt(separation), strength = (limit - d) / limit / d;
             separateX += dx * strength; separateZ += dz * strength;
           }
-          const speed = b.rage ? type.rageSpeed : type.speed;
+          let speed = b.rage ? type.rageSpeed : type.speed;
+          if (b.fight?.started && b.alert>0) speed=Math.max(speed,(distance>6 ? 4.4 : 2.8)+type.speed*.72+b.fight.stage*.35);
           x = (b.dx + separateX * CONFIG.beasts.separation) * speed;
           z = (b.dz + separateZ * CONFIG.beasts.separation) * speed;
           const turn = b.playerVisible && !hearingOnly && !b.stairLeg ? tactic?.(b,game,distance) : 0;
@@ -489,6 +495,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.contactMark.name='boss-hit-contact';
       this.bossMarks=dynamicMesh(new THREE.RingGeometry(.78,1,24),
         new THREE.MeshBasicMaterial({side:THREE.DoubleSide,depthWrite:false}),3);
+      this.groundMarks=dynamicMesh(shapes.box,new THREE.MeshBasicMaterial({depthWrite:false}),64);
       const badges = {
         shield: new THREE.TorusGeometry(.5,.085,4,12), brood: new THREE.ConeGeometry(.5,1,5),
         volatile: new THREE.IcosahedronGeometry(.5,0), elite: new THREE.OctahedronGeometry(.5),
@@ -531,6 +538,22 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         return {...entry,traits};
       });
       return planBeastGroup(this,planned,options,CONFIG,definition.allowSpawnSite);
+    }
+    prepareSpawnRoutes(deadline) {
+      // 地图和体型的几何可跨局复用。只预热普通交战的体型；稀有首领仍于触发时验证。
+      this.spawnWarmIndex ??= 0;
+      const travel=this.spawnTravelFields ??= new Map();
+      while(this.spawnWarmIndex<9 && performance.now()<deadline) {
+        const index=this.spawnWarmIndex,type=index%3,checked=index<6,scale=index<3||!checked ? 1 : 1.25;
+        const cache=checked ? this.spawnFields : travel, key=checked ? type+':'+scale : type;
+        let field=cache.get(key);
+        if(!field){
+          field=this.nav.routeFor(type,checked,scale,true);
+          cache.set(key,field);
+        }
+        if(!field.prepare(deadline))return;
+        this.spawnWarmIndex++;
+      }
     }
     spawnGroup(entries,options={}) {
       const sites = this.planGroup(entries,options);
@@ -613,7 +636,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
-        active: true, storyWave:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
+        active: true, archiveTag:null, sectionRoom:null, roomBounds:null, roomAlert:false, storyWave:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
         nearLOD:false, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
         traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,
@@ -817,16 +840,19 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.lodCounts[b.farLOD?'far':b.nearLOD?'near':'mid']++;
       const [body,eye]=this.modelBatches[batch], appearance=CONFIG.beasts.appearance;
       const walk=t*appearance.walkHz[type]+b.blink;
-      const action=disabled ? 0 : b.mode==='windup' ? appearance.windupTilt[type] : b.mode==='charge' ? .23 : 0;
+      const prep=b.fight?.winding ? Math.min(1,Math.max(0,1-(b.fight.next-t)/b.fight.rules.windup)) : 0;
+      const groundTilt=b.fight?.attack==='slam' ? -.38*prep : 0;
+      const sweepTwist=!disabled && b.fight?.attack==='sweep' ? -.55*prep : 0;
+      const action=disabled ? 0 : groundTilt || (b.mode==='windup' ? appearance.windupTilt[type] : b.mode==='charge' ? .23 : 0);
       const bob=(disabled ? 0 : Math.sin(walk*2))*.075*clamp(b.stride/3,.15,1);
       const roll=b.surfaceRoll+(disabled ? 0 : Math.cos(walk)*.062);
       const y=b.y+bob+(b.surfaceRoll ? b.height*.5*(1-Math.cos(b.surfaceRoll)) : 0);
       const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
       const flash=type===3 ? 0 : Math.min(1,b.flash*12), light=disabled ? .31 : b.rage ? 3.2 : b.mode==='windup' ? 2.85 : appearance.eyeLight;
       body.geometry.attributes.beastFlash.setX(i,flash);
-      setInstance(body,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,null,b.yaw,action,roll);
+      setInstance(body,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,null,b.yaw+sweepTwist,action,roll);
       workColor.setScalar(light);
-      setInstance(eye,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,workColor,b.yaw,action,roll);
+      setInstance(eye,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,workColor,b.yaw+sweepTwist,action,roll);
       if (!b.nearLOD) return;
       body.geometry.attributes.beastLight.setX(i,light);
       const winding=b.mode==='windup' || b.fight?.winding;
@@ -941,7 +967,17 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         this.contactMark.material.opacity=.72*(1-age/.09);
         updateMesh(this.contactMark,1);
       }
-      if (fight?.winding) {
+      let groundMarks=0;
+      if (fight && !disabled) drawGroundAttack(fight,t,this.level,(x0,y0,z0,x1,y1,z1,width,color)=>{
+        const dx=x1-x0,dy=y1-y0,dz=z1-z0,length=Math.hypot(dx,dz);
+        const x=(x0+x1)*.5,y=(y0+y1)*.5+.085,z=(z0+z1)*.5;
+        if (!view.visible(x,y,z,Math.abs(dx)+width,Math.abs(dy)+.12,Math.abs(dz)+width)) return;
+        workColor.setHex(color);
+        setInstance(this.groundMarks,groundMarks++,x,y,z,width,.045,Math.hypot(length,dy)+.035,
+          workColor,Math.atan2(dx,dz),-Math.atan2(dy,length));
+      });
+      this.groundMarks.visible=groundMarks>0; updateMesh(this.groundMarks,groundMarks);
+      if (!disabled && fight?.winding && fight.attack==='theme') {
         workColor.setHex(0xff9144);
         const radius=2.2+fight.stage*.5;
         if (view.visible(fight.aimX,fight.aimY+.09,fight.aimZ,radius,.04,radius))

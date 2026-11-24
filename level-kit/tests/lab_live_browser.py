@@ -42,8 +42,9 @@ def recover_at_airlock(page):
     page.wait_for_function("run.game.phase==='play'", polling=100)
 
 
-def verify(browser, url, static=False):
+def verify(browser, url, static=False, rooms=False):
     root = url.rstrip("/") + "/"
+    before = None
     page = browser.new_page(viewport={"width": 960, "height": 620})
     page.add_init_script("""let seed=5381; Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
         if(location.pathname.includes('/underground-lab/')) window.requestAnimationFrame=()=>1;
@@ -67,8 +68,11 @@ def verify(browser, url, static=False):
     errors = []
     watch_page(page, errors, static)
     try:
+        if rooms:
+            before=page.request.get(root+'api/progress').json()['battleCount']
         page.goto(root if static else root + "underground-lab/?campaign")
-        page.get_by_role("button", name="直接开始", exact=True).click(force=True)
+        if not rooms or before == 0:
+            page.get_by_role("button", name="直接开始", exact=True).click(force=True)
         if static:
             page.locator("#continue").click()
             page.wait_for_url(root + "underground-lab/")
@@ -76,6 +80,17 @@ def verify(browser, url, static=False):
         page.locator("#start").click(force=True)
         page.wait_for_function("run.game.phase==='play'", polling=100)
         recover_at_airlock(page)
+        if rooms:
+            page.add_script_tag(content=(ROOT/'level-kit/tests/lab_layout.js').read_text(encoding='utf8'))
+            result=page.evaluate('() => verifyLabLayout({offsets:[0],extract:true})')
+            page.wait_for_function("async count=> (await (await fetch('/api/progress')).json()).battleCount>count", arg=before, polling=100)
+            saved=page.request.get(root+'api/progress').json()
+            names={item['name'] for item in saved['loot']}
+            assert saved['battles'][0]['won'] and saved['levels'][0]['cleared'], saved
+            assert '冷藏疫株研究档案' in names and '秘藏·培养罐原始编号' in names and sum('查获记录' in n for n in names)==6, (result,names)
+            print('PASS SQLite 逐室战利品',sorted(names),result['optional'],flush=True)
+            assert not errors, errors
+            return
         result = page.evaluate((ROOT/"level-kit/tests/lab_live_driver.js").read_text(encoding="utf-8"))
         print(json.dumps(result, ensure_ascii=False), flush=True)
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result
@@ -123,6 +138,7 @@ if __name__ == "__main__":
                 browser = pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER", "chrome"))
                 try:
                     verify(browser, url)
+                    verify(browser, url, rooms=True)
                 finally:
                     browser.close()
         finally:

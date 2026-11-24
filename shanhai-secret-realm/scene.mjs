@@ -17,7 +17,7 @@ const CONFIG = {
   lava: { depth: -0.40, damage: 14, cooldown: 0.55 },
 };
 
-// 北在上。# 山壁，^ 岩石，R 断垣，B 竹丛，T 墓碑，+ 石道，~ 岩浆，= 石桥。
+// 北在上。# 山壁，^ 岩石，R 断垣，B 竹丛，T 墓碑，+ 石道，~ 岩浆，= 北部石桥，L 牌坊前的裂谷长桥。
 const MAP_GRID = [
   '#########################',
   '#..^.....^.....^.....^..#',
@@ -30,16 +30,16 @@ const MAP_GRID = [
   '#.^..RR...^.+.^...B.B^..#',
   '#..RRR.^....+..^.B..BB.^#',
   '#.^....R..^.+.^...B..BB.#',
-  '#...^.RR^..+++..^B.B..^.#',
-  '#.^RR...++^+++^++B...BB.#',
-  '#..R..RR...+++....B.B...#',
-  '#.^......^..+..^.B.B.B^.#',
-  '#...RR.R....+.....B...B.#',
-  '#..^..R.....+....B.B.^..#',
-  '#...TR..^.T.+.T.^..BB..^#',
-  '#....T..T.T.+.T.T..T....#',
-  '#..^..T..T..+..T...T..^.#',
-  '#....T.T..T.+.T..T.T....#',
+  '#...^.RR^LLLLLLL^B.B..^.#',
+  '#.^RR...+LLLLLLL+B...BB.#',
+  '#........LLLLLLL..B.B...#',
+  '#.^.....~LLLLLLL~B.B.B^.#',
+  '#.......~LLLLLLL~.B...B.#',
+  '#.......+LLLLLLL+B.B.^..#',
+  '#...TR..~LLLLLLL~..BB..^#',
+  '#....T..~LLLLLLL~..T....#',
+  '#..^..T.+LLLLLLL+..T..^.#',
+  '#....T.T~LLLLLLL~T.T....#',
   '#.^.....T...+...T...T.^.#',
   '#.....T...T.+.T...T.....#',
   '#...^...^...+...^....^..#',
@@ -49,7 +49,7 @@ const MAP_GRID = [
 const LANDMARKS = {
   spawn: [0, 38.5], arch: [0, 32.2], altar: [0, -1.3], gate: [0, -11.8], boss: [4.6, -4.2],
   terraces: { x: -25.2, z: -0.4, width: 3.8, deck: 5.2, rise: 0.36, tread: 0.79, steps: 4 },
-  graveGuards: [[1, -11.3, 23.8], [2, 12.5, 24.7], [1, -17.1, 16.3], [2, 16.9, 16.0]],
+  graveGuards: [[1, -15.3, 23.8], [2, 16.5, 24.7], [1, -17.1, 16.3], [2, 16.9, 16.0]],
 };
 
 const loot = [
@@ -232,7 +232,7 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
 
   function block(x, y, z, w, h, d, surface, tint, climb = false) {
     add('box', surface, x, y - h / 2, z, w, h, d, tint);
-    level.box(x, z, w, d, y - h, y, climb);
+    return level.box(x, z, w, d, y - h, y, climb);
   }
   function pillar(x, z, h, w, tint = stone) {
     block(x, h, z, w, h, w, 'thunder', tint);
@@ -279,8 +279,9 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
       }
       const inGrove = x > 15 && z > -18 && z < 19;
       const inGraves = z > 16;
-      const tone = tile === '+' || tile === '=' ? 0xaba28f : inGrove ? 0x667c68 : inGraves ? 0x827b6d : 0x8b8b80;
-      add('box', tile === '=' ? 'thunder' : 'earth', x, -0.32, z, cell + 0.004, 0.64, cell + 0.004, tone);
+      const bridge=tile==='=' || tile==='L';
+      const tone = tile === '+' || bridge ? 0xaba28f : inGrove ? 0x667c68 : inGraves ? 0x827b6d : 0x8b8b80;
+      add('box', bridge ? 'thunder' : 'earth', x, -0.32, z, cell + 0.004, 0.64, cell + 0.004, tone);
       if (tile === '#') {
         const height = 4.3 + random() * 6.8;
         level.box(x, z, cell + 0.01, cell + 0.01, 0, height);
@@ -307,6 +308,10 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
           block(lip, 0.29, z, 0.23, 0.31, cell, 'earth', 0x92907c, true);
           if (row !== 5) pillar(lip, z + (row === 4 ? -0.96 : 0.96), 0.94, 0.39);
         }
+      } else if (tile==='L' && Math.abs(x)>9 && row>=14 && row!==16 && row!==19) {
+        const edge=x+Math.sign(x)*1.62;
+        block(edge,.38,z,.28,.38,cell,'earth',stone,true);
+        if (row%2===0) pillar(edge,z,.82,.42);
       }
     }
   }
@@ -325,18 +330,23 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
   }
 
   for (const side of [-1, 1]) {
-    const x = arch[0] + side * 3.38, z = arch[1];
+    const x = arch[0] + side * 6.15, z = arch[1];
     pillar(x, z, side === 1 ? 4.72 : 4.27, 0.86);
     add('box', 'mask', x, 2.52, z + 0.52, 1.46, 1.21, 0.24, 0xbeb093);
     add('box', 'cloud', x + side * 0.18, 4.93, z, 1.95, 0.34, 1.31, stone, 0, 0, side * 0.10);
     add('box', 'dark', x + side * 0.18, 5.23, z, 2.41, 0.18, 1.75, 0xb8afa0, 0, 0, side * 0.12);
-    add('box', 'cloud', side * 1.77, 4.37, z, 3.30, 0.48, 0.72, 0xc4b295, 0, 0, side * 0.06);
-    level.box(side * 1.77, z, 3.30, 0.72, 4.11, 4.72);
-    lantern(side * 2.48, z + 0.08, 3.83, 1.22);
-    lantern(side * 5.50, z + 1.30, 1.55, 0.83);
-    pillar(side * 5.50, z + 1.30, 1.20, 0.61);
+    add('box', 'cloud', side * 3.12, 4.37, z, 5.98, 0.48, 0.72, 0xc4b295, 0, 0, side * 0.06);
+    level.box(side * 3.12, z, 5.98, 0.72, 4.11, 4.72);
+    lantern(side * 4.8, z + 0.08, 3.83, 1.22);
+    lantern(side * 8.1, z + 1.30, 1.55, 0.83);
+    pillar(side * 8.1, z + 1.30, 1.20, 0.61);
   }
 
+  // 古城纹砖围成的西岸石室，东侧门洞朝向回廊。
+  const stoneWall=(...args)=>level.viewOccluders.push(block(...args));
+  stoneWall(-34,3.2,9,.55,3.2,10,'cloud',stone);
+  for (const z of [4.1,13.9]) stoneWall(-27.8,3.2,z,12.8,3.2,.55,'cloud',stone);
+  for (const z of [5.25,12.75]) stoneWall(-21.6,3.2,z,.55,3.2,2.4,'mask',stone);
   const plaza = new THREE.Mesh(new THREE.CircleGeometry(8.50, 64),
     new THREE.MeshLambertMaterial({ map: mild, color: 0x747f79 }));
   plaza.rotation.x = -Math.PI / 2;
@@ -354,7 +364,8 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
     const angle = (i + 0.5) * TAU / 8;
     const x = Math.sin(angle) * 8.97, z = altar[1] + Math.cos(angle) * 8.97;
     if (Math.abs(x) < 5 && z < -7) continue;
-    pillar(x, z, 1.16 + (i % 2) * 0.55, 0.70);
+    // 南向一对引柱移至桥边，桥头能看到最后一排。
+    pillar(z>5 && Math.abs(x)<5 ? Math.sign(x)*11.5 : x, z, 1.16 + (i % 2) * 0.55, 0.70);
     add('stone', 'jade', x, 1.26 + (i % 2) * 0.55, z, 0.24, 0.22, 0.24, flagGlow, angle);
   }
 
@@ -847,8 +858,12 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'荒冢墓园',at:[-8,25],entries:[[-16,24],[0,18]]},
-    {name:'古城祭坛',at:[4,-2],entries:[[-9,-8],[13,-7]]},
+    {name:'墓园裂谷长桥',at:[0,27],entries:[[0,22],[0,12]],
+      parts:[{name:'长桥阵列',count:100,bounds:[-10.5,-4.4,10.5,28.8],anchor:[0,12.5]}]},
+    {name:'古城西岸回廊',at:[-16,7.5],entries:[[-18,3],[-26.5,9]],
+      parts:[{name:'西岸回廊',count:90,bounds:[-37,-20,-6,3.8],anchor:[-19,-2]},
+        {name:'藏玉石室',count:10,bounds:[-33.3,4.7,-22.1,13.2],anchor:[-26.5,9],
+          reward:{name:'古城祭玉',value:160,at:[-26.5,9]}}]},
   ]},
   weaponSkin: 'shanhai-secret-realm',
   pageTitle: '上古秘境 | 第二关',
@@ -870,6 +885,7 @@ export default {
   },
   area(x, z, level, y) {
     if (z > 30.7 && Math.abs(x) < 7.5) return '南侧残破石牌坊';
+    if (tileAt(x,z)==='L') return '墓园裂谷长桥';
     if (z < -18.2) return tileAt(x, z) === '=' ? '裂谷石桥' : '北部熔岩裂谷';
     if (z > 15.5) return '南部荒芜墓园';
     if (x > 15) return '东部幽竹林';
@@ -877,7 +893,7 @@ export default {
     return '中央祭坛广场';
   },
   minimap: {
-    tiles: { '#': '#4f5855', '^': '#495752', R: '#817366', B: '#3d725d', T: '#76606a', '+': '#426560', '~': '#873f37', '=': '#be9d71' },
+    tiles: { '#': '#4f5855', '^': '#495752', R: '#817366', B: '#3d725d', T: '#76606a', '+': '#426560', '~': '#873f37', '=': '#be9d71', L:'#be9d71' },
     overlay({ ctx, px, pz }) {
       const { x, z, width, deck, tread, steps } = LANDMARKS.terraces;
       const d = deck + 2 * tread * steps;

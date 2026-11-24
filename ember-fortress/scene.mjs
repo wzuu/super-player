@@ -843,8 +843,13 @@ function lavaModel(type,{THREE,shapes,mergeGeometries},broken=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'吊桥灰原',at:[-8,25],entries:[[-14,19],[0,18]]},
-    {name:'东侧铸造工坊',at:[17,10],entries:[[24,6],[12,14]]},
+    {name:'吊桥灰原',at:[-8,25],entries:[[-10,20]],parts:[
+      {name:'吊桥灰原',count:100,bounds:[-30,9,12,33],anchor:[-10,20]}
+    ]},
+    {name:'工坊卸料道',at:[17,10],entries:[[21,10]],parts:[
+      {name:'工坊卸料道',count:92,bounds:[8,-7,42,26],anchor:[21,10]},
+      {name:'铸造炉室',count:8,bounds:[19.8,-8.3,30.7,0.9],anchor:[25,-4],types:[0],reward:{name:'黑曜铸模',value:120,at:[24.4,-3]}}
+    ]},
   ]},
   weaponSkin: 'ember-fortress',
   pageTitle:'烬火要塞 | 第七关',

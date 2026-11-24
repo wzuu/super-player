@@ -811,8 +811,13 @@ function polarModel(type,{THREE,shapes,mergeGeometries},rage=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'机场跑道',at:[-9,26],entries:[[-17,22],[1,19]]},
-    {name:'钻探塔管线',at:[-23,9],entries:[[-29,13],[-20,1]]},
+    {name:'机场跑道',at:[-9,26],entries:[[-10,23]],parts:[
+      {name:'机场跑道',count:100,bounds:[-26,14,11,34],anchor:[-10,23]}
+    ]},
+    {name:'研究楼冰湖外廊',at:[12,5],entries:[[12,0]],parts:[
+      {name:'研究楼冰湖外廊',count:92,bounds:[-6,-21,17.8,12],anchor:[12,0]},
+      {name:'研究楼冷藏室',count:8,bounds:[30.5,-15,36.9,-6.1],anchor:[34,-10],types:[0],reward:{name:'封存冰芯',value:120,at:[31.2,-11.8]}}
+    ]},
   ]},
   weaponSkin: 'polar-station',
   pageTitle:'极夜冰站 | 第五关',

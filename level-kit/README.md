@@ -8,6 +8,8 @@
 
 ## 新建关卡
 
+主线的开放战区在 `story.sectors` 或对应的 `story.route` 战斗阶段配置 `parts`。每部分填写名称、数量、锚点和区域边界，各部分总量应等于该战区守卫数。小房间的 `reward` 指定清场后可按交互键领取的物品及其位置，净空有限的房间用 `types` 限定能实际通过入口的敌种。实验室的门禁组与上古秘境的开放桥面分别提供两种接入实例。
+
 1. 把 `starter/scene.mjs` 复制到新关卡目录，修改 `CONFIG`、`MAP_GRID` 和主题文字。将完整主题填写到开发圣经末尾的模板中，作为本关卡开发输入。
 2. 在项目根目录运行 `python3 server.py`。访问 `http://127.0.0.1:8000/level-kit/preview.html?scene=../新关卡目录/scene.mjs`。省略查询参数可预览灰盒模板。
 3. 在项目根目录运行 `node level-kit/pack.mjs 新关卡目录/scene.mjs`。脚本使用 es-module-lexer 解析模块依赖，默认在场景旁生成 `index.html`，也接受第二个参数指定输出路径。关卡 HTML 通过相对路径引用共用的本地 Three.js，保留目录结构即可直接打开，支持离线游玩。

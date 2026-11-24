@@ -131,6 +131,19 @@ function buildMap(context) {
       );
   }
   function house(x, z) {
+    // 河岸这间老铺打开面街推拉门，实体外墙和屋檐仍挡住射线。
+    if (Math.abs(x - 32.4) < 0.1 && Math.abs(z - 7.2) < 0.1) {
+      for (const side of [-1, 1]) {
+        block('paper', x, z + side * 4.1, 9.4, 0.3, 0, 3.5, true);
+        block('wood', x - 4.55, z + side * 3.05, 0.3, 2.4, 0, 3.5, true);
+        block('wood', x, z + side * 4.1, 9.5, 0.34, 1.4, 1.56);
+      }
+      block('paper', x + 4.55, z, 0.3, 8.2, 0, 3.5, true);
+      block('wood', x, z, 9.6, 8.5, 3.5, 3.7, true);
+      part('roof', 'black', x, 4.26, z, 10.2, 1.3, 9.2);
+      block('vermilion', x - 4.75, z, 0.15, 4.4, 2.9, 3.4);
+      return;
+    }
     block('wood', x, z, 5.9, 5.7, 0, 0.42, true);
     block('paper', x, z, 5.6, 5.35, 0.41, 3.16, true);
     for (const face of [-1, 1]) {
@@ -541,8 +554,13 @@ function createEnvironment(context) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'鸟居参道',at:[-8,18],entries:[[-15,15],[0,10]]},
-    {name:'东侧河岸',at:[26,7],entries:[[29,5],[18,0]]},
+    {name:'鸟居参道',at:[-8,18],entries:[[-8,16]],parts:[
+      {name:'鸟居参道',count:100,bounds:[-22,9,8,29],anchor:[-8,16]}
+    ]},
+    {name:'东河沿街',at:[22,8],entries:[[20,1]],parts:[
+      {name:'东河沿街',count:92,bounds:[4,-13,27.8,12.5],anchor:[20,1]},
+      {name:'河岸绸缎铺',count:8,bounds:[28.7,4,35.9,10.4],anchor:[32,7],types:[0],reward:{name:'织锦账册',value:120,at:[33,7]}}
+    ]},
   ]},
   config: CONFIG,
   grid: MAP_GRID,

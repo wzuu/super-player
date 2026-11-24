@@ -25,9 +25,10 @@ function herdSetup([mode, sample, target]) {
   if (g.field) g.field.step = () => {};
   for (const b of manager.pool) b.active = false;
   manager.live = 0; manager.boss = null; manager.spawnTime = Infinity;
-  const dense = sample === 'dense', arena = sample === 'open' || dense;
-  const [px,py,pz,yaw] = sample === 'indoor' ? [27,0,1,0] :
-    sample === 'wall' ? [-6,0,18,0] : sample === 'mirror' ? [37,0,5,0] :
+  const dense = sample === 'dense' || sample === 'boss-wave', arena = sample === 'open' || dense;
+  const newLab = level.entryDoor?.z0 > 45;
+  const [px,py,pz,yaw] = sample === 'indoor' ? (newLab ? [15,0,-22,0] : [27,0,1,0]) :
+    sample === 'wall' ? (newLab ? [-5,0,23,0] : [-6,0,18,0]) : sample === 'mirror' ? [37,0,5,0] :
     sample === 'tower' ? [0,level.base(0,17),17,0] : [0,38,29,0];
   if (arena) level.box(0,0,82,82,37.8,38,true);
   Object.assign(player,{x:px,y:py,z:pz,fallPeak:py});
@@ -62,6 +63,15 @@ function herdSetup([mode, sample, target]) {
   window.birthCost = manager.simulationStats && {...manager.simulationStats};
   if (rules.simulation) rules.simulation.profile = false;
   manager.refreshHash();
+  if (sample==='boss-wave' && mode!=='baseline') {
+    window.bossWaveSample=true;
+    const b=manager.boss,f=b.fight;
+    Object.assign(f,{started:true,turn:1,next:g.time});
+    b.playerVisible=true;
+    manager.ai.update(b,player,g,1/60,0);
+    if (!f.winding || f.attack!=='slam') throw Error('首领未准备砸地');
+    f.next=g.time+.45; // 预热期末开始扩散，正式采样覆盖可见波前。
+  }
   camera.updateMatrixWorld();
 }
 
@@ -75,7 +85,7 @@ function herdMeshes(b) {
     else if (item instanceof Map) item.forEach(add);
     else if (Object.getPrototypeOf(item) === Object.prototype) Object.values(item).forEach(add);
   }
-  [b.modelBatches,b.detailParts,b.healthBG,b.healthFG,b.bossMarks,b.chargeMarks,b.shadows,b.badges].forEach(add);
+  [b.modelBatches,b.detailParts,b.healthBG,b.healthFG,b.bossMarks,b.groundMarks,b.chargeMarks,b.shadows,b.badges].forEach(add);
   return meshes;
 }
 
@@ -86,14 +96,16 @@ async function herdMeasure(frames) {
   function draw() {run.frame(++tick*1000/60);}
   for (let i=0;i<30;i++) {await raf(); draw();}
   const samples = [], shots = g.performance.shots;
-  let last = await raf(), submittedMin = Infinity;
+  let last = await raf(), submittedMin = Infinity, waveFrames=0;
   const submitted = () => b.visibility?.stats.bodies ?? b.live;
   for (let i=0;i<frames;i++) {
     draw();
+    if (b.boss?.fight?.ground?.live && b.groundMarks?.count) waveFrames++;
     submittedMin = Math.min(submittedMin,submitted());
     const now = await raf();
     samples.push(now-last); last = now;
   }
+  if (window.bossWaveSample && !waveFrames) throw Error('采样未绘制进行中的首领冲击波');
   const shotsDuringSample = g.performance.shots-shots;
   if (config.beasts.simulation) {
     config.beasts.simulation.profile = true;
@@ -153,7 +165,7 @@ async function herdMeasure(frames) {
   const perFrame = Object.fromEntries(Object.entries(cost).map(([key,value])=>[key,round(value/profileFrames)]));
   const total = samples.reduce((sum,time)=>sum+time,0); samples.sort((a,b)=>a-b);
   return {gpu:herdGPU(),
-    fps:round(1000*frames/total),p95:round(samples[Math.ceil(frames*.95)-1]), shots:shotsDuringSample,
+    fps:round(1000*frames/total),p95:round(samples[Math.ceil(frames*.95)-1]), shots:shotsDuringSample,waveFrames,
     simulated:b.simulationStats?.steps ? round(b.simulationStats.actors/b.simulationStats.steps) : b.live,
     submittedMin, centreInViewMin, submitted:submitted(),lod:b.lodCounts ?? null,visibility:b.visibility?.stats ?? null,
     perFrame,peakDraws,peakTriangles,simulation:b.simulationStats ?? null,spawn:window.birthCost ?? null};

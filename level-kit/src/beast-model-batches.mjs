@@ -95,10 +95,48 @@ export function createBeastBatches(manager, context, definition, basicModel, gra
   manager.legacyFarStart=manager.nearStart+high.length;
   manager.farStart=manager.legacyFarStart+legacyFar.length;
   manager.modelBatches=[...legacy,...mid,...high,...legacyFar,...far];
+  const jointMeshes=joints.map(({head,tail})=>[head,tail]);
+  const detailedQueue=[...high,...mid,...far,...jointMeshes].flat();
+  // 当前档可禁止普通近模，首领仍有独立近模名额。关闭细节时使用原型自身的近远两套。
+  const bossQueue=[...high.slice(3),...mid,...far,...jointMeshes.slice(3)].flat();
+  const legacyQueue=[...legacy,...legacyFar].flat();
+  const eyes=new Set(manager.modelBatches.map(pair=>pair[1]));
+  const warmScene=new THREE.Scene();
+  warmScene.matrixWorldAutoUpdate=false;
+  let warmIndex=0,warmQueue=null;
   const parent=new THREE.Matrix4(), relative=new THREE.Matrix4(), rotation=new THREE.Euler(0,0,0,'YXZ');
   let specular=true;
+  function syncSpecular() {
+    if (appearance.detailSpecular===specular)return;
+    specular=appearance.detailSpecular;
+    for(const material of specularMaterials) {material.specularMap=specular?atlas:null; material.needsUpdate=true;}
+    warmQueue=null;
+  }
   return {
     joints,
+    prepareMaterial(renderer,scene,camera,target) {
+      syncSpecular();
+      const queue=!appearance.detailEnabled ? legacyQueue :
+        appearance.nearBudgets[manager.visualQuality]>0 ? detailedQueue : bossQueue;
+      if(queue!==warmQueue){warmQueue=queue;warmIndex=0;}
+      const mesh=queue[warmIndex];
+      if(!mesh)return;
+      warmIndex++;
+      // 用真实的几何、材质与灯光提交零实例，完成首次上传与编译，不改变真正相机的场景内容。
+      warmScene.children.length=0;
+      scene.traverseVisible(o=>{if(o.isLight)warmScene.children.push(o);});
+      warmScene.fog=scene.fog;warmScene.environment=scene.environment;
+      warmScene.children.push(mesh);
+      const previous=renderer.getRenderTarget(),clear=renderer.autoClear,visible=mesh.visible,count=mesh.count;
+      if(eyes.has(mesh) && !mesh.instanceColor)mesh.setColorAt(0,new THREE.Color(1,1,1));
+      mesh.visible=true;mesh.count=0;
+      try {
+        renderer.setRenderTarget(target);renderer.autoClear=false;renderer.render(warmScene,camera);
+      }finally{
+        mesh.visible=visible;mesh.count=count;renderer.autoClear=clear;renderer.setRenderTarget(previous);
+        warmScene.children.length=0;
+      }
+    },
     apply(form,index,bodyMatrix,headPitch,headYaw,tailPitch,tailYaw,flash,light) {
       bodyMatrix.getMatrixAt(index,parent);
       const part=joints[form];
@@ -113,10 +151,7 @@ export function createBeastBatches(manager, context, definition, basicModel, gra
       }
     },
     flush() {
-      if (appearance.detailSpecular!==specular) {
-        specular=appearance.detailSpecular;
-        for(const mat of specularMaterials) {mat.specularMap=specular?atlas:null; mat.needsUpdate=true;}
-      }
+      syncSpecular();
       for(let form=0;form<joints.length;form++) {
         const batch=manager.nearStart+form,count=manager.counts[batch];
         if(count)markInstancePrefix(manager.modelBatches[batch][0].geometry.attributes.beastLight,count);

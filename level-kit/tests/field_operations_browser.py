@@ -52,8 +52,8 @@ def verify(browser):
         page.goto((ROOT/level['id']/'index.html').as_uri())
         page.wait_for_function("!!window.run", polling=100)
         if level['id']=='underground-lab':
-            doors=page.evaluate((ROOT/'level-kit/tests/player_doors.js').read_text(encoding='utf-8')+
-                                '\nverifyPlayerDoors()')
+            page.add_script_tag(content=(ROOT/'level-kit/tests/player_doors.js').read_text(encoding='utf-8'))
+            doors=page.evaluate('() => verifyPlayerDoors()')
             print('PASS closed pursuit, player opening, traversable enemy routes and projectile rays',doors,flush=True)
         result=page.evaluate("""() => {
           const {game:g,nav}=run,f=g.field;
@@ -68,6 +68,10 @@ def verify(browser):
               g.level.move(p,0,-.09,run.config.player.step);
             }
             if(door.active || p.z>outside)throw Error('从出生点未能穿过自动气闸');
+          }
+          if(location.pathname.includes('/underground-lab/')){
+            const spawn={x:p.x,y:p.y,z:p.z};
+            clearLabArchive(g);Object.assign(p,spawn);g.encounter.update(g,1);
           }
           window.fieldAnchor={x:p.x,z:p.z};
           nav.rebuild(p.x,p.z);
@@ -89,6 +93,12 @@ def verify(browser):
             events=page.evaluate("""stage=>{
               const {game:g,config}=run,m=g.beasts,e=g.encounter,p=g.player;
               // 在非主线模式保留已有普通群，让事件为同批成员和现有角色都预留空间。
+              if(stage==='underground-lab'){
+                g.reset();g.phase='play';
+                const door=g.level.entryDoor;
+                Object.assign(p,{x:0,y:0,z:door.z1+1});e.update(g,1);
+                Object.assign(p,fieldAnchor);run.nav.rebuild(p.x,p.z);
+              }
               const spawned=[],spawn=m.spawnGroup.bind(m);
               m.spawnGroup=(entries,opts)=>{
                 const group=spawn(entries,opts);
@@ -231,6 +241,7 @@ def verify(browser):
               check(!f.interact(g),'one-shot mechanism reused');
               nav.rebuild(fieldAnchor.x,fieldAnchor.z);
               check(nav.dist[nav.index(f.vault.center.x,f.vault.center.z)]>=0,'vault disconnected');
+              if(location.pathname.includes('/underground-lab/'))clearLabArchive(g);
               move({...f.secret.front,y:f.secret.front.y+4});check(!f.interact(g)&&!f.secretOpen,'secret opened across floors');
               move(f.secret.front);check(f.interact(g)&&f.secretOpen&&!f.secret.door.box.active,'secret did not open');
               reset('endless');clear();check(!f.secretOpen&&!f.switchUsed&&f.vaultStage==='idle','replay stale state');

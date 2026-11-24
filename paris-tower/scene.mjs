@@ -7,13 +7,16 @@ const climbs = [[-20,17],[19,-21],[20,17],[-20,-17]].map(([x,z]) => {
   const sx=Math.sign(x), sz=Math.sign(z);
   return [[x,0,z],[sx*16,2.4,sz*14],[sx*12.6,4.8,sz*11],[sx*9.8,height,sz*7.7]];
 });
+const towerApproach = {name:'战神广场南引道',at:[0,30],entries:[[6,23]],parts:[
+      {name:'战神广场南引道',count:92,bounds:[-5,12,24,30],anchor:[6,23]},
+      {name:'西梯检修亭',count:8,bounds:[-36,27,-28,34],anchor:[-32,30],types:[0],reward:{name:'铁塔维修铜牌',value:120,at:[-34,30]}}
+    ]};
 const story = {type:'tower', platform, beacon, rescue, climbs,
-  ascent:{kind:'fight',id:'approach',name:'铁塔南梯口',at:[0,30],label:'清理铁塔南梯口',
-    entries:[[-8,24],[8,24]],mix:[0,0,2]},
-  sectors:[
-  {name:'战神广场',at:[-6,28],entries:[[-9,24],[9,24]]},
-  {name:'塔脚钢架',at:[-16,13],entries:[[-23,12],[-18,4]]},
-]};
+  ascent:{...towerApproach,kind:'fight',id:'approach',name:'铁塔南梯口',label:'清理铁塔南梯口',mix:[0,0,2]},
+  sectors:[towerApproach,{name:'塔脚钢架',at:[-16,13],entries:[[-20,0]],parts:[
+      {name:'塔脚钢架',count:100,bounds:[-37,-15,-7,9],anchor:[-20,0]}
+    ]}],
+};
 const grid = Array.from({length:25},(_,i)=>i===0||i===24?'#'.repeat(25):'#'+'.'.repeat(23)+'#');
 function ground(x,z) {
   if (Math.abs(x)<=11 && Math.abs(z)<=9) return height;
@@ -32,6 +35,14 @@ function buildMap(context) {
   const {level, seededRandom} = context, random = seededRandom(1515);
   const b=stageBuilder(context,{iron:0x76513d, brass:0xd09d63, floor:0x526471, stone:0x8d8983, sky:0x37445b, light:0xffdd8a});
   b.floor('stone');
+  // 西梯检修亭向塔脚敞开，不占南梯和斜梁的通行宽度。
+  for (const z of [26.2,34.8]) {
+    b.block('stone',-32,z,9.8,.35,0,3.4,true);
+    b.block('iron',-27.3,z+(z<30?1.1:-1.1),.35,2.2,0,3.4,true);
+  }
+  b.block('stone',-36.7,30.5,.35,8.6,0,3.4,true);
+  b.block('iron',-32,30.5,10,9,3.4,3.7,true);
+  b.block('brass',-27.2,30.5,.18,3.8,2.9,3.23);
   // 四条向内收束的桁架、交叉腹杆和塔冠构成远近一致的铁塔轮廓。
   const rings = [[0,18],[7.2,10],[12,7.1],[20,3.8],[27,2.2],[35,1.1]];
   for (let i=1;i<rings.length;i++) {

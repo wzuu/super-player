@@ -51,18 +51,18 @@ def lab(page):
       const g=run.game,{level,beasts:m}=g;
       const mirrors=m.visibility.mirrors.map(m=>m.mesh);
       for(const mirror of mirrors)mirror.visible=false;
-      const eye=[1.6,1.5,27], target=[1.6,1.5,17];
+      const eye=[0,1.5,55], target=[0,1.5,49];
       const visible=()=>frame(eye,target).visible(...target,.25,.25,.25);
-      const gate=level.viewOccluders.find(w=>Math.abs(w.x0)<.01 && Math.abs(w.z0-21.76)<.01);
+      const gate=level.viewOccluders.find(w=>w.x0<0 && w.x1>0 && Math.abs((w.z0+w.z1)/2-52)<.01);
       check(gate && gate.active && !visible(),'安检门闭合时遮挡');
       level.setBarrier(gate,null,false);check(visible(),'安检门打开后同格立即可见');
       level.setBarrier(gate,null,true);
-      check(frame([8,1.6,26],[8,1.6,18]).visible(8,1.6,18,.4,.4,.4),'安检玻璃透视');
-      check(frame([1.6,7,27],[1.6,7,17]).visible(1.6,7,17,.25,.25,.25),'从门顶上方可见');
-      check(frame([-4,1.5,27],[6,1.5,17]).visible(6,1.5,17,3,.6,1),'贴墙探头时边缘保留');
-      const at=[1.85,1.5,35.5], across=[1.85,1.5,27.5];
+      check(frame([4,1.7,37],[11,1.7,37]).visible(11,1.7,37,.4,.4,.4),'安检玻璃透视');
+      check(frame([0,7,55],[0,7,49]).visible(0,7,49,.25,.25,.25),'从门顶上方可见');
+      check(frame([-3.4,1.5,56],[-4,1.5,50]).visible(-4,1.5,50,3,.6,1),'贴墙探头时边缘保留');
+      const at=[1.6,1.5,63.5], across=[1.6,1.5,56.5];
       check(!frame(at,across).visible(...across,.2,.3,.2),'气闸门叶闭合');
-      Object.assign(g.player,{x:0,z:33,y:0});g.encounter.update(g,.03);
+      Object.assign(g.player,{x:0,z:61,y:0});g.encounter.update(g,.03);
       check(level.entryDoor.active && frame(at,across).visible(...across,.2,.3,.2),'门叶开始滑动即保守放行');
       for(const mirror of mirrors)mirror.visible=true;
       clearActors();
@@ -113,8 +113,8 @@ def cold_grid(browser):
         try:
             result=page.evaluate("""() => {
               const {game:g,camera}=run,m=g.beasts,v=m.visibility,centers=[];
-              // 沿用整帧压测的室内布兵，固定朝向大厅南侧实体隔墙，确保有真实的遮挡命中。
-              camera.position.set(-6,1.65,18);camera.lookAt(-6,1.65,-15);
+              // 在安检走廊内从南向北看 z=20 隔墙的实体段，保留门洞和观察玻璃的可见性。
+              camera.position.set(-7,1.65,25);camera.lookAt(-7,1.65,-15);
               // 记录一次真实提交中首次触达的每个格子，计时只重复原版候选墙列表的构建。
               v.cells.clear();
               const candidates=v.candidates;

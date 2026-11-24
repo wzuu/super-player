@@ -789,8 +789,13 @@ function machineModel(type,{THREE,shapes,mergeGeometries},rage=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'管道集市坡道口',at:[10.65,17.4],entries:[[17,17],[-1,16]]},
-    {name:'全息广告广场',at:[-10,8],entries:[[-17,12],[0,3]]},
+    {name:'管道集市坡道口',at:[10.65,17.4],entries:[[7,18]],parts:[
+      {name:'管道集市坡道口',count:100,bounds:[-12,9,23,32],anchor:[7,18]}
+    ]},
+    {name:'广场西横街',at:[-10,8],entries:[[-13,2]],parts:[
+      {name:'广场西横街',count:92,bounds:[-22,-20,3,8],anchor:[-13,2]},
+      {name:'西巷义体诊所',count:8,bounds:[-32.8,-4.3,-23.2,4.3],anchor:[-27,0],types:[0],reward:{name:'诊所加密记录',value:120,at:[-30,2]}}
+    ]},
   ]},
   weaponSkin: 'neon-undercity',
   pageTitle:'霓雨下城 | 第九关',

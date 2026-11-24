@@ -132,6 +132,8 @@ def run(browser,url):
     assert "扩容弹匣" in page.locator("#weapon-build").inner_text()
     page.click("#start")
     page.wait_for_function("run?.game.phase==='play'")
+    # 驻敌会在玩家站桩操作期间攻击。弹匣和视角专项需保持同一局，受击反馈另行验证。
+    page.evaluate("run.game.player.hurtDelay = Infinity")
     check_weapon_model(page)
     assert page.evaluate("""() => run.config.weapon.pellets>0 && run.game.pickups.objects.some(i =>
       i.active && i.kind==='ammo' && i.permanent && i.value===Math.ceil(run.config.pickups.ammoCache*
@@ -151,11 +153,14 @@ def run(browser,url):
     assert fov["normal"]==fov["base"]==fov["recovered"] and fov["hurt"]+.1<fov["normal"],fov
     page.mouse.up(button="right")
     assert page.evaluate("!run.game.player.aimRequested && run.game.ui.aimDot.hidden && !run.game.weapon.group.visible")
-    page.evaluate("Object.assign(run.game.weapon,{ammo:1,reserve:4})")
+    page.evaluate("""() => {
+      Object.assign(run.game.weapon,{ammo:1,reserve:4});
+      window.shotsBeforeReload = run.game.performance.shots;
+    }""")
     page.keyboard.press("r")
     page.wait_for_function("!document.querySelector('#reload-ring').hidden")
     page.mouse.down()
-    page.wait_for_function("run.game.performance.shots===1")
+    page.wait_for_function("run.game.performance.shots > shotsBeforeReload")
     page.mouse.up()
     page.wait_for_function("run.game.weapon.ammo>=1")
     page.keyboard.press("Escape")
@@ -169,7 +174,7 @@ def run(browser,url):
       const g=run.game,p=g.player,w=g.weapon,b=g.beasts,level=g.level;
       p.look.rotation.set(0,0,0,'YXZ');p.positionCamera(0);
       // 固定无地形的高处，不受本关随机刷怪或地面结构影响。
-      Object.assign(p,{x:0,y:40,z:0});p.positionCamera(0);
+      Object.assign(p,{x:0,y:40,z:0,hurtDelay:0});p.positionCamera(0);
       const eye=run.camera.position.clone();
       const wall=level.box(0,.53,3,.2,40,44);
       w.render(0,p,g);

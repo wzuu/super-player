@@ -380,7 +380,9 @@ def verify_variation(browser, name):
       if(name==='fog' && (scene.fog.density<=fog || config.pickups.beamScale<=1))throw Error('浓雾');
       if(name==='blackout' && renderer.toneMappingExposure>=light)throw Error('停电');
       if(name==='patrol'){
-        const b=g.beasts.spawnRegular(0,1,0,30);if(!b.affixes?.length||g.patrolRemaining!==1)throw Error('精英巡逻');
+        const guards=g.beasts.pool.filter(b=>b.active && b.storyWave);
+        if(guards.length!==200 || g.patrolRemaining!==0 || !guards.slice(0,v.elites).every(b=>b.affixes?.length))
+          throw Error('开局两支驻队没有落实精英巡逻：'+[guards.length,g.patrolRemaining]);
       }
       if(name==='plenty'||name==='fury'){
         const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='补给弹药');
@@ -411,6 +413,9 @@ def main():
                     assert verify_simulation_cadence(low)==high, "画质改变了真实战斗或远距感知调度"
                     low.close()
                     verify_boss_feedback(page)
+                if stage=="rain-city":
+                    from boss_routes_browser import check_boss_attacks
+                    print("雨城首领",check_boss_attacks(page),flush=True)
                 pickup_views(page,stage,os.environ.get('PICKUP_CAPTURE'))
                 for burst in [False,True]:
                     result=boss_measure(page,burst)
