@@ -127,7 +127,7 @@ def field(page, url):
     page.select_option("#mission-mode","endless")
     assert "没有撤离" in page.locator("#mission-rule").inner_text()
     page.select_option("#mission-mode","classic")
-    assert "守卫" in page.locator("#mission-rule").inner_text()
+    assert "歼灭" in page.locator("#mission-rule").inner_text()
     page.set_viewport_size({"width":390,"height":560})
     before = page.locator("#start").bounding_box()
     page.locator("#preparation summary").click()

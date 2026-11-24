@@ -97,7 +97,7 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 | `src/story.mjs`、`src/objectives.mjs` | 读取关卡的区域、入口、敌种、数量与可用战区，推进门禁、护送、坚守和撤离 |
 | `src/stair-navigation.mjs` | 四种体型经双端楼梯跨层追击，按体型和入口缓存寻路场，远程体争夺高点 |
 
-普通战区在场景的 `story.sectors` 设置地点与整群部署入口。实验室、钟楼和古都的 `story.route` 按顺序配置清剿、交互与撤离。地面坐标写作 `[x,z]`，跨层坐标写作 `[x,y,z]`。巴黎的 `platform`、`beacon`、`rescue` 和 `climbs` 分别维护防守区、信标、登机点与攀登轨迹。时限集中于 `missionRules`。
+普通战区在场景的 `story.sectors` 设置地点与整群部署入口。实验室的 `story.route` 使用 `requiredRoom` 指定取卡或送电前要清除的房间，`passage` 允许穿过仍有守卫的战区，首领阶段的 `victory` 指定击杀时的结算文案。钟楼和古都分别按各自路线配置坚守、护送与撤离。地面坐标写作 `[x,z]`，跨层坐标写作 `[x,y,z]`。巴黎的 `platform`、`beacon`、`rescue` 和 `climbs` 分别维护防守区、信标、登机点与攀登轨迹。时限集中于 `missionRules`。
 
 生成入口后，`python level-kit/tests/story_browser.py` 验证各关目标连通、守卫和任务重开，`python level-kit/tests/stair_routes_browser.py` 验证四种体型的双向楼梯。使用 `python level-kit/tests/story_performance.py <基线构建根目录>` 比较同机位持续射击下的帧率和帧时间。
 

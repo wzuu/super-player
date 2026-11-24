@@ -722,9 +722,11 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
       if (type === 3) {
         game.bossDead = true; this.boss = null;
-        const site = this.level.pickupSite(b.x,b.z,dropY,game.player,this.nav);
-        game.pickups.add('core', site.x, site.z, site.y + 0.18, TEXT.keyItem, 0);
-        game.ui.notify(TEXT.bossDefeated, 2.6);
+        if (!game.story?.bossDefeated?.(game)) {
+          const site = this.level.pickupSite(b.x,b.z,dropY,game.player,this.nav);
+          game.pickups.add('core', site.x, site.z, site.y + 0.18, TEXT.keyItem, 0);
+          game.ui.notify(TEXT.bossDefeated, 2.6);
+        }
       }
       if (!definition.onBeastDefeated?.(b, game, source)) {
         // 无人机残骸等由关卡接管死亡表现，普通凶兽才进入倒地池。

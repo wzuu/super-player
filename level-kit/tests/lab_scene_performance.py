@@ -14,14 +14,20 @@ setup = """name => {
   let cold=0;
   for(let turn=0;turn<90;turn++){
     if(s.stage==='boss' && name==='reactor')break;
-    if(s.stage==='fight' && name!=='reactor')break;
+    if(s.stage==='fight' && (['hall','room'].includes(name) ||
+        (name==='overlap' && s.encounters.length===3)))break;
     if(s.target)at(s.target);
     if(s.stage==='use'){const begin=performance.now();s.interact(g);cold=Math.max(cold,performance.now()-begin);}
-    else for(const b of m.pool)if(b.active&&b.storyWave)m.damage(b,1e7,g);
+    else for(const b of m.pool)if(b.active && b.storyWave &&
+        (name!=='overlap' || ['安保室','配电房'].includes(b.sectionRoom)))m.damage(b,1e7,g);
     g.time+=.3;m.releaseSplits(g);s.step(.3,g);
   }
-  const coords = {hall:[0,51,0,34],room:[-9,32,-20,33],reactor:[0,-45.1,1.5,-60]}[name];
-  at({x:coords[0],y:0,z:coords[1]});
+  if(name==='overlap'){
+    at({x:22.05,y:0,z:-27});g.encounter.interact(g);g.encounter.update(g,1);
+    if(m.live<314)throw Error('三场残敌与可选档案室未全部进场 '+m.live);
+  }
+  const coords = {overlap:[22,-27,38,-27],hall:[0,51,0,34],room:[-9,32,-20,33],reactor:[1,-57,1.5,-65]}[name];
+  at({x:coords[0],y:g.level.base(coords[0],coords[1]),z:coords[1]});
   p.look.rotation.set(-.025,Math.atan2(p.x-coords[2],p.z-coords[3]),0,'YXZ');p.positionCamera(0);
   document.querySelector('#menu').hidden=true;g.ui.nodes.hud.hidden=true;
   const gl=run.renderer.getContext(),ext=gl.getExtension('WEBGL_debug_renderer_info');
@@ -48,7 +54,7 @@ html=file.read_text(encoding='utf8').replace('    startLevel(definition, campaig
         'return {game,scene,camera,renderer,config:CONFIG,grid:GRID,nav,frame:animate};').replace(
         'requested = requestAnimationFrame(animate);','requested = 0;')
 with sync_playwright() as pw,pw.chromium.launch(channel=os.getenv('GAME_TEST_BROWSER','chrome'),headless=True) as browser:
-  for mode in ['hall','room','reactor']:
+  for mode in ['hall','room','overlap','reactor']:
     page=browser.new_page(viewport={'width':960,'height':540},device_scale_factor=1)
     errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)))

@@ -94,6 +94,10 @@ def finish_at_gate(page):
                         if(phase<2 && (!b.active || b.fight.stage!==phase+1))throw Error('首领未逐阶段转场');
                     }
                     if(!g.bossDead)throw Error('首领仍在场');
+                    if(s.actionName==='歼灭'){
+                        if(g.phase!=='win' || g.pickups.keyItem?.active) throw Error('歼灭行动未在首领死亡时结算');
+                        return [treasureName,false];
+                    }
                     at(g.pickups.keyItem);
                     if(!g.pickups.takeKey(g.player,g))throw Error('核心无法拾取');
                 }

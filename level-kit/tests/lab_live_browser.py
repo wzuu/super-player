@@ -14,7 +14,7 @@ from campaign_browser import ROOT
 
 def watch_page(page, errors, static):
     page.on("pageerror", lambda exc: errors.append(str(exc)))
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error"
+    page.on("console", lambda msg: errors.append(f"{msg.location.get('url', '')} {msg.text}") if msg.type == "error"
             and urlsplit(msg.location.get("url", "")).path != "/favicon.ico" else None)
     if static:
         page.on("request", lambda req: errors.append("静态页面请求了 API " + req.url)
@@ -87,7 +87,7 @@ def verify(browser, url, static=False, rooms=False):
             saved=page.request.get(root+'api/progress').json()
             names={item['name'] for item in saved['loot']}
             assert saved['battles'][0]['won'] and saved['levels'][0]['cleared'], saved
-            assert '冷藏疫株研究档案' in names and '秘藏·培养罐原始编号' in names and sum('查获记录' in n for n in names)==6, (result,names)
+            assert '冷藏档案室样本箱' in names and '秘藏·培养罐原始编号' in names and sum('查获记录' in n for n in names)==6, (result,names)
             print('PASS SQLite 逐室战利品',sorted(names),result['optional'],flush=True)
             assert not errors, errors
             return
@@ -96,8 +96,9 @@ def verify(browser, url, static=False, rooms=False):
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result
         assert result["missed"] and result["gunBreaks"] and result["pulseBreaks"], result
         assert result["spawned"] == [100,100,100] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
-        assert result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
+        assert not result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
         assert sum(result["startingAmmo"]) + sum(b["taken"] for b in result["boxes"]) == result["shots"] + sum(result["ammo"]), result
+        assert page.locator("#menu-title").inner_text() == "歼灭成功"
         if static:
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')", polling=100)
             page.locator("#campaign-home").click(force=True)
@@ -108,11 +109,11 @@ def verify(browser, url, static=False, rooms=False):
                 const store = await (await import('./campaign/store.mjs')).campaignStore();
                 const progress = await store.progress(), history = await store.history();
                 return {prefix:store.pendingPrefix, count:progress.battleCount, first:progress.levels[0],
-                        second:progress.levels[1], battles:history.battles};
+                        second:progress.levels[1], battles:history.battles, report:(await store.report(history.battles[0].id)).report};
             }""")
             assert saved["prefix"].startswith("super-player-static:") and saved["count"] == 1, saved
             assert saved["first"]["cleared"] and saved["second"]["unlocked"], saved
-            assert len(saved["battles"]) == 1, saved
+            assert len(saved["battles"]) == 1 and saved["report"]["actionName"] == "歼灭", saved
             record = saved["battles"][0]
             assert record["level"] == "underground-lab" and record["won"] and record["kills"] == result["kills"], record
             print("PASS IndexedDB 刷新回读同一局胜利与击杀数，第二关已解锁", flush=True)
@@ -120,6 +121,7 @@ def verify(browser, url, static=False, rooms=False):
             page.wait_for_function("async()=> (await (await fetch('/api/progress')).json()).levels[1].unlocked", polling=100)
             saved = page.request.get(root + "api/progress").json()
             record = saved["battles"][0]
+            assert page.request.get(root+"api/report", params={"id":record["id"]}).json()["report"]["actionName"] == "歼灭"
             assert saved["battleCount"] == 1 and saved["levels"][0]["cleared"] and saved["levels"][1]["unlocked"], saved
             assert record["level"] == "underground-lab" and record["won"] and record["kills"] == result["kills"], record
         assert not errors, errors

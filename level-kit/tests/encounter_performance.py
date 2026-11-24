@@ -11,7 +11,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT
 
-ROOMS = {"underground-lab": ("服务器走廊", 0, -11), "rain-city": ("钟楼南街", 1, 8)}
+ROOMS = {"underground-lab": ("检修运输廊", 0, -11), "rain-city": ("钟楼南街", 1, 8)}
 SEED = """
   let lockOwner=null;
   Object.defineProperty(document,'pointerLockElement',{get:()=>lockOwner,configurable:true});
@@ -51,7 +51,7 @@ PREPARE = """([fallbackName,fallbackX,fallbackZ])=>{
   const g=run.game,s=g.story,p=g.player,nav=run.nav;
   const move=t=>{Object.assign(p,{x:t.x,y:t.y,z:t.z});nav.rebuild(p.x,p.z);};
   for(let i=0;i<1800;i++) {
-    if(s.target) move(s.target);
+    if(s.target && !(room?.passage && s.stage==='fight' && s.target.z===z)) move(s.target);
     if(s.stage==='fight' && s.target.x===x && s.target.z===z) {
       p.look.rotation.set(-.04,0,0,'YXZ');
       p.hurtDelay=1000;
@@ -159,7 +159,9 @@ def measure(browser, root, stage, expected):
             page.evaluate(BIRTHS)
             page.locator("#start").click()
             page.wait_for_function("window.run?.game.phase==='play'")
-            sample = ("服务器机房",28,-9) if stage=="underground-lab" and "服务器走廊" not in html else ROOMS[stage]
+            sample = ROOMS[stage]
+            if stage=="underground-lab" and sample[0] not in html:
+                sample = ("服务器走廊",0,-11) if "服务器走廊" in html else ("服务器机房",28,-9)
             page.evaluate(PREPARE,sample)
             metrics=page.evaluate(EXERCISE,[result["peak"] if frames else expected,frames])
             if frames:

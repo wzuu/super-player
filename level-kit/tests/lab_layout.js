@@ -126,11 +126,13 @@ async function verifyLabLayout({ offsets, extract }) {
         nav.rebuild(p.x,p.z);
       }
       if (offset === 0) {
-        const left = team[48].sectionRoom;
+        const left = team.find(b => b.roomBounds[2] < 0).sectionRoom;
+        const right = team.find(b => b.roomBounds[0] > 0).sectionRoom;
+        const tag = team[0].storyWave;
         clearGroup((b) => b.sectionRoom === left && b.storyWave === team[0].storyWave);
         const roomLoot = g.pickups.objects.find((o) => o.active && o.name === left + '查获记录');
         const liveElsewhere = m.pool.filter((b) => b.active && b.storyWave).length;
-        if (!roomLoot || liveElsewhere !== 74)
+        if (!roomLoot || liveElsewhere !== 100 - homes[left])
           throw Error('local clear wrongly mixed with other rooms ' + liveElsewhere);
         const meters = walk(roomLoot);
         claim(roomLoot);
@@ -145,7 +147,7 @@ async function verifyLabLayout({ offsets, extract }) {
           const guard = m.pool.filter((b) => b.active && b.archiveTag);
           optional.guard = guard.length;
           optional.mainBefore = liveElsewhere;
-          if (guard.length !== 100 || m.pool.filter((b) => b.active && b.storyWave).length !== 74)
+          if (guard.length !== 100 || m.pool.filter((b) => b.active && b.storyWave).length !== liveElsewhere)
             throw Error(
               'optional group ' +
                 [
@@ -164,12 +166,12 @@ async function verifyLabLayout({ offsets, extract }) {
           g.field.interact(g);
           if (g.field.secretOpen) throw Error('未清除守卫就能打开证物柜');
           clearGroup((b) => Boolean(b.archiveTag));
-          const bonus = g.pickups.objects.find((o) => o.active && o.name === '冷藏疫株研究档案');
-          if (!bonus || m.pool.filter((b) => b.active && b.storyWave).length !== 74)
+          const bonus = g.pickups.objects.find((o) => o.active && o.name === '冷藏档案室样本箱');
+          if (!bonus || m.pool.filter((b) => b.active && b.storyWave).length !== liveElsewhere)
             throw Error('missing optional loot or main membership conflict');
           optional.walk = walk(bonus);
           claim(bonus);
-          if (!g.loot.some((i) => i.name === '冷藏疫株研究档案' && i.origin === 'vault'))
+          if (!g.loot.some((i) => i.name === '冷藏档案室样本箱' && i.origin === 'vault'))
             throw Error('did not actually obtain archive loot');
           optional.reward = bonus.value;
           walk({ ...secret.front, z: secret.front.z + 1 });
@@ -184,12 +186,10 @@ async function verifyLabLayout({ offsets, extract }) {
           g.pickups.update(0, p, g);
           if (!g.loot.some((o) => o.name === record.name)) throw Error('证物不能实际带离');
         }
-        const right = team[74].sectionRoom,
-          tag = team[0].storyWave;
         clearGroup((b) => b.sectionRoom === right && b.storyWave === tag);
         const lootR = g.pickups.objects.find((o) => o.active && o.name === right + '查获记录'),
           rest = m.pool.filter((b) => b.active && b.storyWave).length;
-        if (!lootR || rest !== 48) throw Error('right room rewards blocked ' + [right, rest]);
+        if (!lootR || rest !== liveElsewhere - homes[right]) throw Error('right room rewards blocked ' + [right, rest]);
         const d = walk(lootR);
         claim(lootR);
         if (!g.loot.some((i) => i.name === lootR.name)) throw Error('right room loot not carried');
@@ -202,7 +202,13 @@ async function verifyLabLayout({ offsets, extract }) {
         for (const b of m.pool.filter((x) => x.active && x.storyWave)) m.damage(b, 1e6, g, 'weapon');
         s.step(0.15, g);
       }
-      Object.assign(p, { x: 0, y: 0, z: z - 32 + 2.4 });
+      if(j<2) {
+        const goal=s.target;
+        Object.assign(p,{x:Math.sign(goal.x)*13.65,y:goal.y,z:goal.z});
+        if(s.interact(g) || s.target!==goal) throw Error('隔着实体隔板取得了任务物 '+j);
+      }
+      walk(s.target);
+      if (j===2) { s.step(.05,g); continue; }
       if (!s.interact(g))
         throw Error('objective not advanced ' + [j, s.stage, s.guide(g, { keyItem: '核心' }).title]);
     }
@@ -213,19 +219,15 @@ async function verifyLabLayout({ offsets, extract }) {
     walk(s.target);
     if (!s.interact(g)) throw Error('reactor door interaction failed');
     if (!m.boss) throw Error('missing boss');
+    walk({x:-16,y:-1.2,z:-50});
+    if(Math.abs(p.y+1.2)>.11) throw Error('检修梯折返平台高度错误 '+p.y);
+    walk({x:0,y:-2.4,z:-57});
+    if(Math.abs(p.y+2.4)>.11) throw Error('反应堆大厅地面高度错误 '+p.y);
     for (let phase = 0; m.boss?.active && phase < 6; phase++) {
       g.time += 3;
       m.damage(m.boss, 1e7, g, 'weapon');
     }
-    const key = g.pickups.keyItem;
-    if (!key?.active) throw Error('missing boss key');
-    walk(key);
-    if (!g.pickups.takeKey(p, g)) throw Error('uncollected boss key');
-    s.step(0.04, g);
-    walk(s.target);
-    if (!s.interact(g)) throw Error('withdrawal door interaction failed');
-    walk(s.target);
-    s.step(0.04, g);
+    if (g.core || g.pickups.keyItem?.active) throw Error('歼灭首领仍需拾取核心');
     if (g.phase !== 'win') throw Error('mission exit blocked ' + g.phase);
   }
   return { reports, rooms, approaches, optional, device: g.field.device, vault: g.field.vault?.front };
@@ -260,7 +262,7 @@ function verifyLabWatch() {
   check(guards.every(b=>!l.blocked(b.x,b.z,b.y,b.radius,b.height) && Math.abs(b.y-l.foot(b.x,b.z,b.y+.05,b.radius))<.08),'巡逻撞墙或离地');
   const source={x:0,z:39};
   at(source.x,source.z);
-  const hidden=guards.filter(b=>!b.roomAlert && b.sectionRoom!=='安检走廊' && !sees(b,p.x,p.z) &&
+  const hidden=guards.filter(b=>!b.roomAlert && (b.roomBounds[2]<0 || b.roomBounds[0]>0) && !sees(b,p.x,p.z) &&
     Math.hypot(b.x-p.x,b.z-p.z)<config.weapon.hearingRadius-1);
   check(hidden.length>=2,'射程内没有隔墙驻守者');
   Object.assign(g,{shotAt:g.time,shotX:p.x,shotY:p.y,shotZ:p.z,shotHearingScale:1});

@@ -37,50 +37,78 @@ function mainDoor(id,z,why){
 function sideWall(x,z0,z1,doorZ){
   vertical(x,z0,doorZ-3);vertical(x,doorZ+3,z1);
 }
-vertical(-23,-84,67);vertical(23,-84,-29.25);vertical(23,-24.75,67);
+for (const x of [-23,23]) {vertical(x,-84,-44);vertical(x,52,67);}
 vertical(51,-42,-12);horizontal(23,51,-42);horizontal(23,51,-12);horizontal(-23,23,67);horizontal(-23,23,-84);
 horizontal(-23,-3.5,60);horizontal(3.5,23,60);
 for(const [n,c,title,lname,rname,mix] of [
-  [0,36,'安检走廊','器材库','防疫站',[0,0,0,2]],
-  [1,4,'培养走廊','培养室','样本室',[0,2,0,1,0]],
-  [2,-28,'服务器走廊','供电间','机柜室',[0,1,0,2,0,1,2]]]){
+  [0,36,'安检折廊','安保室','防疫站',[0,0,0,2]],
+  [1,4,'弯折运输廊','培养室','配电房',[0,2,0,1,0]],
+  [2,-28,'检修运输廊','梯井值班室','机柜室',[0,1,0,2,0,1,2]]]){
   const z0=c-16,z1=c+16;
   const door=mainDoor(['security','samples','power'][n],z1,'开启'+title+'隔离门');
   course.push(door);
   const firstSide=n===1 ? 1 : -1;
   const sideDoorZ=[];
+  const west=[-32,-27,-29][n], east=[27,32,23][n];
   for(const sign of [-1,1]){
     const first=sign===firstSide;
     const doorZ=c+(first ? 1.5 : -8.5);
     sideDoorZ.push(doorZ);
     sideWall(sign*7.7,z0,z1,doorZ);
-    for(const v of [z0+3,z1-3])horizontal(sign<0?-23:7.7,sign<0?-7.7:23,v);
+    const outer=sign<0 ? west : east;
+    vertical(sign*23,z0,z0+3); vertical(sign*23,z1-3,z1);
+    if(n===2 && sign>0) {
+      vertical(outer,z0+3,HATCH.z-HATCH.width/2);
+      vertical(outer,HATCH.z+HATCH.width/2,z1-3);
+    } else vertical(outer,z0+3,z1-3);
+    for(const v of [z0+3,z1-3])horizontal(sign<0?outer:7.7,sign<0?-7.7:outer,v);
     // 实体消杀隔板让侧房守卫绕过门廊再接敌。远门仅在靠入口的一端与内室相通。
-    vertical(sign*13,first ? c-6 : z0+3,first ? c+2.5 : c+3);
+    vertical(sign*12.6,first ? c-10 : z0+3,first ? c+3.5 : c+3);
     decor.push([sign*17.3,c+sign*2,2.5,3,1.4,n]);
   }
-  for(const [x,dz] of [[firstSide*5.2,-8],[-firstSide*5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
+  // 两道错开的实体隔板让中央通道折向相反两侧，并留下回退空间。
+  horizontal(firstSide<0 ? -7.7 : -1.2, firstSide<0 ? 1.2 : 7.7,c+5);
+  horizontal(firstSide<0 ? -1.2 : -7.7, firstSide<0 ? 7.7 : 1.2,c-1);
+  horizontal(firstSide<0 ? -7.7 : -1.2, firstSide<0 ? 1.2 : 7.7,c-10);
+  for(const [x,dz] of [[firstSide*5.2,-8],[firstSide*5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
+  const requiredRoom=n===1 ? rname : lname;
+  // 门口群驻守在远端，入口巡逻与两翼仍登记在同一场遭遇中。
   const parts=[
-    {name:title,count:48,bounds:[-7.15,z0+.8,7.15,z1-.8],anchor:[0,c-4]},
-    {name:lname,count:26,bounds:[-22.5,z0+3.7,-9.7,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
-    {name:rname,count:26,bounds:[9.7,z0+3.7,22.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]}
+    {name:title+'门卫',count:23,bounds:[-7.15,z0+.8,7.15,c-1.8],anchor:[0,c-9]},
+    {name:lname,count:firstSide<0 ? 43 : 32,bounds:[west+.5,z0+3.7,-13.1,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
+    {name:rname,count:firstSide>0 ? 43 : 32,bounds:[13.1,z0+3.7,east-.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]},
+    {name:title+'巡逻岗',count:2,bounds:[-6.8,c+5.8,6.8,c+9.5],anchor:[2,c+7],types:[0]}
   ];
-  for (const part of parts.slice(1)) {
+  for (const part of parts.slice(1,3)) {
     part.reward = {name: part.name + '查获记录', value: 120, at: [Math.sign(part.anchor[0])*15.35,z0+5.7]};
   }
-  sections.push({title,parts,z0,z1,sideDoorZ});
-  course.push({kind:'fight',name:title,parts,at:[0,z1+1],range:4,entries:parts.map(s=>s.anchor),mix,
-    label:'清剿'+title+'，确认两侧房间',bounds:parts.map(s=>s.bounds)});
-  course.push({kind:'use',at:[0,z0+2.4],label:['领取安保卡','读取封存记录','恢复反应堆供电'][n]});
+  sections.push({title,parts,z0,z1,west,east,sideDoorZ});
+  const passage=n===2;
+  course.push({kind:'fight',name:title,parts,at:[0,passage ? z0+1.25 : z1+1],range:4,
+    entries:parts.map(s=>s.anchor),mix,bounds:parts.map(s=>s.bounds),passage,
+    requiredRoom:passage ? null : requiredRoom,label:passage ? '穿过检修运输廊，到达折返梯入口' : '清除'+requiredRoom+'守卫'});
+  if (!passage) vertical(firstSide*14.8,c+5.8,c+8.2,.42);
+  if (!passage) course.push({kind:'use',at:[n===0 ? -16 : 16,c+7],terminalKind:n===0 ? 'card' : 'breaker',
+    label:n===0 ? '从安保室领取实体门卡' : '合上配电房电闸'});
   ammo.push([.5,z1+1.5],[1.1,c+3],[-.7,z0+2.4]);
   health.push([-.8,z1+2,45],[0,c,60]);
   loot.push([0,c-9,title+'记录',90+n*17]);
 }
-course.push(mainDoor('reactor',-44,'打开反应堆主隔离门'),{kind:'boss',label:'击败零号实验体'},
-  mainDoor('service',-76,'以核心权限卡解除撤离门封锁'),{kind:'reach',at:[0,-81],label:'撤离',win:true});
+course.push(mainDoor('reactor',-44,'打开反应堆主隔离门'),{kind:'boss',label:'歼灭零号实验体',victory:'零号实验体已被歼灭，研究设施行动完成。'});
 const bossSupplies=[[.4,-42],[9.5,-58.5],[-10,-63]];
 ammo.push([2.5,62],...bossSupplies);health.push([-9,-63,65],[8,-53,60]);
-for(const [x,z] of [[-7,-54],[7,-68],[-12.5,-67],[13,-54]])decor.push([x,z,2.1,2.8,1.4,3]);
+for(const [x,z] of [[-7,-59],[7,-68],[-12.5,-67],[13,-60]])decor.push([x,z,2.1,2.8,1.4,3]);
+// 两跑检修梯在西端平台折返，每跑十二级，每级下降 0.1 米。
+const upperLandingZ = -44, turnZ = -50, reactorFloorZ = -56;
+const reactorDepth = 2.4;
+function floorHeight(x,z) {
+  if (z >= upperLandingZ) return 0;
+  if (z <= reactorFloorZ) return -reactorDepth;
+  const tread = Math.min(12,Math.max(0,Math.floor(-x-2)));
+  return -.1 * (z > turnZ ? tread : 24-tread);
+}
+horizontal(-13,23,turnZ);
+horizontal(-23,-3.4,reactorFloorZ); horizontal(3.4,23,reactorFloorZ);
 const roomBounds = sections.flatMap(section => section.parts);
 // 守卫在自己的驻点巡视。枪声只给出开火位置，看到玩家或被击中才交给追击 AI。
 const guardNeighbors = [];
@@ -114,15 +142,17 @@ function watchRooms(b, g, dt, canSee, config) {
   b.fx = Math.sin(facing); b.fz = Math.cos(facing); b.yaw = facing;
   return true;
 }
-const labStory={type:'lab',watchRooms,turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
-  terminals:course.filter(t=>t.kind==='use').map(t=>t.at),locks:locks.map(([id,x,z])=>({id,at:[x,z],why:'需完成上一项任务'})),route:course};
+const labStory={type:'lab',classicAction:'歼灭',watchRooms,turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
+  terminals:course.filter(t=>t.kind==='use').map(t=>({at:t.at,kind:t.terminalKind})),locks:locks.map(([id,x,z])=>({id,at:[x,z],why:'需完成上一项任务'})),route:course};
 const MAP_GRID=Array.from({length:88},(_,i)=>{
  const z=i*2-87;
  return Array.from({length:54},(_,j)=>{
    const x=j*2-53;
-   if((Math.abs(x)>23||z<-84||z>67)&&!(x>23&&x<51&&z>-42&&z< -12))return '#';
+   const wing=sections.some(s=>x>=s.west && x<=s.east && z>s.z0+3 && z<s.z1-3);
+   const archive=x>23 && x<51 && z>-42 && z< -12;
+   if((Math.abs(x)>23||z<-84||z>67)&&!wing&&!archive)return '#';
    if (wallBoxes.some(([cx,cz,w,d])=>Math.abs(cx-x)<=w/2 && Math.abs(cz-z)<=d/2)) return '#';
-   if (x > 23) return 'A';
+   if (archive) return 'A';
    if (z < -44 && z > -76) return 'B';
    if (Math.abs(x) < 7.7) return 'H';
    return '.';
@@ -130,7 +160,7 @@ const MAP_GRID=Array.from({length:88},(_,i)=>{
 });
 const CERAMIC=0x8faabf,METAL=0x334757;
 const REACTOR={x:0,z:-62.5};
-const LANDMARKS={spawn:[0,0,63],boss:[3.5,0,-56.5],gate:[0,.16,-82.8]};
+const LANDMARKS={spawn:[0,0,63],boss:[8,-reactorDepth,-63],gate:[0,.16-reactorDepth,-82.8]};
 const CABINETS=[[-17.3,-30],[-20.2,-19.5],[17.3,-26],[20.2,-35.7],[38.5,-36.7]];
 const TANKS=[[-17.3,2,false],[-20.4,10,true],[17.3,6,false],[20,-2,false],[38.5,-17,true]];
 const CRATES=[[-17.3,34,3.4,2.2],[-20.3,41.5,2.8,1.9],[17.3,38,2.8,2.2],[19.8,29,3.1,1.8],[33.6,-36.5,2.7,2]];
@@ -173,18 +203,36 @@ function buildMap(ctx) {
   };
   const geometry = { ...shapes, round: new THREE.CylinderGeometry(0.5, 0.5, 1, 48) };
   const kit = new StaticBatches(materials, geometry);
-  const box = (material, x, y, z, w, h, d, tint, yaw = 0) => kit.add('box', material, x, y, z, w, h, d, tint, yaw);
+  const solid = (x,z,w,d,bottom,top,climb=false) => {
+    const floor=floorHeight(x,z);
+    return level.box(x,z,w,d,bottom+floor,top+floor,climb);
+  };
+  const box = (material, x, y, z, w, h, d, tint, yaw = 0) => kit.add('box', material, x, y+floorHeight(x,z), z, w, h, d, tint, yaw);
   const drum = (material, x, y, z, w, h, tint, smooth = false) =>
-    kit.add(smooth ? 'round' : 'cylinder', material, x, y, z, w, h, w, tint);
+    kit.add(smooth ? 'round' : 'cylinder', material, x, y+floorHeight(x,z), z, w, h, w, tint);
   const glow = (x, y, z, w, h, d, tint = ICE, power = 2.0, yaw = 0) =>
     box('emit', x, y, z, w, h, d, brighter(tint, power), yaw);
 
-  const deck = new THREE.Mesh(new THREE.PlaneGeometry(90, 154), new THREE.MeshStandardMaterial({
-    map:deckMap,color:0x8599ab,roughness:.45,metalness:.38
-  }));
-  deck.rotation.x=-Math.PI/2;
-  deck.position.z=-8.5;
-  scene.add(deck);
+  const deckMaterial=new THREE.MeshStandardMaterial({map:deckMap,color:0x8599ab,roughness:.45,metalness:.38});
+  function deck(x0,x1,z0,z1) {
+    const x=(x0+x1)/2,z=(z0+z1)/2;
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),deckMaterial);
+    mesh.rotation.x=-Math.PI/2; mesh.position.set(x,floorHeight(x,z),z);
+    scene.add(mesh);
+  }
+  deck(-23,23,upperLandingZ,67); deck(23,51,-42,-12); deck(-23,23,-84,reactorFloorZ);
+  for (const s of sections) {
+    deck(s.west,-23,s.z0+3,s.z1-3);
+    if (s.east>23) deck(23,s.east,s.z0+3,s.z1-3);
+  }
+  for (const [back,front] of [[turnZ,upperLandingZ],[reactorFloorZ,turnZ]]) {
+    deck(-23,-14,back,front); deck(-2,23,back,front);
+    for(let x=-14;x<-2;x++) {
+      const z=(back+front)/2;
+      box('metal',x+.5,-.1,z,1,.2,front-back,STEEL);
+      glow(x+.5,.008,z,.04,.012,front-back-.4,AMBER,.9);
+    }
+  }
 
   // 玻璃与门框都在实体墙线上，房内的实验体可提前看见，弹道和行走仍须经过门洞。
   for(const [x,z,w,d,height] of wallBoxes) {
@@ -194,7 +242,7 @@ function buildMap(ctx) {
       if(alongZ)box(material,x,y,z+a,depth,h,size,color);
       else box(material,x+a,y,z,size,h,depth,color);
     };
-    const wall=level.box(x,z,w,d,0,height);
+    const wall=solid(x,z,w,d,-reactorDepth,height);
     if(!glass)level.viewOccluders.push(wall);
     const count=Math.ceil(span/3.3),width=span/count;
     for(let n=0;n<count;n++){
@@ -214,12 +262,12 @@ function buildMap(ctx) {
   }
 
   const roofs=[
-    [0,59.5,46,15,4.6], ...sections.map(s=>[0,(s.z0+s.z1)/2,46,32,5.5]),
-    [0,-60,46,32,8.2], [0,-80,46,8,4.6], [37,-27,28,30,5.5]
+    [0,59.5,46,15,4.6], ...sections.map(s=>[(s.west+s.east)/2,(s.z0+s.z1)/2,s.east-s.west,32,5.5]),
+    [0,-50,46,12,8.2], [0,-66,46,20,8.2], [0,-80,46,8,4.6], [37,-27,28,30,5.5]
   ];
   for(const [x,z,w,d,h] of roofs){
     box('panel',x,h+.13,z,w,.26,d,0x40535f);
-    level.box(x,z,w,d,h,h+.26);
+    solid(x,z,w,d,h,h+.26);
     for(let dz=-d/2+4;dz<d/2;dz+=8){
       box('metal',x,h-.11,z+dz,w,.24,.22,STEEL);
       for(const dx of [-w*.29,0,w*.29]){
@@ -240,7 +288,7 @@ function buildMap(ctx) {
       const [lx,lz]=part.reward.at;
       // 领取点前方保留无碰撞的空地，台座贴在后方实体墙上。
       box('metal',lx,.53,lz-1.4,1.8,1.06,.56,STEEL);
-      level.box(lx,lz-1.4,1.8,.56,0,1.06);
+      solid(lx,lz-1.4,1.8,.56,0,1.06);
       glow(lx,1.12,lz-1.4,1.56,.1,.38,JADE,1.7);
     }
   }
@@ -251,7 +299,7 @@ function buildMap(ctx) {
     box('panel',x,h/2,z,w,h,d,i%2?0x597183:0x735e52);
     box('metal',x,h+.04,z,w+.06,.09,d+.06,DARK);
     glow(x,h*.76,z+d/2+.02,w*.65,.048,.03,AMBER,1.5);
-    level.box(x,z,w,d,0,h);
+    solid(x,z,w,d,0,h);
   }
   function header(x, z, yaw, w, height, tint) {
     box('metal', x, height + 0.20, z, w + 0.46, 0.39, 0.74, DARK, yaw);
@@ -273,7 +321,7 @@ function buildMap(ctx) {
       g.fillStyle = '#9caeba'; g.font = '20px monospace'; g.fillText(badge, 149, 110);
     });
     const board = new THREE.Mesh(new THREE.PlaneGeometry(3.84, 1.08), new THREE.MeshBasicMaterial({ map }));
-    board.position.set(x, y, z); board.rotation.y = yaw; scene.add(board);
+    board.position.set(x, y+floorHeight(x,z), z); board.rotation.y = yaw; scene.add(board);
   };
   const stationColors=['#ffbb71','#87e8c7','#9cceff'];
   for(const [i,section] of sections.entries()){
@@ -291,7 +339,7 @@ function buildMap(ctx) {
     }
     sign(-4.95,2.95,z0+.39,0,code,'CLEARANCE TERMINAL','取证与供电',tint);
   }
-  for(const [z,id,name] of [[60,'A00','入口气闸'],[-44,'R04','反应堆大厅'],[-76,'X05','检修撤离口']]){
+  for(const [z,id,name] of [[60,'A00','入口气闸'],[-44,'R04','折返检修梯'],[-76,'X05','北侧检修气闸']]){
     header(0,z,0,z===60?7:6.8,4.1,JADE);
     sign(0,4.85,z+.4,0,id,'AUTHORIZED PERSONNEL',name,'#a6eddb');
   }
@@ -305,7 +353,7 @@ function buildMap(ctx) {
   box('metal', rx, 0.1625, rz, 9.38, 0.325, 9.38, 0x3f5362);
   drum('emit', rx, 0.329, rz, 9.16, 0.012, brighter(0x4782a6, 1.45), true);
   drum('metal', rx, 0.338, rz, 8.98, 0.012, 0x324956, true);
-  level.box(rx, rz, 9.38, 9.38, 0, 0.325, true);
+  solid(rx, rz, 9.38, 9.38, 0, 0.325, true);
   drum('metal', rx, 0.58, rz, 4.6, 0.52, METAL, true);
   drum('emit', rx, 3.35, rz, 2.45, 5.0, brighter(0x8deaff, 3.05), true);
   drum('glass', rx, 3.35, rz, 3.57, 5.10, ICE, true);
@@ -322,13 +370,13 @@ function buildMap(ctx) {
     glow(c * 4.31, 0.365, rz + s * 4.31, 0.19, 0.075, 0.085, AMBER, 1.6, -a);
   }
   // 中段金属笼杆保持中空，中央的亮柱能从每个角度读出来。
-  level.box(rx, rz, 3.46, 3.46, 0, 6.51);
+  solid(rx, rz, 3.46, 3.46, 0, 6.51);
 
   const rings = [];
   for (const [r, y, arc, tint] of [[2.7, 4.45, Math.PI * 1.76, ICE], [3.13, 4.94, Math.PI * 1.54, 0x609fff], [3.49, 5.52, Math.PI * 1.33, 0xd1f6ff]]) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.026, 7, 64, arc),
       new THREE.MeshBasicMaterial({ color: brighter(tint, 2.3) }));
-    ring.position.set(rx, y, rz); scene.add(ring); rings.push(ring);
+    ring.position.set(rx, y+floorHeight(rx,rz), rz); scene.add(ring); rings.push(ring);
   }
 
   // 门底座与两侧场发生器。共享裂隙负责力场、漩涡和胜利瞬间的冲击波。
@@ -336,19 +384,19 @@ function buildMap(ctx) {
   drum('metal', gx, 0.073, gz, 6.1, 0.146, 0x466078, true);
   drum('emit', gx, 0.137, gz, 5.95, 0.029, brighter(ICE, 1.0), true);
   drum('metal', gx, 0.152, gz, 5.68, 0.022, DARK, true);
-  level.box(gx, gz, 5.75, 5.75, 0, 0.165, true);
+  solid(gx, gz, 5.75, 5.75, 0, 0.165, true);
   for (const s of [-1, 1]) {
     const x = s * 2.79;
     box('panel', x, 2.03, gz, 0.58, 4.04, 0.85, CERAMIC);
     box('metal', x, 0.35, gz, 0.94, 0.70, 1.16, STEEL);
     glow(x, 2.2, gz + 0.45, 0.11, 2.84, 0.045, ICE, 2.8);
-    level.box(x, gz, 0.92, 1.15, 0, 4.04);
+    solid(x, gz, 0.92, 1.15, 0, 4.04);
   }
 
   for (const [x, z] of CABINETS) {
     box('metal', x, 1.63, z, 1.60, 3.26, 3.20, DARK);
     box('panel', x, 3.27, z, 1.68, 0.13, 3.23, STEEL);
-    level.box(x, z, 1.60, 3.20, 0, 3.35);
+    solid(x, z, 1.60, 3.20, 0, 3.35);
     for (const s of [-1, 1]) {
       box('panel', x + s * 0.79, 1.48, z, 0.09, 2.73, 2.96, 0x526a80);
       for (const zOffset of [-1.0, 0, 1.0]) for (let h = 0; h < 6; h++) {
@@ -371,7 +419,7 @@ function buildMap(ctx) {
     drum('emit', x, 3.66, z, 2.70, 0.052, brighter(ICE, 2.0), true);
     kit.add(broken ? 'shattered' : 'round', 'tank', x, broken ? 1.88 : 2.15, z,
       2.44, broken ? 2.28 : 3.0, 2.44, 0xffffff, broken ? i * 0.48 : 0);
-    level.box(x, z, 2.55, 2.55, 0, broken ? 1.46 : 3.78);
+    solid(x, z, 2.55, 2.55, 0, broken ? 1.46 : 3.78);
     for (const s of [-1, 1]) {
       box('metal', x + s * 1.33, 2.2, z - 0.21, 0.17, 3.1, 0.21, STEEL);
       glow(x + s * 1.33, 2.21, z - 0.069, 0.057, 2.6, 0.04, JADE, 1.6);
@@ -394,7 +442,7 @@ function buildMap(ctx) {
   for (const [i, [x, z, w, d]] of CRATES.entries()) {
     const tint = i % 2 ? 0x445b71 : 0x8b6650;
     box('panel', x, 1.09, z, w, 2.18, d, tint);
-    level.box(x, z, w, d, 0, 2.18);
+    solid(x, z, w, d, 0, 2.18);
     for (let offset = -w / 2 + 0.24; offset < w / 2; offset += 0.49) {
       box('metal', x + offset, 1.08, z, 0.11, 1.96, d + 0.065, tint);
     }
@@ -404,7 +452,7 @@ function buildMap(ctx) {
   for (const [i, [x, z]] of STEAM.entries()) {
     const h = 2.5 + i % 2 * 0.4;
     drum('metal', x, h / 2, z, 0.60, h, STEEL);
-    level.box(x, z, 0.59, 0.59, 0, h);
+    solid(x, z, 0.59, 0.59, 0, h);
     drum('metal', x, 0.21, z, 0.91, 0.42, DARK);
     drum('emit', x, 1.45, z, 0.65, 0.075, brighter(AMBER, 1.75));
     kit.add('cylinder', 'metal', x + 0.42, 0.73, z, 0.23, 0.65, 0.23, METAL, 0, 0, Math.PI / 2);
@@ -418,7 +466,7 @@ function buildMap(ctx) {
     [0,6.4,-57,0x7dcfff,98,32],[0,5.9,-70,0x899dff,62,26]
   ]){
     const light=new THREE.PointLight(tint,strength,range,1.53);
-    light.position.set(x,y,z);scene.add(light);
+    light.position.set(x,y+floorHeight(x,z),z);scene.add(light);
     lights.push({light,normal:light.color.clone(),strength});
   }
   kit.flush();
@@ -554,7 +602,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
       if(this.archiveTag && !this.archiveLoot &&
         !game.beasts.pool.some(b=>b.active && b.archiveTag===this.archiveTag) &&
         !game.beasts.traits.splits.some(child=>child.archiveTag===this.archiveTag)){
-        const treasure=game.pickups.add('rare',38,-27,0,'冷藏疫株研究档案',460,true);
+        const treasure=game.pickups.add('rare',38,-27,0,'冷藏档案室样本箱',460,true);
         if(treasure){treasure.origin='vault';treasure.manual=true;this.archiveLoot=true;}
       }
       if (game.blast) return;
@@ -633,7 +681,7 @@ function createEnvironment({ THREE, scene, mapData, CONFIG: setup, canvasTexture
   const reflection = new Reflector(new THREE.PlaneGeometry(21, 27.1), {
     shader, textureWidth: size, textureHeight: size, multisample: 0, clipBias: 0.003,
   });
-  reflection.position.set(REACTOR.x, .008, REACTOR.z);
+  reflection.position.set(REACTOR.x, .008-reactorDepth, REACTOR.z);
   reflection.rotation.x = -Math.PI / 2;
   reflection.material.transparent = true;
   reflection.material.depthWrite = false;
@@ -788,7 +836,7 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 }
 
 export default {
-  story:labStory, health,
+  story:labStory, health, terrain:{ground:floorHeight},
   secretLockReason: game => game.encounter.archiveLoot ? null : '先清除档案区守卫，再打开证物柜', initialPopulationAnchor:[0,55], weaponSkin:'underground-lab',config:CONFIG,
   grid:MAP_GRID, loot,ammo,buildMap,createEncounter,createEnvironment,buildBeastModel,
   buildRageModel:helpers=>buildBeastModel(3,helpers,true),
@@ -804,7 +852,7 @@ export default {
       x >= left && x <= right && z >= back && z <= front);
     if (part) return part.name;
     if (z < -76) return '北侧检修气闸';
-    return z < -44 ? '反应堆大厅' : z > 52 ? '入口气闸舱' : '隔离区门禁';
+    return z < reactorFloorZ ? '反应堆大厅' : z < upperLandingZ ? '折返检修梯' : z > 52 ? '入口气闸舱' : '隔离区门禁';
   },
   minimap: {tiles: {'#':'#263441', '.':'#506573', H:'#386270', B:'#496e6e', A:'#80684a'}},
   background:0x101e2c,fog:0x172a39,portal:{width:4.9,depth:.22,height:4.9},
@@ -819,6 +867,6 @@ export default {
     loot: '研究物资',
     safe: '气闸安全缓冲区',
     rage: '零号实验体挣脱拘束，变异幼体正在聚集',
-    brief: '沿青绿地线依次清剿安检、培养与服务器走廊，两侧房间保存各自的研究记录。恢复机房供电后进入反应堆，取得零号权限卡，从北端检修气闸撤离。',
+    brief: '从西侧安保室取得门卡，经运输廊进入东侧配电房送电。沿检修梯下到反应堆，利用脉冲柱破甲，歼灭零号实验体。',
   },
 };

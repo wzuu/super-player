@@ -79,13 +79,13 @@ def combat(page):
         try {
           config.beasts.visibility.enabled=enabled;
           g.reset();g.phase='play';clearActors();m.spawnTime=20;
-          Object.assign(p,{x:0,y:0,z:28});p.positionCamera(0);
-          const b=m.spawn(1,0,24,levelFloor(),Math.PI*.6);
-          function levelFloor(){return g.level.surface(0,24,.5)}
+          Object.assign(p,{x:0,y:0,z:58});p.positionCamera(0);
+          const b=m.spawn(1,0,54,levelFloor(),Math.PI*.6);
+          function levelFloor(){return g.level.surface(0,54,.5)}
           m.refreshHash();const steps=[];
           for(let i=0;i<6;i++){
             g.time+=.04;m.update(.04,p,g);
-            camera.position.set(0,1.6,28);camera.lookAt(0,1.6,50);
+            camera.position.set(0,1.6,58);camera.lookAt(0,1.6,65);
             for(let j=0;j<renders;j++)m.render(.02,g.time);
             steps.push([b.yaw,b.x0,b.x1,b.mode,b.x,b.z]);
           }
