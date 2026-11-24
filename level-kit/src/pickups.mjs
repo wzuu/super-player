@@ -90,15 +90,21 @@ export function createPickupClass(context) {
       let object = kind === 'core' ? this.objects.at(-1) :
         this.objects.find((p, i) => i < end && !p.active && !this.ammoStations.has(p));
       if (!object) {
+        let oldestUnclaimedRare = null;
         for (let i = 0; i < end; i++) {
           const p = this.objects[i];
+          if (!p.active || p.permanent) continue;
+          if (permanent && p.kind === 'rare' && p.origin === 'drop' &&
+              (!oldestUnclaimedRare || p.born < oldestUnclaimedRare.born))
+            oldestUnclaimedRare = p;
           if (
-            p.active && !p.permanent &&
             ['ammo', 'health', 'grenade'].includes(p.kind) &&
             (!object || p.born < object.born)
           )
             object = p;
         }
+        // 先回收普通消耗品。全池只剩未领取的随机稀有时，固定配给仍能落地。
+        object ??= oldestUnclaimedRare;
       }
       if (!object) return;
       if (kind === 'core') this.keyItem = object;

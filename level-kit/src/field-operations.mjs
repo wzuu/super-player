@@ -653,7 +653,7 @@ export function createFieldOperations(context, campaign) {
         const award = (claimed) => {
           if (token !== runNumber || g.phase === 'fail' || g.phase === 'win') return;
           if (!claimed) treasure(g, secret.center, '秘藏·' + cfg.relic, cfg.value, 'secret');
-          else g.pickups.add('ammo', secret.center.x, secret.center.z, secret.center.y, '密室补给',
+          else if (!g.pickups.deepSupplies) g.pickups.add('ammo', secret.center.x, secret.center.z, secret.center.y, '密室补给',
             g.pickups.cacheAmount(24), true);
         };
         if (campaign)

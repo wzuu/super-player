@@ -197,6 +197,20 @@ def verify(browser):
                 reset('endless');
               }
               clear();move(f.vault.front);check(f.hint(g).includes('可选'),'vault hint');
+              const drops=g.pickups, front=f.vault.front;
+              const carried=drops.add('rare',front.x,front.z,front.y,'已领取的随机稀有',73);
+              drops.update(0,g.player,g);
+              check(!carried.active && g.loot.some(i=>i.name==='已领取的随机稀有'),'rare not collected');
+              const core=drops.add('core',g.level.spawn.x,g.level.spawn.z,g.level.spawn.y,'任务核心',1,true);
+              const protectedItems=drops.objects.filter(i=>i.active && i.permanent).map(i=>[i,i.name]);
+              const floorLoot=[];
+              for(let i=0;i<drops.objects.length;i++){
+                drops.age+=.1;
+                const item=drops.add('rare',g.level.spawn.x,g.level.spawn.z,g.level.spawn.y,'未领取稀有'+i,80);
+                if(!item)break;
+                floorLoot.push(item);
+              }
+              check(floorLoot.length>150 && !drops.add('rare',0,0,0,'已满',80),'普通拾取池未满');
               check(f.interact(g),'start vault');tick(2);wave('vault',f.cfg.guards);
               tick(3);wave('vault',f.cfg.reinforcements);
               check(f.vaultStage==='clear','vault unfinished');
@@ -204,6 +218,12 @@ def verify(browser):
               check(vaultAmmo.length===2 && vaultAmmo.reduce((n,i)=>n+i.value,0)===
                 g.pickups.cacheAmount(f.cfg.guards*run.config.pickups.roundsPerGuard)+
                 g.pickups.cacheAmount(f.cfg.reinforcements*run.config.pickups.roundsPerGuard),'vault entry supplies');
+              check(vaultAmmo.includes(floorLoot[0]) && vaultAmmo.includes(floorLoot[1]) &&
+                protectedItems.every(([i,name])=>i.active && i.name===name) && core===drops.keyItem &&
+                g.loot.some(i=>i.name==='已领取的随机稀有'),'回收顺序或保护对象有误');
+              const issued=vaultAmmo.reduce((n,i)=>n+i.value,0);
+              g.weapon.reserve=0;move(front);drops.update(0,g.player,g);
+              check(g.weapon.reserve===issued && vaultAmmo.every(i=>!i.active),'满池开宝库后的两批弹药无法领取');
               const reward=g.pickups.objects.find(x=>x.active&&x.origin==='vault');
               check(reward?.value===f.cfg.value,'missing vault reward');move(reward);g.pickups.collect(reward,g.player,g);
               move(f.lever);check(f.vault.shortcut.box.active!==false && f.interact(g),'switch blocked');
@@ -349,13 +369,63 @@ def verify_kill_loot(page,url):
              g.loot[0].name!==picked || !drops.some(i=>i.active))throw Error('拾取重复或附送补给');
           g.finish(won,'掉落验收');
         }""",[won,picked])
-        page.wait_for_function("async n=>(await store.progress()).battleCount===n",arg=battle_number,polling=100)
+        page.wait_for_function("document.querySelector('#menu-status').textContent.startsWith('对战已保存')",polling=100)
         progress=page.evaluate("()=>store.progress()")
+        assert progress['battleCount']==battle_number,progress
         gear=page.evaluate("()=>store.gear()")
         expected={'精英徽记':1}
         if battle_number==3: expected['精英改装材料·穿透弹芯']=1
         assert {i['name']:i['count'] for i in progress['loot']}==expected,progress
         assert bool(gear['state'].get('mods',{}).get('pierce'))==(battle_number==3),gear
+
+
+def verify_delayed_secret(page,url):
+    # 让真实 SQLite 先登记秘藏，再把查询响应留到深入或重开之后送达。
+    for level in LEVELS[1:4]:
+        loot=[{'name':'秘藏·测试藏品','value':400}] if level['id']=='buried-tomb' else []
+        battle=dict(id=str(uuid4()),level=level['id'],won=True,kills=1,durationMs=1000,endedAt=1001,loot=loot)
+        page.evaluate("b=>store.save(b)",battle)
+    page.route("**/buried-tomb/",expose_game)
+    page.add_init_script("""const readJson=Response.prototype.json;
+      window.discoveriesRead=0;
+      Response.prototype.json=async function(){
+        const data=await readJson.call(this);
+        if(this.url.endsWith('/api/discovery')){
+          window.alreadyClaimed=data.claimed;
+          await new Promise(resolve=>window.releaseDiscovery=resolve);
+          window.releaseDiscovery=null;
+          setTimeout(()=>window.discoveriesRead++,0);
+        }
+        return data;
+      };""")
+    page.goto(url+"/buried-tomb/")
+    page.wait_for_function("!!window.run",polling=100)
+    for number,when in enumerate(['ordinary','inside','enter','restart'],1):
+        page.evaluate("""()=>{
+          const {game:g}=run,f=g.field;
+          window.resetRoom=()=>{g.reset();g.phase='play';g.story.blocksExit=false;g.core=g.bossDead=true;};
+          window.enterDeep=()=>{
+            const {x,y,z}=g.level.gate;Object.assign(g.player,{x,y,z});f.deepen(g);f.deepen(g);
+            if(!g.pickups.deepSupplies)throw Error('未进入深入阶段');
+          };
+          resetRoom();
+        }""")
+        if when=='inside': page.evaluate("enterDeep()")
+        page.evaluate("""()=>{
+          const {game:g}=run,f=g.field;Object.assign(g.player,f.secret.front);
+          if(!f.interact(g)||!f.secretOpen)throw Error('未打开密室');
+        }""")
+        page.wait_for_function("typeof window.releaseDiscovery==='function'",polling=100)
+        assert page.evaluate("window.alreadyClaimed")
+        if when=='enter': page.evaluate("enterDeep()")
+        if when=='restart': page.evaluate("resetRoom()")
+        page.evaluate("releaseDiscovery()")
+        # JSON 返回后的下一轮事件循环，正式 discover/award 已处理完毕。
+        page.wait_for_function("n=>discoveriesRead===n",arg=number,polling=100)
+        actual=page.evaluate("run.game.pickups.objects.filter(i=>i.active && i.name==='密室补给').map(i=>[i.value,i.permanent])")
+        expected=page.evaluate("[[run.game.pickups.cacheAmount(24),true]]") if when=='ordinary' else []
+        assert actual==expected,(when,actual,expected)
+    print('PASS previously claimed secret, response after deep entry and restart',flush=True)
 
 
 def verify_claims(browser,url,static):
@@ -403,6 +473,7 @@ def verify_claims(browser,url,static):
     new=first.evaluate("async()=> (await (await import('./campaign/store.mjs')).campaignStore()).progress()")
     assert new['discoveries']==[] and new['battleCount']==0
     verify_kill_loot(first,url)
+    if not static: verify_delayed_secret(first,url)
     context.close()
     print("PASS discovery, duplicate death/pickup, collected-only extraction, loss, two tabs and retry",
           "IndexedDB" if static else "SQLite",flush=True)
