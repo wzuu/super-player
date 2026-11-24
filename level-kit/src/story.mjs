@@ -161,27 +161,38 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function deploy(g,stage) {
     if(stage.roster)return stage.roster;
     const entrances = (stage.climbs ? stage.climbs.map(route => route[0]) : stage.entries).map(asPoint);
+    const parts = stage.parts?.flatMap(part => Array(part.count).fill(part));
+    const anchorsByRoom = stage.parts && new Map(stage.parts.map(part => [part, asPoint(part.anchor)]));
+    if (parts && parts.length !== stage.count) throw Error('分区合计与战区守卫数不符：' + stage.name);
     const mix = stage.mix ?? [0, 0, 1, 2];
     const entries = Array.from({length: stage.count}, (_, i) => ({
       type: mix[i % mix.length],
+      anchor: anchorsByRoom?.get(parts[i]),
       // 从通道纵向列队，保留四足模型头尾之间的通行净空。
       angle: entrances[i % entrances.length].z < g.player.z ? 0 : Math.PI,
     }));
     // 允许向同一战区的通道展开，不占用撤离口、出生保护区或之后清场房间的集结区域。
     const later = stages.slice(stages.indexOf(stage) + 1).filter(stage => stage.kind === 'fight');
     const laterSites = later.flatMap(stage => stage.entries.map(asPoint));
+    const clearForPlayers = site => !level.inSafeZone(site.x, site.z, 1.4) &&
+      !(Math.abs(site.y - level.gate.y) < 2 && separation(site, level.gate) < 3) &&
+      !stage.clearLanes?.some(([x0,z0,x1,z1]) => site.x >= x0 && site.x <= x1 && site.z >= z0 && site.z <= z1);
     const withinSector = site => {
-      if (level.inSafeZone(site.x, site.z, 1.4) || (Math.abs(site.y - level.gate.y) < 2 &&
-          separation(site, level.gate) < 3)) return false;
-      if (stage.clearLanes?.some(([x0,z0,x1,z1]) => site.x >= x0 && site.x <= x1 &&
-          site.z >= z0 && site.z <= z1)) return false;
+      if (!clearForPlayers(site)) return false;
       let distance = Infinity;
       for (const p of entrances) distance = Math.min(distance, separation(p, site));
       if (distance > 27 || laterSites.some(p => separation(p, site) < distance + 1)) return false;
       return !stage.bounds || stage.bounds.some(([x0,z0,x1,z1]) =>
         site.x >= x0 && site.x <= x1 && site.z >= z0 && site.z <= z1);
     };
-    const options = {anchors: entrances, accept: withinSector, acceptGroup: i => i % entrances.length};
+    const options = {anchors: entrances, accept: withinSector, acceptGroup:i=>i%entrances.length};
+    if (parts) {
+      options.acceptGroup = index => parts[index].name;
+      options.accept = (site, index) => {
+        const [left, back, right, front] = parts[index].bounds;
+        return clearForPlayers(site) && site.x >= left && site.x <= right && site.z >= back && site.z <= front;
+      };
+    }
     if (stage.climbs) {
       // 攀登前先在可步行的塔脚集结；其后的斜梁是独立于地面寻路的路线。
       options.target = entrances[0];
@@ -204,6 +215,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     for (const [i, beast] of creatures.entries()) {
       beast.storyWave = roster.tag;
       if(stage.stationed)beast.guardPost=stage.target;
+      beast.sectionRoom=parts?.[i].name;
+      beast.roomBounds=parts?.[i].bounds;
+      beast.roomAlert=!parts || parts[i]===parts[0];
       beast.alert = CONFIG.beasts.memory + 6;
       beast.droneRaider = Boolean(stage.escort && i % 2 === 0);
       if (stage.climbs) {
@@ -211,6 +225,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         beast.climbPoint = 0;
       }
     }
+    if (parts) roster.rooms = stage.parts.filter(part => part.reward).map(part => ({part, cleared:false}));
     return roster;
   }
   function startGroup(g) {
@@ -304,6 +319,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
+      this.roomTreasureCount = stages.reduce((count, stage) => count + (stage.parts?.filter(part => part.reward).length ?? 0), 0);
       index = 0;
       sign.visible = false;
       // 开放街段从开局就可被看见和射击，前置清场只切换目标，原有成员不重生。
@@ -374,7 +390,17 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           ) {
             startGroup(g);
           }
-          if (group && !members(g).length) {
+          if (!group) break;
+          const living = members(g);
+          for (const room of group.rooms ?? []) {
+            if (room.cleared || living.some(beast => beast.sectionRoom === room.part.name) ||
+                g.beasts.traits.splits.some(child => child.storyWave === group.tag && child.sectionRoom === room.part.name)) continue;
+            const {at: [x,z], name, value} = room.part.reward;
+            const treasure = g.pickups.add('rare', x, z, level.surface(x,z,level.base(x,z)+0.5), name, value, true);
+            if (treasure) { treasure.origin = 'main'; room.cleared = true; }
+          }
+          if (!living.length && (!group.rooms || (group.rooms.every(room => room.cleared) &&
+              !g.beasts.traits.splits.some(child => child.storyWave === group.tag)))) {
             this.encounters.at(-1).clearedAt = g.time;
             this.droneDocked = false;
             advance(g);
@@ -444,17 +470,18 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const t = item.target,
         p = g.player;
       if (['use', 'rescue'].includes(item.kind) && near(p, t, 2.8) && clearLine(p, t)) {
-        if (item.door && stages[index+1]?.deployOnEntry) {
-          // 在同一输入内用打开后的实体门验证可达性；整群未就位前不会出现一帧空房。
-          const gate=item,oldGroup=group;
+        if (item.door && (stages[index+1]?.parts || stages[index+1]?.deployOnEntry)) {
+          const gate=item;
           close(gate.door,false);
-          item=stages[++index];group=null;
+          item=stages[++index];
           if(!startGroup(g)){
-            index--;item=gate;group=oldGroup;close(gate.door,true);return true;
+            index--;item=gate;close(gate.door,true);return true;
           }
-          g.journal?.complete(g,gate.label);enter(g,group);
+          g.journal?.complete(g,gate.label);
+          enter(g,group);
           g.sound.tone(440,720,.23,.16,'sine');
-          for(const station of consoles)if(separation(station.group.position,t)<1.1)station.card.visible=false;
+          for(const station of consoles)
+            if(separation(station.group.position,t)<1.1)station.card.visible=false;
           return true;
         }
         g.sound.tone(440, 720, 0.23, 0.16, 'sine');
@@ -519,6 +546,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
               living.length +
               ' 只' +
               (this.droneDocked ? ' · 无人机停靠，拦截袭击者' : '');
+            if (group.rooms && target.sectionRoom) detail += ' · 最近驻敌在' + target.sectionRoom;
           }
           break;
         case 'hold':
@@ -550,7 +578,10 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         b.active && b.playerVisible && b.alert > 0 && Math.hypot(b.x-p.x,b.y-p.y,b.z-p.z) <= 13);
       // 交战区的浮标仍可提示当前威胁；地面的路线指向房间或大厅，不在每只移动敌人间跳动。
       let target=task.target;
-      if (engaged && target.storyWave && item?.kind==='fight') target=item.target;
+      if (engaged && target.storyWave && item?.kind==='fight') {
+        const room = item.parts?.find(part => part.name === target.sectionRoom);
+        target = room ? asPoint(room.anchor) : item.target;
+      }
       if (engaged && target.fight && item?.kind==='boss') target=level.bossAnchor;
       route ??= createMissionNavigation(nav);
       const path=route(p,definition.navigationApproach?.(p,target,level) ?? target,task.stage);
@@ -570,6 +601,13 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       if(b.guardPost){
         if(b.flash>0 || b.hp<b.maxHP || Math.hypot(b.x-g.player.x,b.z-g.player.z)<13)b.guardPost=null;
         else {b.stride=0;return true;}
+      }
+      if(b.storyWave && b.roomBounds && !b.roomAlert){
+        const [left,back,right,front]=b.roomBounds, p=g.player;
+        b.roomAlert=b.hp<b.maxHP || (p.z>=back && p.z<=front &&
+          p.x>=left-2 && p.x<=right+2 && Math.hypot(p.x-b.x,p.z-b.z)<19) ||
+          (b.playerVisible && Math.hypot(p.x-b.x,p.z-b.z)<15);
+        if(!b.roomAlert){b.stride=0;return true;}
       }
       if (b.climbRoute) {
         const dst = b.climbRoute[b.climbPoint],

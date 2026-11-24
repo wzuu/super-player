@@ -585,7 +585,7 @@ export function createFieldOperations(context, campaign) {
         return pulseBlocked(g.beasts.boss, g.time) || use + ' 释放脉冲破甲 · 注意冲击伤害';
       }
       if (secret && !this.secretOpen && near(p, secret.front, 1.8))
-        return '墙板后有回声 · ' + use + ' 查看异色接缝';
+        return definition.secretLockReason?.(g) || '墙板后有回声 · ' + use + ' 查看异色接缝';
       if (vault && this.vaultStage === 'idle' && near(p, vault.front, 4))
         return '可选搜集 · ' + use + ' 闯入' + cfg.name + '，守卫有两波，后门机关可开捷径';
       return '';
@@ -646,6 +646,11 @@ export function createFieldOperations(context, campaign) {
         return true;
       }
       if (secret && !this.secretOpen && near(p, secret.front, 1.8)) {
+        const reason=definition.secretLockReason?.(g);
+        if (reason) {
+          g.ui.notify(reason, 2);
+          return true;
+        }
         this.secretOpen = true;
         open(secret.door, false);
         g.ui.notify('发现秘闻 · ' + cfg.lore, 5);

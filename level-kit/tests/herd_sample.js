@@ -26,8 +26,9 @@ function herdSetup([mode, sample, target]) {
   for (const b of manager.pool) b.active = false;
   manager.live = 0; manager.boss = null; manager.spawnTime = Infinity;
   const dense = sample === 'dense', arena = sample === 'open' || dense;
-  const [px,py,pz,yaw] = sample === 'indoor' ? [27,0,1,0] :
-    sample === 'wall' ? [-6,0,18,0] : sample === 'mirror' ? [37,0,5,0] :
+  const newLab = level.entryDoor?.z0 > 45;
+  const [px,py,pz,yaw] = sample === 'indoor' ? (newLab ? [15,0,-22,0] : [27,0,1,0]) :
+    sample === 'wall' ? (newLab ? [-5,0,23,0] : [-6,0,18,0]) : sample === 'mirror' ? [37,0,5,0] :
     sample === 'tower' ? [0,level.base(0,17),17,0] : [0,38,29,0];
   if (arena) level.box(0,0,82,82,37.8,38,true);
   Object.assign(player,{x:px,y:py,z:pz,fallPeak:py});

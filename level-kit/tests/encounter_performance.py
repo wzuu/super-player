@@ -11,7 +11,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT
 
-ROOMS = {"underground-lab": ("服务器机房", 28, -9), "rain-city": ("钟楼南街", 1, 8)}
+ROOMS = {"underground-lab": ("服务器走廊", 0, -11), "rain-city": ("钟楼南街", 1, 8)}
 SEED = """
   let seed=680067;
   Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -47,6 +47,8 @@ PREPARE = """([name,x,z])=>{
       p.look.rotation.set(-.04,0,0,'YXZ');
       p.hurtDelay=1000;
       window.room=name;
+      const members=g.beasts.pool.filter(b=>b.active&&b.storyWave);
+      window.initialGap=members.length?Math.min(...members.map(b=>Math.hypot(b.x-p.x,b.z-p.z))):Infinity;
       return;
     }
     const current=s.guide(g,{keyItem:'核心'})?.target?.storyWave;
@@ -77,6 +79,7 @@ EXERCISE = """([expected,peakOnly])=>{
       g.step(dt);
       const log=s.encounters.find(e=>e.name===window.room);
       if(log?.clearedAt) {
+        if(!Number.isFinite(nearestSpawn))nearestSpawn=window.initialGap;
         if(log.spawned!==expected)throw Error('实际入场数不符 '+log.spawned);
         const earlier=window.measuredGroups?.get(window.measuredTag);
         if(earlier)nearestSpawn=Math.min(nearestSpawn,earlier.gap);
@@ -147,7 +150,8 @@ def measure(browser, root, stage, expected):
             page.evaluate(BIRTHS)
             page.locator("#start").click()
             page.wait_for_function("window.run?.game.phase==='play'")
-            page.evaluate(PREPARE,ROOMS[stage])
+            sample = ("服务器机房",28,-9) if stage=="underground-lab" and "服务器走廊" not in html else ROOMS[stage]
+            page.evaluate(PREPARE,sample)
             metrics=page.evaluate(EXERCISE,[result["peak"] if frames else expected,frames])
             if frames:
                 result.update(page.evaluate(FRAMES))

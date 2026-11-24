@@ -629,7 +629,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
-        active: true, storyWave:null, guardPost:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
+        active: true, archiveTag:null, sectionRoom:null, roomBounds:null, roomAlert:false, guardPost:null, storyWave:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
         nearLOD:false, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
         traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,

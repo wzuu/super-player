@@ -124,6 +124,9 @@ export class FoeTraits {
     for (const child of children) {
       child.alert = 5;
       child.storyWave = parent.storyWave ?? null;
+      child.archiveTag=parent.archiveTag;
+      child.sectionRoom=parent.sectionRoom;
+      child.roomAlert=true;
       child.fieldGroup = parent.fieldGroup ?? null;
       if (['vault', 'deep'].includes(child.fieldGroup)) game.field.guards.push(child);
     }
@@ -178,6 +181,6 @@ export class FoeTraits {
   }
   defeated(b) {
     if (has(b, 'split'))
-      this.splits.push({ x: b.x, y: b.y, z: b.z, storyWave: b.storyWave, fieldGroup: b.fieldGroup });
+      this.splits.push({ x: b.x, y: b.y, z: b.z, storyWave: b.storyWave, fieldGroup: b.fieldGroup, archiveTag:b.archiveTag, sectionRoom:b.sectionRoom });
   }
 }

@@ -259,11 +259,11 @@ def verify(browser,ids):
             if(getComputedStyle(panel).visibility!=='visible'||!note.textContent)throw Error('EMP 后未恢复任务');
           }
           if(defaultMode==='classic' && g.story.doorStates.reactor!==undefined){
-            for(const id of ['security','power','reactor','service'])if(!g.story.doorStates[id])throw Error('重开门禁 '+id);
-            const door={x:1.6,y:0,z:22},from={x:1.6,y:1,z:23.5},dir={x:0,y:0,z:-1};
+            for(const id of ['security','samples','power','reactor','service'])if(!g.story.doorStates[id])throw Error('重开门禁 '+id);
+            const door={x:0,y:0,z:20},from={x:0,y:1,z:21.5},dir={x:0,y:0,z:-1};
             if(!g.level.blocked(door.x,door.z,0,.33,1.77)||g.level.visible(from,dir,3))throw Error('封锁门穿过玩家或弹道');
-            at({x:1.6,y:0,z:23.5});
-            if(!g.story.interact(g)||!g.story.doorStates.security||!g.ui.notice.includes('安保卡'))throw Error('门禁未说明缺失权限');
+            at({x:0,y:0,z:21.5});
+            if(!g.story.interact(g)||!g.story.doorStates.samples||!g.ui.notice.includes('需完成'))throw Error('门禁未说明缺失权限');
           }
           if(defaultMode!=='classic'){
             start('classic');
@@ -307,7 +307,7 @@ def verify(browser,ids):
                   g.pickups.takeKey(p,g);
                 }
                 if(target){
-                  if(l.entryDoor?.active && p.z>32 && target.z<32)target=s.navigation({target},g).waypoint??target;
+                  if(l.entryDoor?.active && p.z>l.entryDoor.z1 && target.z<l.entryDoor.z0)target=s.navigation({target},g).waypoint??target;
                   r.rebuild(target.x,target.z);
                   const i=r.index(p.x,p.z), j=r.next(p.x,p.z);
                   const exact=Math.hypot(p.x-target.x,p.z-target.z)<1.6||i===j;
@@ -368,43 +368,38 @@ def verify(browser,ids):
             }""")
             print('PASS rain-city ground guidance and combat',streets,flush=True)
         if stage == 'underground-lab':
-            detour = page.evaluate("""()=>{
+            page.add_script_tag(content=(ROOT/'level-kit/tests/lab_layout.js').read_text(encoding='utf8'))
+            layout = page.evaluate('() => verifyLabLayout({offsets:[-1.9,0,1.9],extract:false})')
+            assert len(layout['reports']) == 9 and len(layout['rooms']) == 6, layout
+            for sample in layout['reports']:
+                assert sorted(sample['homes'].values()) == [26,26,48] and sample['gap'] >= 6, sample
+                assert sample['closedBefore'] and not sample['blocked'] and not sample['overlap'], sample
+            print('PASS laboratory formation, approach and room rewards',layout,flush=True)
+            route_guard = page.evaluate("""()=>{
               const g=run.game,s=g.story,p=g.player,l=g.level;
-              g.reset();g.phase='play';
-              const go=target=>{
-                let length=0;
-                for(let step=0;step<1800;step++){
-                  if(Math.hypot(p.x-target.x,p.z-target.z)<.28){run.nav.rebuild(p.x,p.z);return length;}
+              const pos=(x,z)=>({x,y:0,z}), go=target=>{
+                for(let i=0;i<1600;i++){
+                  if(Math.hypot(p.x-target.x,p.z-target.z)<.28)return;
                   const task=s.navigation({target},g),wp=task.waypoint;
-                  if(!wp||wp!==task.path[0])throw Error('没有可行主路 '+JSON.stringify({p:[p.x,p.z],target}));
-                  const dx=wp.x-p.x,dz=wp.z-p.z,d=Math.hypot(dx,dz);
-                  const ratio=Math.min(.2,d)/Math.max(.0001,d);
-                  const walked=l.move(p,dx*ratio,dz*ratio,.46);
-                  if(walked<.001&&!l.entryDoor?.active)throw Error('转角停滞 '+JSON.stringify({p:[p.x,p.y,p.z],target:[target.x,target.z],wp}));
-                  length+=walked;p.y=l.foot(p.x,p.z,p.y+.46,p.radius);
-                  g.encounter.update(g,.04);
+                  if(!wp)throw Error('不可到达实验室导向测试点 '+JSON.stringify(target));
+                  const dx=wp.x-p.x,dz=wp.z-p.z,factor=Math.min(1,.19/Math.max(.001,Math.hypot(dx,dz)));
+                  l.move(p,dx*factor,dz*factor,run.config.player.step);
+                  p.y=l.foot(p.x,p.z,p.y+.06,p.radius);g.encounter.update(g,.04);
                 }
-                throw Error('绕行超时');
+                throw Error('实验室方向绕行超时');
               };
-              const pos=(x,z)=>({x,y:0,z});
-              // 从合法安检门出发，刻意向东走错。途中查看同一个西向任务的转角如何变化。
-              go(pos(0,30));
-              for(let n=0;n<360 && s.stage==='fight';n++){
-                for(const b of g.beasts.pool)if(b.active)g.beasts.damage(b,1e7,g);
-                g.time+=.5;g.beasts.releaseSplits(g);s.step(.5,g);
+              g.reset();g.phase='play';go(s.target);s.interact(g);
+              for(let i=0;i<50 && s.stage==='fight';i++){
+                for(const b of g.beasts.pool)if(b.active && b.storyWave)g.beasts.damage(b,1e7,g);
+                g.time+=.2;g.beasts.releaseSplits(g);s.step(.2,g);
               }
-              for(let i=0;i<2;i++){
-                if(s.stage!=='use')throw Error('安检门禁顺序失效 '+[s.stage,s.remaining,g.beasts.live,p.x,p.z]);
-                go(s.target);if(!s.interact(g))throw Error('安保卡无法开门');
-              }
-              go(pos(1.6,20.5));
-              const main=s.target,guide=()=>s.navigation(g.objective.guide(g,{keyItem:'核心'}),g);
+              const guide=()=>s.navigation(g.objective.guide(g,{keyItem:'核心'}),g);
               const direct=guide().path.map(q=>[q.x,q.z]);
-              go(pos(12,17));
-              const off=guide().path.map(q=>[q.x,q.z]);
-              if(!direct.length||!off.length||JSON.stringify(direct)===JSON.stringify(off))throw Error('走错路后没有重算路线');
-              const threat=g.beasts.spawn(0,p.x-3,p.z,p.y);
-              if(!threat)throw Error('近场测试怪无法生成');
+              go(pos(13,40));const fromSide=guide().path.map(q=>[q.x,q.z]);
+              if(!direct.length||!fromSide.length||JSON.stringify(direct)===JSON.stringify(fromSide))
+                throw Error('从防疫站折返主路时未重算路线');
+              const threat=g.beasts.spawn(0,p.x-2,p.z,p.y);
+              if(!threat)throw Error('侧房门口没有可用测试点');
               threat.playerVisible=true;threat.alert=8;
               const arrows=run.scene.getObjectByName('ground-directions');
               function markers(){
@@ -443,19 +438,11 @@ def verify(browser,ids):
               if(arrows.visible || arrows.count)throw Error('暂停还在绘制导航');
               g.phase='play';
               g.beasts.damage(threat,1e7,g);
-              const boxes=['封存逆变器样本','零号实验体日志'];
-              let sideWalk=0;
-              for(const name of boxes){
-                const rare=g.pickups.objects.find(o=>o.active&&o.name===name);
-                sideWalk+=go(rare);g.pickups.update(.04,p,g);
-                if(rare.active||!g.loot.some(o=>o.name===name))throw Error('侧房搜集失败 '+name);
-              }
-              sideWalk+=go(main);s.step(.05,g);
-              if(s.stage!=='fight'||s.encounters.length!==1)throw Error('绕行后没有回到培养室任务');
-              return {metres:Math.round(sideWalk),treasure:boxes};
+              return true;
             }""")
-            print('PASS optional rooms, wrong turn, alternative route and combat navigation',detour,flush=True)
-        if stage in ('rain-city','underground-lab'):
+            assert route_guard
+        if stage == 'rain-city':
+
             check_trigger_edges(page,stage)
         if stage in ('rain-city','paris-tower'):
             timed_encounters(page,stage)

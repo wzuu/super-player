@@ -28,6 +28,7 @@ function playLaboratoryCampaign() {
     previous = '',
     stale = 0, nextRoll = 0, rollingUntil = 0, rollAim = 0;
   const log = [];
+  let lastKills = g.kills;
   const reload = w.reload.bind(w);
   w.reload = (game) => {
     const before = w.reloadLeft;
@@ -80,8 +81,7 @@ function playLaboratoryCampaign() {
       let span = 0;
       for (let j = 0.4; j <= 10; j += 0.4) {
         const x=p.x+j*dx, z=p.z+j*dz;
-        if (g.level.blocked(x,z,p.y,p.radius,p.height) ||
-          [[-17.5,15],[19,11.5]].some(([sx,sz]) => Math.abs(x-sx)<3 && Math.abs(z-sz)<2.7)) break;
+        if (g.level.blocked(x,z,p.y,p.radius,p.height)) break;
         span = j;
       }
       if (span < 1) continue;
@@ -93,7 +93,11 @@ function playLaboratoryCampaign() {
         if(d<12)pressure+=(12-d)*(12-d)/80;
       }
       // 留出转身空间，绕开可见酸池。仅靠眼前距离容易把玩家逼进墙角。
-      const outward=Math.max(0,Math.abs(q.x)-32)+Math.max(0,Math.abs(q.z)-33);
+      const segment=g.story.encounters.length-1;
+      const front=52-32*segment, back=front-32;
+      const arena=g.story.stage==='boss';
+      const outward=Math.max(0,Math.abs(q.x)-19)+
+        Math.max(0,q.z-(arena?-46:front+4))*2+Math.max(0,(arena?-74:back)-q.z);
       const acid=g.projectiles.puddles.some(pool=>pool.life>0 && distance(pool.pos,q)<2.4);
       const score=gap + .8*span - 1.1*pressure - 1.3*outward - (acid?5:0) +
         (old ? .1*(dx*(old.x-p.x)+dz*(old.z-p.z)) : 0);
@@ -108,13 +112,7 @@ function playLaboratoryCampaign() {
       state = s.stage,
       b = g.beasts.boss;
     const raw = s.guide(g, { keyItem: '核心' });
-    if (
-      [
-        [-17.5, 15],
-        [19, 11.5],
-      ].some(([x, z]) => Math.abs(p.x - x) < 2.4 && Math.abs(p.z - z) < 2.1)
-    )
-      report.sideRooms = true;
+    if(g.encounter.hatchOpen || (p.x>23 && p.z< -12 && p.z> -42))report.sideRooms=true;
     const creatures = g.beasts.pool
       .filter((e) => e.active && visible(e))
       .sort((a, b) => distance(a, p) - distance(b, p));
@@ -143,7 +141,17 @@ function playLaboratoryCampaign() {
         ...ammo(),
       ]);
     }
-    if (g.time - stale > 225) break;
+    if (g.kills !== lastKills) {
+      lastKills = g.kills;
+      stale = g.time;
+    }
+    if (g.time - stale > 225) {
+      const pick = o => o && [o.name,o.sectionRoom,o.x,o.y,o.z,o.hp];
+      report.blocked={target:pick(raw.target), waypoint:pick(route(raw.target)), nearest:pick(creatures[0]),
+        alive:g.beasts.pool.filter(e=>e.active).length,left:g.beasts.pool.filter(e=>e.active).slice(0,5).map(pick),
+        items:g.pickups.objects.filter(o=>o.active&&distance(p,o)<5).map(pick)};
+      break;
+    }
     input.down.clear();
     input.fire = false;
     if (state === 'boss' && b) {
@@ -153,10 +161,10 @@ function playLaboratoryCampaign() {
         report.doorAmmo = ammo();
         bossShots = g.performance.shots;
       }
-      if (!report.enterAmmo && p.z < 9.3 && Math.abs(p.x) < 11) report.enterAmmo = ammo();
+      if (!report.enterAmmo && p.z < -44.3 && Math.abs(p.x) < 11) report.enterAmmo = ammo();
       if (!firstWindow && f.weakUntil > g.time) firstWindow = f.weakUntil;
       report.missed = Boolean(firstWindow && g.time >= firstWindow);
-      if (p.z > 9 || (!report.pulseBreaks && distance(p, device) > 1.8)) dest = route(device);
+      if (p.z > -44 || (!report.pulseBreaks && distance(p, device) > 1.8)) dest = route(device);
       else if (
         report.missed &&
         !report.pulseBreaks &&
@@ -167,7 +175,7 @@ function playLaboratoryCampaign() {
       )
         input.interact = true;
       if (f.winding && Math.hypot(p.x - f.aimX, p.z - f.aimZ) < 3.7)
-        dest = route({ x: p.x > 6 ? 2 : 9, y: 0, z: 2.5 });
+        dest = route({ x: p.x > 6 ? 2 : 9, y: 0, z: -59.5 });
       if (enemy === b && (!report.missed || f.transitionUntil > g.time)) enemy = null;
       if (!enemy && !dest && !visible(b)) dest = route(b);
     } else if (state === 'boss' && g.pickups.keyItem) {
@@ -177,7 +185,10 @@ function playLaboratoryCampaign() {
       input.interact = g.pickups.nearKey(p);
     } else if (state === 'fight' && raw.stage.endsWith('-combat')) {
       if (!enemy) dest = route(raw.target);
-      if (enemy) dest = strafe(creatures,step);
+      if (enemy) {
+        const close = distance(p,enemy);
+        dest = creatures.length < 4 && close > 11 && p.hp >= 65 ? route(enemy) : strafe(creatures,step);
+      }
     } else {
       dest = route(raw?.target ?? target);
       if ((state === 'use' && target && distance(p, target) < 2.55) || g.pickups.nearKey(p))
@@ -198,9 +209,15 @@ function playLaboratoryCampaign() {
       .filter((i) => i.active && i.permanent && i.kind === 'health' && distance(p, i) < 16)
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
     // 备弹低于两个弹匣时，沿当前战区寻找地图上标出的固定弹箱。
+    if(state==='fight' && w.ammo+w.reserve<3*config.weapon.magazine && (!enemy||distance(p,enemy)>6)){
+      const segment=g.story.encounters.length-1,front=52-segment*32;
+      const boxes=g.pickups.objects.filter(i=>i.active&&i.permanent&&i.kind==='ammo'&&i.z>=front-31&&i.z<=front+3);
+      const supply=boxes.sort((a,b)=>distance(p,a)-distance(p,b))[0];
+      if(supply)dest=route(supply)??supply;
+    }
     if (state==='boss' && b && w.ammo+w.reserve<2*config.weapon.magazine) {
       const supply=g.pickups.objects.filter(i=>i.active && i.permanent && i.kind==='ammo' &&
-        Math.abs(i.x)<11 && i.z<12).sort((a,b)=>distance(p,a)-distance(p,b))[0];
+        Math.abs(i.x)<13 && i.z< -43).sort((a,b)=>distance(p,a)-distance(p,b))[0];
       if (supply) dest=route(supply)??supply;
     }
     if (p.hp < 60 && med && (!enemy || distance(p,enemy)>8)) dest = route(med);
@@ -210,7 +227,7 @@ function playLaboratoryCampaign() {
     if (stock.medkit && p.hp < 70 && (!enemy || distance(p,enemy)>5)) g.kit.use(2,g);
     if (stock.grenade && enemy && state === 'fight' && distance(p,enemy)>6 &&
         creatures.filter(a=>distance(a,enemy)<4.5).length>=7) g.kit.use(3,g);
-    if (enemy && dest && state==='fight' && g.time>=nextRoll && distance(p,enemy)<4.8 &&
+    if (enemy && dest && (state==='fight'||state==='boss') && g.time>=nextRoll && distance(p,enemy)<4.8 &&
         distance(p,dest)>2.6) {
       rollAim=Math.atan2(p.x-dest.x,p.z-dest.z);
       rollingUntil=g.time+.32;
@@ -221,7 +238,7 @@ function playLaboratoryCampaign() {
       p.look.rotation.set(0,rollAim,0,'YXZ');
       input.fire=false;
       input.down.add('ShiftLeft');
-    } else if (enemy && dest && state === 'fight' && distance(p,enemy)<6 &&
+    } else if (enemy && dest && (state === 'fight' || state === 'boss') && distance(p,enemy)<6 &&
         !p.tired && (!w.ammo || g.time-p.lastHurt<2 || p.hp<65)) {
       p.look.rotation.set(0,Math.atan2(p.x-dest.x,p.z-dest.z),0,'YXZ');
       input.fire=false;
@@ -230,7 +247,9 @@ function playLaboratoryCampaign() {
     if (state !== 'use' || p.hp >= 99 || g.beasts.live) move(dest);
     const beforeBreaks = b?.fight.breaks,
       cooldown = g.field.deviceAt;
+    const lastX=p.x, lastZ=p.z;
     g.step(0.04);
+    if(g.core)report.exitMetres=(report.exitMetres??0)+Math.hypot(p.x-lastX,p.z-lastZ);
     if (b && b.fight.breaks > beforeBreaks) {
       if (g.field.deviceAt > cooldown) report.pulseBreaks++;
       else report.gunBreaks++;
