@@ -142,6 +142,30 @@ def verify(browser):
               return [f.cfg.name,'vault/secret/switch/rays/attribution',f.cfg.hunt?'hunt':'',f.cfg.deep?'deep':''];
             }""")
             print("PASS",level['id'],details,flush=True)
+        if level['id']=='ember-fortress':
+            routes=page.evaluate("""() => {
+              const {game:g,config}=run, p=g.player;
+              document.getElementById('mission-mode').value='classic';g.reset();g.phase='play';
+              function traverse(time,x,z) {
+                Object.assign(p,{x:-4,y:0,z:30,lastHurt:-Infinity});
+                g.time=time;g.encounter.update(g);
+                const target={x,y:0,z}, task=g.story.navigation({target},{player:p,time,beasts:{pool:[]}});
+                if(!task.path?.length)throw Error('没有通往目标的路线');
+                for(const turn of task.path) {
+                  const dx=turn.x-p.x,dz=turn.z-p.z,steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.08));
+                  for(let i=0;i<steps;i++) {
+                    g.level.move(p,dx/steps,dz/steps,config.player.step);
+                    p.y=g.level.foot(p.x,p.z,p.y+config.player.step,p.radius);
+                  }
+                  if(Math.hypot(p.x-turn.x,p.z-turn.z)>.01)throw Error('推荐路线被真实移动规则拦下');
+                }
+                if(Math.hypot(p.x-x,p.z-z)>.01)throw Error('未到达标记');
+                return task.path.length;
+              }
+              return [traverse(20,-4,20),traverse(130,-4,20),traverse(130,17,10),traverse(170,-4,20)];
+            }""")
+            assert routes[0]==routes[3]==1 and min(routes[1:3])>1,routes
+            print("PASS 低潮、涨潮绕行及退潮后的实际移动",routes,flush=True)
     assert not errors,errors
     page.close()
 

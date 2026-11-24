@@ -145,6 +145,11 @@ export function createFieldOperations(context, campaign) {
   const pulseAt = definition.story?.pulseAt;
   const device = pulseAt ? { x: pulseAt[0], y: level.base(...pulseAt), z: pulseAt[1] }
     : site([level.bossSpawn.x + 5, level.bossSpawn.z], 0.55, 2);
+  function pulseBlocked(boss, time) {
+    if (boss.fight?.transitionUntil > time) return '首领正在转阶段 · 等待装甲恢复';
+    if (boss.fight?.brokenUntil > time) return '首领已破甲 · 集中射击核心';
+    return near(boss, device, 7) ? '' : '将首领引到青色脉冲柱七米内';
+  }
   if (device) {
     stamp('cylinder', 'wall', 0x566274, at(device, 0, 0.4, 0), 0.85, 0.8, 0.85);
     stamp('cylinder', 'glow', 0x64dcfc, at(device, 0, 0.89, 0), 0.62, 0.23, 0.62);
@@ -227,7 +232,7 @@ export function createFieldOperations(context, campaign) {
       builder.block('rail', point.x - 2.02, point.z, 0.32, 2.2, 1.92, 2.65, true);
       builder.flush();
       level.extraGround = deck.height;
-      level.terrainRevision++;
+      level.terrainChanged();
       level.highPost = at(point, 0.5, 1.92, 0);
       level.stairs = {
         x: point.x,
@@ -602,7 +607,7 @@ export function createFieldOperations(context, campaign) {
         );
       if (near(p, device) && g.beasts.boss?.active) {
         if (this.deviceAt > g.time) return '破甲脉冲冷却 ' + Math.ceil(this.deviceAt-g.time) + ' 秒';
-        return near(g.beasts.boss, device, 7) ? use + ' 释放脉冲破甲 · 注意冲击伤害' : '将首领引到青色脉冲柱七米内';
+        return pulseBlocked(g.beasts.boss, g.time) || use + ' 释放脉冲破甲 · 注意冲击伤害';
       }
       if (secret && !this.secretOpen && near(p, secret.front, 1.8))
         return '墙板后有回声 · ' + use + ' 查看异色接缝';
@@ -654,8 +659,9 @@ export function createFieldOperations(context, campaign) {
       }
       if (near(p, device) && g.beasts.boss?.active && g.time >= this.deviceAt) {
         const b = g.beasts.boss;
-        if (!near(b, device, 7) || !breakBoss(b, g)) {
-          g.ui.notify('等待首领装甲恢复，并引入脉冲范围', 1.5);
+        const blocked = pulseBlocked(b, g.time);
+        if (blocked || !breakBoss(b, g)) {
+          g.ui.notify(blocked || '等待首领装甲恢复', 1.5);
           return true;
         }
         this.deviceAt = g.time + 18;

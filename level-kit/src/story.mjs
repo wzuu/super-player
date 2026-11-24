@@ -110,9 +110,15 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     stageTime = 0,
     nextBatch = 0;
   const asPoint = (a) => (a?.isVector3 ? a : a.length === 3 ? xyz(a) : point(a));
-  function enter(g) {
+  function enter(g, continuing = null) {
     item = stages[index] ?? null;
-    group = null;
+    group = continuing;
+    if (group) {
+      // 爆破后的敌人改从封锁线进入，已入场者和剩余名额仍属于原来的遭遇。
+      if (item.entries) group.entrance = item.entries.map(asPoint);
+      if (item.cap) group.tag.cap = group.cap = item.cap;
+      if (item.mix) group.mix = item.mix;
+    }
     stageTime = 0;
     nextBatch = 0;
     director.stage = item?.id ?? item?.kind ?? 'complete';
@@ -137,8 +143,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function advance(g) {
     g.journal?.complete(g, item?.label ?? item?.name);
     if (item?.kind === 'hold') g.sound.stageEvent?.('clear', g, item.target);
+    const continuing = item.encounter && item.encounter === stages[index + 1]?.encounter;
     index++;
-    enter(g);
+    enter(g, continuing ? group : null);
   }
   function startGroup(g, n, entrances, cap, mix, escort = false) {
     group = {
@@ -176,7 +183,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const y = level.surface(x, z, entry.y + 0.5);
       if (
         level.blocked(x, z, y, stats.radius, stats.height) ||
-        (item.kind !== 'defend' && field.dist[field.index(x, z)] < 0) ||
+        (!item.climbs && field.dist[field.index(x, z)] < 0) ||
         Math.hypot(g.player.x - x, g.player.y - y, g.player.z - z) < 3.3 ||
         g.beasts.pool.some(
           (b) =>
@@ -194,6 +201,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     }
     return null;
   }
+  function pressureStage() {
+    return group.deployed < 20 ? 0 : group.deployed < 55 ? 1 : 2;
+  }
   function deploy(g, dt) {
     if (!group) return;
     const warning = group.warning - g.time;
@@ -209,13 +219,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     group.timer -= dt;
     if (group.timer > 0 || !group.left) return;
     // 前二十只试探，随后两批提高近场压力；接缝处不停发。
-    const stage = group.deployed < 20 ? 0 : group.deployed < 55 ? 1 : 2;
-    let cap = group.cap;
-    if (item.kind === 'fight') cap = Math.ceil(cap * [0.55, 0.78, 1][stage]);
-    if (item.kind === 'defend' && director.elapsed < 30) cap = 8;
     let active = 0;
     for (const b of g.beasts.pool) if (b.active && b.storyWave) active++;
-    if (active >= cap) return;
+    if (active >= director.cap) return;
     const type = group.mix[group.deployed % group.mix.length];
     const routes = item.kind === 'defend' && director.elapsed < 30 ? 2 : group.entrance.length;
     const entryIndex = group.tickets++ % routes,
@@ -226,7 +232,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       return;
     }
     const opening = group.deployed + 1 < (item.vanguard ?? 0);
-    group.timer = opening ? 0.13 : (item.interval ?? 0.34) * [1.12, 1, 0.84][stage];
+    group.timer = opening ? 0.13 : (item.interval ?? 0.34) * [1.12, 1, 0.84][pressureStage()];
     creature.storyWave = group.tag;
     creature.droneRaider = group.escort && group.deployed % 2 === 0;
     if (item.climbs) {
@@ -254,8 +260,8 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           range: 3.2,
         },
         { kind: 'use', id: 'beacon', at: spec.beacon, label: '启动观景台救援信标' },
-        { kind: 'defend', at: spec.beacon, label: '守住观景台，等待直升机', platform: p, climbs },
-        { kind: 'rescue', at: spec.rescue, label: '登上塔侧救援直升机', climbs },
+        { kind: 'defend', encounter: 'tower-rescue', at: spec.beacon, label: '守住观景台，等待直升机', platform: p, climbs },
+        { kind: 'rescue', encounter: 'tower-rescue', at: spec.rescue, label: '登上塔侧救援直升机', climbs },
       ];
     }
     if (type === 'escort' && mode === 'escort') return spec.route;
@@ -273,7 +279,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       return Boolean(spec && ['classic', 'timed', 'hold', 'escort', 'rescue'].includes(mode));
     },
     get cap() {
-      return this.managed ? (item?.kind === 'boss' ? 9 : (group?.cap ?? 14)) : CONFIG.beasts.capacity;
+      if (!this.managed) return CONFIG.beasts.capacity;
+      if (!group) return item?.kind === 'boss' ? 9 : 14;
+      if (item.kind === 'defend' && this.elapsed < 30) return 8;
+      if (item.kind === 'fight') return Math.ceil(group.cap * [0.55, 0.78, 1][pressureStage()]);
+      return group.cap;
     },
     prepare(mode) {
       this.managed = this.supports(mode);

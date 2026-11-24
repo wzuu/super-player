@@ -73,6 +73,61 @@ def blocked_legacy_upgrade(browser, url):
     context.close()
 
 
+def departure_retry(context, url, static):
+    stage = url + '/underground-lab/'
+    def expose(route):
+        response=route.fetch()
+        entry="    startLevel(definition, campaign, campaignStage);"
+        html=response.text()
+        assert html.count(entry)==1
+        route.fulfill(response=response,body=html.replace(entry,"    window.departure = campaign;\n"+entry))
+    pages=[]
+    try:
+        for _ in range(2):
+            tab=context.new_page()
+            pages.append(tab)
+            tab.add_init_script("localStorage.setItem('super-player:first-entry:v1','skip')")
+            if static: tab.route("**/campaign/levels.json",lambda route:route.fulfill(json=LEVELS))
+            tab.route(stage,expose)
+            tab.goto(stage)
+            tab.wait_for_function("!!window.departure")
+        first,peer=pages
+        first.evaluate("""async () => {
+          const store=await (await import('/campaign/store.mjs')).campaignStore();
+          const {updateGear}=await import('/level-kit/src/gear.mjs');
+          await updateGear(store,state=>{state.stock.medkit=80;state.items=['medkit',null]});
+          const write=store.writeGear;
+          store.writeGear=async data=>{
+            const result=await write(data);
+            store.writeGear=write;
+            if(result.saved)throw Error('测试：出发回执中断');
+            return result;
+          };
+          try {await departure.prepare();throw Error('未触发预期的回执中断');}
+          catch(error){if(error.message!=='测试：出发回执中断')throw error;}
+        }""")
+        peer.evaluate("""async () => {
+          for(let i=0;i<32;i++)await departure.prepare();
+        }""")
+        result=first.evaluate("""async () => {
+          const store=await (await import('/campaign/store.mjs')).campaignStore();
+          const before=(await store.gear()).state.stock.medkit,write=store.writeGear;
+          let release,timer;
+          const network=new Promise(resolve=>{release=resolve;});
+          store.writeGear=data=>data.acknowledgePurchase?network.then(()=>write(data)):write(data);
+          try {
+            const kit=await Promise.race([departure.prepare(),new Promise((_,reject)=>{
+              timer=setTimeout(()=>reject(Error('回收迟迟未完成，出发被阻塞')),6000);
+            })]);
+            return [before,(await store.gear()).state.stock.medkit,kit.counts.medkit];
+          } finally {clearTimeout(timer);release();store.writeGear=write;}
+        }""")
+        assert result==[47,47,2],result
+        print("PASS lost departure reply and 32 peer departures", "IndexedDB" if static else "SQLite", result,flush=True)
+    finally:
+        for tab in pages: tab.close()
+
+
 def run(browser, url, static, database):
     context = browser.new_context(viewport={"width": 920, "height": 680})
     page = context.new_page()
@@ -324,6 +379,7 @@ def run(browser, url, static, database):
         }""")
         assert migrated["kills"] == 5 and migrated["shots"] == 12 and migrated["eliteKills"] == 3, migrated
     assert not detail["old"].get("report") and detail["old"]["loot"][0]["name"] == "旧宝物"
+    departure_retry(context,url,static)
     assert detail["failed"]["report"] and not detail["failed"]["hasReplay"]
     page.evaluate("async () => (await import('./campaign/profiles.mjs')).createProfile()")
     page.reload()

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createGrid, createWorld } from '../src/world.mjs';
+import { createMissionNavigation } from '../src/mission-navigation.mjs';
 import { makeConfig } from '../src/config.mjs';
 
 // 使用与浏览器 importmap 相同的公共模块别名。
@@ -19,6 +20,50 @@ const CONFIG = makeConfig({ map: { cell: 2, navCell: 2 } });
 const GRID = createGrid(Array(7).fill('.......'), 2);
 const { Level, Navigation } = createWorld({ CONFIG, GRID, V3: Vector, definition: {},
   clamp: (v, min, max) => Math.min(max, Math.max(min, v)) });
+
+test('涨潮时玩家路标绕过禁行低沟，退潮后恢复直接路线', () => {
+  let flooded = false;
+  const inside = (x,z) => flooded && x >= -1 && x <= 1 && z >= -2.5 && z <= 2.5;
+  const terrain = {
+    routeOpen: (x,z) => !inside(x,z),
+    canEnter: (body,x,z) => !inside(x,z) || inside(body.x,body.z),
+  };
+  const world = createWorld({ CONFIG, GRID, V3: Vector, definition:{terrain},
+    clamp:(v,min,max)=>Math.min(max,Math.max(min,v)) });
+  const level = new world.Level(), nav = new world.Navigation(level);
+  const route=createMissionNavigation(nav), start={x:-4,y:0,z:2}, target={x:4,y:0,z:-2};
+  assert.deepEqual(route(start,target),[target]);
+  flooded=true;level.terrainChanged();
+  const path=route(start,target);
+  assert.ok(path.length>1);
+  let previous=start;
+  for(const turn of path) {
+    for(let i=0;i<=100;i++) {
+      const x=previous.x+(turn.x-previous.x)*i/100, z=previous.z+(turn.z-previous.z)*i/100;
+      assert.ok(!inside(x,z));
+    }
+    previous=turn;
+  }
+  assert.deepEqual(previous,target);
+  flooded=false;level.terrainChanged();
+  assert.deepEqual(route(start,target),[target]);
+});
+
+test('有地形规则的玩家寻路只重查局部门边，全局事件仍重查全图', () => {
+  const world=createWorld({ CONFIG, GRID, V3:Vector, definition:{terrain:{routeOpen:()=>true}},
+    clamp:(v,min,max)=>Math.min(max,Math.max(min,v)) });
+  const level=new world.Level(), door=level.box(0,0,.2,2,0,3);
+  const field=new world.Navigation(level).playerRoute();
+  const canWalk=field.canWalk.bind(field);
+  let calls=0;
+  field.canWalk=(a,b)=>{calls++;return canWalk(a,b);};
+  field.rebuild(4,0);
+  const all=calls;
+  calls=0;level.setBarrier(door,null,false);field.rebuild(4,0);
+  assert.ok(calls>0 && calls<all/2);
+  calls=0;level.terrainChanged();level.setBarrier(door,null,true);field.rebuild(4,0);
+  assert.equal(calls,all);
+});
 
 test('贴墙滑动时阻挡法向移动，开放墙体后可通过', () => {
   const level = new Level();

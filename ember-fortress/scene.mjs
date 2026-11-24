@@ -420,7 +420,7 @@ function createEncounter({CONFIG: settings,level,sound}) {
     phase:'calm',height:LAKE.base,flooded:false,status:null,wave:0,nextBurn:0,
     get rifleTide(){return (this.height-LAKE.base)/(tune.peak-LAKE.base);},
     reset(){
-      if(this.flooded)level.terrainRevision++;
+      if(this.flooded)level.terrainChanged();
       this.phase='calm';this.height=LAKE.base;this.flooded=false;this.status=null;this.wave=0;this.nextBurn=0;
     },
     update(game){
@@ -450,7 +450,7 @@ function createEncounter({CONFIG: settings,level,sound}) {
         }
       }
       const flooded=height>=BED+.025;
-      if(flooded!==this.flooded)level.terrainRevision++;
+      if(flooded!==this.flooded)level.terrainChanged();
       this.phase=phase;this.height=height;this.flooded=flooded;this.wave=cycle;
       const p=game.player;
       const region=lavaRegion(p.x,p.z,height,flooded);

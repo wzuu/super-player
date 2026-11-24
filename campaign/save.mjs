@@ -104,7 +104,7 @@ export async function connectCampaign(level, onUpgradeBlocked) {
   let draft = null;
   let gearSnapshot, showLoadout;
   let refreshVersion = 0;
-  let reservation = crypto.randomUUID();
+  let departure = { token: crypto.randomUUID() };
   const selectors = [];
   function previewLoadout() {
     if (!showLoadout || !gearSnapshot) return;
@@ -195,6 +195,7 @@ export async function connectCampaign(level, onUpgradeBlocked) {
     }
   };
   const purchases = new Map();
+  const acknowledge = operation => store.writeGear({ acknowledgePurchase: operation.token }).catch(() => {});
   document.getElementById('shop-buy').onclick = async (event) => {
     if (shop.disabled) return;
     const button = event.currentTarget,
@@ -218,7 +219,7 @@ export async function connectCampaign(level, onUpgradeBlocked) {
       purchases.delete(id);
       shopStatus.textContent = stock[id].name + '兑换成功';
       // 只有本页收到成功结果且已刷新库存才回收收据，其他标签的未确认兑换继续可重试。
-      await store.writeGear({ acknowledgePurchase: purchase.token }).catch(() => {});
+      await acknowledge(purchase);
     } catch (error) {
       shopStatus.textContent = error.message;
     } finally {
@@ -236,19 +237,16 @@ export async function connectCampaign(level, onUpgradeBlocked) {
     onLoadout(listener) { showLoadout = listener; previewLoadout(); },
     async prepare() {
       const values = draft;
+      const operation = departure;
       const kit = await updateGear(store, (state, snapshot) => {
-        // 网络超时后重试同一次出发，直接取回已装好的装备，避免再次扣库存。
-        const receipts = (state.departures ??= {});
-        if (receipts[reservation]) return structuredClone(receipts[reservation]);
         if (values) applyChoice(state, values, snapshot);
-        const packed = packKit(state, items,equippedSkin ?? level);
-        receipts[reservation] = structuredClone(packed);
-        const keys = Object.keys(receipts);
-        if (keys.length > 32) delete receipts[keys[0]];
-        return packed;
-      });
-      if (draft === values) draft = null;
-      reservation = crypto.randomUUID();
+        operation.selection = values;
+        return packKit(state, items,equippedSkin ?? level);
+      }, operation);
+      if (draft === operation.selection) draft = null;
+      departure = { token: crypto.randomUUID() };
+      // 装备已领到，后台回收这次出发的收据，避免因回收网络超时而卡在开场。
+      void acknowledge(operation);
       return kit;
     },
     reset() {

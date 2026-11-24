@@ -85,24 +85,24 @@ export function packKit(state, items, weapon='*') {
   return { skills: [...state.skills], items: [...state.items], counts, build,
     mods:Object.fromEntries(Object.values(build).filter(id=>state.mods[id] && modifications[id]).map(id=>[id,true])) };
 }
-export async function updateGear(store, mutate, purchase) {
+export async function updateGear(store, mutate, operation) {
   for (let attempt = 0; attempt < 8; attempt++) {
     // 回执丢失时原样重发同一修订。后端先认收据，再检查版本和余额。
-    if (purchase?.request) {
-      if ((await store.writeGear(purchase.request)).saved) return purchase.value;
-      purchase.request = null;
+    if (operation?.request) {
+      if ((await store.writeGear(operation.request)).saved) return operation.value;
+      operation.request = null;
     }
     const snapshot = await store.gear();
     const state = defaultGear(snapshot.state);
     const value = mutate(state, snapshot);
     const request = { revision: snapshot.revision, state };
-    if (purchase) {
-      request.purchaseId = purchase.token;
-      purchase.request = request;
-      purchase.value = value;
+    if (operation) {
+      request.purchaseId = operation.token;
+      operation.request = request;
+      operation.value = value;
     }
     if ((await store.writeGear(request)).saved) return value;
-    if (purchase) purchase.request = null;
+    if (operation) operation.request = null;
   }
   throw Error('存档正在其他窗口使用，请重试');
 }

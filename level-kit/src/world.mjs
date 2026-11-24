@@ -119,6 +119,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.spawnPitch = definition.spawnPitch ?? -0.012;
       this.sites = [];
       this.terrainRevision = 0;
+      this.globalTerrainRevision = 0;
       this.barrierChanges = new Map();
     }
     box(x, z, width, depth, low, high, climb = false) {
@@ -134,6 +135,9 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       barrier.active = closed;
       this.terrainRevision++;
       this.barrierChanges.set(barrier,this.terrainRevision);
+    }
+    terrainChanged() {
+      this.globalTerrainRevision = ++this.terrainRevision;
     }
     base(x, z) {
       const base=definition.terrain?.ground?.(x,z)??0;
@@ -253,14 +257,23 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     }
     canWalk(a,b) {
       const samples = Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(this.body.radius*.8)));
-      let y = a.y;
+      const body = { x:a.x, y:a.y, z:a.z, radius:this.body.radius, height:this.body.height };
+      const allowed = definition.terrain?.routeOpen;
+      let open = allowed?.(a.x,a.z,this.level) ?? true;
       for (let j=1; j<=samples; j++) {
         const x=a.x+(b.x-a.x)*j/samples, z=a.z+(b.z-a.z)*j/samples;
-        const floor=this.level.foot(x,z,y+this.body.step,this.body.radius);
-        if (Math.abs(floor-y)>this.body.step+.025 || this.level.blocked(x,z,floor,this.body.radius,this.body.height)) return false;
-        y=floor;
+        const floor=this.level.foot(x,z,body.y+this.body.step,body.radius);
+        const nextOpen = allowed?.(x,z,this.level) ?? true;
+        // 玩家可以走出脚下刚刚上涨的岩浆，但导航不能把开放路段拉直成穿越禁行带的近路。
+        // 水平移动逐轴结算。斜线掠过沟道拐角时，两个端点都可能在干地上。
+        if ((open && !nextOpen) || (definition.terrain?.canEnter &&
+            (!this.level.canEnter(body,x,z,floor) || !this.level.canEnter(body,x,body.z,floor) ||
+             !this.level.canEnter(body,body.x,z,floor))) ||
+            Math.abs(floor-body.y)>this.body.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height)) return false;
+        body.x=x;body.z=z;body.y=floor;
+        open=nextOpen;
       }
-      return Math.abs(y-b.y)<.65;
+      return Math.abs(body.y-b.y)<.65;
     }
     x(i) { return (i % this.width + 0.5) * this.cell - GRID.halfX; }
     z(i) { return (Math.floor(i / this.width) + 0.5) * this.cell - GRID.halfZ; }
@@ -272,7 +285,13 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     rebuild(x, z) {
       const routes = this.routes;
       if (this.terrainRevision !== this.level.terrainRevision) {
-        const dirty = this.edges && this.terrainRevision >= 0 && routes === this.walkable ? new Set() : null;
+        const dirty = this.edges && this.terrainRevision >= this.level.globalTerrainRevision ? new Set() : null;
+        const changed = i => {
+          if (!dirty) return;
+          dirty.add(i);
+          if (i % this.width) dirty.add(i-1);
+          if (i >= this.width) dirty.add(i-this.width);
+        };
         // 门体可能在寻路场创建之后加入。只重新采样门体周边各体型能通过的格子。
         for (const [box, revision] of this.level.barrierChanges) {
           if (revision <= this.terrainRevision) continue;
@@ -282,17 +301,15 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
             const i=row+col, x=this.x(i), z=this.z(i);
             const y=this.ground(x,z,i);
             this.walkable[i]=!this.level.blocked(x,z,y,radius,height);
-            if (dirty) {
-              dirty.add(i);
-              if (i % this.width) dirty.add(i-1);
-              if (i >= this.width) dirty.add(i-this.width);
-            }
+            changed(i);
           }
         }
         this.target = -1;
         this.terrainRevision = this.level.terrainRevision;
         if (routes !== this.walkable) for (let i = 0; i < routes.length; i++) {
-          routes[i] = this.walkable[i] && definition.terrain.routeOpen(this.x(i), this.z(i), this.level);
+          const open = Number(Boolean(this.walkable[i] && definition.terrain.routeOpen(this.x(i), this.z(i), this.level)));
+          if (routes[i] !== open) changed(i);
+          routes[i] = open;
         }
         if (this.edges) {
           // 隔墙可能正好横跨两个可站立格之间。玩家路标同时检查边界处的净空。

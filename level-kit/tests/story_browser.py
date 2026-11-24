@@ -7,6 +7,81 @@ from campaign_browser import ROOT, LEVELS
 from playwright.sync_api import sync_playwright
 
 
+def timed_reinforcements(page, stage):
+    """同一组残敌和未入场者随时间目标推进；分别验证立即撤离和留下战斗。"""
+    result=page.evaluate("""tower=>{
+      const g=run.game,s=g.story,p=g.player,m=g.beasts;
+      const first=tower?'defend':'countdown',last=tower?'rescue':'breakout';
+      const limits=tower?[8,14]:[7,9];
+      function at(t){Object.assign(p,{x:t.x,y:t.y,z:t.z});run.nav.rebuild(p.x,p.z);}
+      function tick(dt){g.time+=dt;m.releaseSplits(g);g.objective.step(dt,g);s.step(dt,g);}
+      const alive=()=>m.pool.filter(b=>b.active&&b.storyWave);
+      const kill=()=>{for(const b of alive())m.damage(b,1e7,g);};
+      const runs=[];
+      for(const strategy of (tower?['leave','stay','clearEarly']:['leave','stay'])){
+        const clearEarly=strategy==='clearEarly';
+        g.reset();g.phase='play';
+        let deployed=0,holdTotal=0;
+        const original=m.spawnRegular;
+        m.spawnRegular=function(...args){
+          const b=original.apply(this,args);
+          if(b&&s.stage==='hold')holdTotal++;
+          if(b&&(s.stage===first||s.stage===last))deployed++;
+          return b;
+        };
+        try{
+          for(let n=0;n<1800&&s.stage!==first;n++){
+            if(s.target)at(s.target);
+            kill();
+            if(['use','beacon'].includes(s.stage))s.interact(g);
+            if(s.stage!==first)tick(s.stage==='hold'?.05:.5);
+          }
+          if(s.stage!==first||(!tower&&(holdTotal!==100||g.objective.held!==45)))
+            throw Error('前置阶段或独立坚守队列未完成 '+[s.stage,holdTotal]);
+          at(s.target);
+          let before=[],tag,peak=0;
+          const began=g.time;
+          for(let step=0;step<600&&s.stage===first;step++){
+            if(clearEarly)kill();
+            before=alive().map(b=>[b,b.spawnGeneration]);
+            tick(.25);
+            const active=alive();
+            peak=Math.max(peak,active.length);
+            const limit=tower&&s.elapsed>=30?limits[1]:limits[0];
+            if(active.length>limit||(s.stage===first&&s.cap!==limit))throw Error('定时阶段或子体超过活跃上限');
+            if(active.length)tag??=active.at(-1).storyWave;
+          }
+          if(s.stage!==last)throw Error('未能进入撤离阶段');
+          if(clearEarly ? deployed!==100 : (deployed<=0||deployed>=100||!before.length))
+            throw Error('切换阶段时部署与残敌异常 '+[strategy,deployed,before.length]);
+          const seconds=g.time-began;
+          if(seconds!==(tower?90:10)||(tower?s.elapsed!==90:!s.detonated||s.doorStates.barricade))
+            throw Error('时间或爆破门禁改变 '+seconds);
+          if(!before.every(([b,n])=>b.active&&b.spawnGeneration===n))throw Error('切换阶段清掉原有守卫');
+          if(s.remaining!==100-deployed)throw Error('切换阶段丢失或重置了待入场者 '+[s.remaining,deployed]);
+          const atExit=deployed, routes=new Set();
+          if(strategy!=='leave'){
+            if(tower)at({x:0,y:7.2,z:2});
+            for(let n=0;n<650 && (deployed<100||alive().length);n++){
+              kill();tick(.25);const active=alive();
+              for(const b of active)if(b.climbRoute)routes.add(b.climbRoute[0].join());
+              if(active.length>limits[1]||active.some(b=>b.storyWave!==tag))throw Error('后半段另建队列或突破上限');
+            }
+            if(tower&&!clearEarly&&routes.size!==4)throw Error('救援到达后攀登方向不足 '+routes.size);
+            for(let i=0;i<40;i++)tick(.25);
+            if(g.phase!=='play'||deployed!==100||s.remaining||alive().length)throw Error('留下后实际部署异常 '+[deployed,s.remaining,alive().length]);
+          }
+          at(s.target);
+          if(tower)s.interact(g);else tick(.04);
+          if(g.phase!=='win')throw Error('撤离不应受残敌和待入场数影响');
+          runs.push({strategy,atExit,total:deployed,peak,seconds,routes:routes.size,holdTotal});
+        }finally{m.spawnRegular=original;}
+      }
+      return runs;
+    }""", stage=='paris-tower')
+    print('PASS finite timed encounters',stage,result,flush=True)
+
+
 def verify(browser,ids):
     page=browser.new_page(viewport={"width":960,"height":620})
     errors=[]
@@ -299,6 +374,8 @@ def verify(browser,ids):
               return {metres:Math.round(sideWalk),treasure:boxes};
             }""")
             print('PASS optional rooms, wrong turn, alternative route and combat navigation',detour,flush=True)
+        if stage in ('rain-city','paris-tower'):
+            timed_reinforcements(page,stage)
         assert not errors,errors
     page.close()
 

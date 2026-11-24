@@ -184,8 +184,9 @@ def field(page, url):
         pickups.add('core', player.x, player.z, player.y, '核心', 1);
         const slot = pickups.keyItem;
         if (!pickups.takeKey(player, run.game)) return false;
-        pickups.add('ammo', player.x, player.z, player.y, '弹药', 1);
-        return slot.kind === 'ammo' && !pickups.takeKey(player, run.game) && slot.active;
+        const rounds = pickups.add('ammo', player.x, player.z, player.y, '弹药', 1);
+        return !slot.active && rounds !== slot && rounds?.active && rounds.kind === 'ammo' &&
+            pickups.keyItem === null && !pickups.takeKey(player, run.game);
     }""")
     refresh = []
     page.route("**/api/gear", lambda route: refresh.append(route))

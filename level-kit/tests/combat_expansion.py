@@ -99,7 +99,15 @@ def verify_boss_feedback(page):
       g.field.interact(g);
       if(g.field.deviceAt || f.breaks)throw Error('范围外消耗破甲脉冲');
       Object.assign(b,{x:device.x-1,z:device.z});
-      if(!g.field.interact(g) || f.breaks!==1 || g.field.deviceAt<=g.time)throw Error('范围内脉冲未破甲');
+      for(let i=0;i<f.rules.breakHits && !f.breaks;i++)g.beasts.damage(b,1,g,'weapon',{headshot:true});
+      if(f.breaks!==1 || !g.field.hint(g).includes('已破甲'))throw Error('枪械破甲后仍提示释放脉冲');
+      if(!g.field.interact(g) || g.field.deviceAt || f.breaks!==1)throw Error('已破甲时消耗脉冲');
+      g.beasts.damage(b,1e6,g,'weapon');
+      if(f.transitionUntil<=g.time || !g.field.hint(g).includes('正在转阶段'))throw Error('转阶段仍提示释放脉冲');
+      if(!g.field.interact(g) || g.field.deviceAt || f.breaks!==1)throw Error('转阶段时消耗脉冲');
+      g.time=f.transitionUntil;
+      if(!g.field.hint(g).includes('释放脉冲') || !g.field.interact(g) || f.breaks!==2 || g.field.deviceAt<=g.time)
+        throw Error('范围内脉冲未破甲');
       g.reset();
       if(g.field.deviceAt || g.beasts.boss.fight.breaks)throw Error('重开留下脉冲冷却或破甲状态');
     }""")
