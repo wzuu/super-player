@@ -40,6 +40,11 @@ export function buildFacility(ctx, plan) {
   for(let r=0;r<GRID.rows;r++) for(let c=0;c<GRID.columns;c++) {
     if(!walkable(r,c)) continue;
     const x=GRID.x(c),z=GRID.z(r);
+    // 岩层和塔座在脚下也要挡弹。取四角最低高程，坡面上方留给玩家和凶兽通行。
+    if(plan.solidGround){
+      const low=Math.min(floor(x-half,z-half),floor(x-half,z+half),floor(x+half,z-half),floor(x+half,z+half));
+      if(low>.4)level.box(x,z,size,size,-3,low-.08);
+    }
     for(const [dx,dz] of [[-half,-half],[-half,half],[half,half],[-half,-half],[half,half],[half,-half]]) {
       groundVertices.push(x+dx,floor(x+dx,z+dz),z+dz);
       uv.push((x+dx)/4,(z+dz)/4);

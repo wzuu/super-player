@@ -1,5 +1,20 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'tower-observation-defense': {
+    name:'塔架值勤型',detail:'铆接护木配有古铜色护箍，与观景台桁架同色。',
+    base:'#827368',trim:'#bda177',dark:'#494951',light:'#e4cc9f',
+    backdrop:'#434454',key:'#ebc99e',fill:'#9eaec2',metalness:.55,roughness:.42,
+  },
+  'waterfall-temple-defense': {
+    name:'瀑庭巡护型',detail:'石绿色机匣刻着防滑浅纹，护木两侧留有水位标记。',
+    base:'#6b8779',trim:'#baab78',dark:'#3b5555',light:'#d8d6a6',
+    backdrop:'#364f4d',key:'#dde2b8',fill:'#91c9bf',metalness:.37,roughness:.57,
+  },
+  'dune-signal-terrace': {
+    name:'绿洲巡台型',detail:'枪身覆砂土色耐磨涂层，护木嵌有绿松石刻度。',
+    base:'#9b805e',trim:'#5d9991',dark:'#51473c',light:'#dec28f',
+    backdrop:'#51473b',key:'#f4d3a0',fill:'#9fc4bd',metalness:.32,roughness:.65,
+  },
   'steam-service-rail': {
     name:'车间监修型',detail:'青灰烤漆机匣，护木两侧装有黄铜检修刻度。',
     base:'#63777c',trim:'#b99756',dark:'#374951',light:'#dfc292',

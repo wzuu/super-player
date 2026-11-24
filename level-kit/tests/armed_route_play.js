@@ -5,20 +5,41 @@ function playArmedRoute({via,reward,stage}) {
   const points=via.map(([x,z,y])=>({x,z,y:y??g.level.base(x,z)}));
   points.push(story.target);
   let leg=0,lastWaypoint,steps=0;
-  const convoy=g.objective.convoy,docks=new Set();
+  const convoy=g.objective.convoy,defense=story.defense,docks=new Set();
+  let defenseDeployed=false;
   const actor=()=>{const v=g.objective.drone.position;return {x:v.x,y:v.y-1,z:v.z};};
   const phases=new Set(),captured=new Set(),peaks={};
-  for(const b of g.beasts.pool.filter(b=>b.active)){
-    const section=peaks[b.sectionRoom]??={deployed:0,visible:0,threats:0,melee:0};
-    section.deployed++;
+  function countGuards(){
+    for(const b of g.beasts.pool.filter(b=>b.active && story.isCurrentGuard(b))){
+      const section=peaks[b.sectionRoom]??={deployed:0,visible:0,threats:0,melee:0};
+      section.deployed++;
+    }
   }
+  countGuards();
   function advance(){
     for(let i=0;i<90 && g.phase==='play' && g.time<165;i++){
 
       const loot=reward && g.pickups.objects.find(o=>o.active && o.name===reward);
       if(loot && distance(p,loot)<1.6)tap('KeyF');
       let target;
-      if(convoy){
+      if(defense){
+        const task=defense.target;
+        if(!defense.started){
+          target=loot||task;
+          if(!loot && distance(p,target)<2.15)tap('KeyF');
+        }else if(defense.boardable){
+          target=task;if(distance(p,task)<2.15)tap('KeyF');
+        }else{
+          // 沿内侧掩体换位，优先应对最先到达入口的存活敌群。
+          const lanes=defense.lanes.map(l=>{
+            const guards=g.beasts.pool.filter(b=>b.active && b.sectionRoom===l.name);
+            const near=Math.min(...guards.map(b=>distance(b,l.point)));
+            return {lane:l,score:near+Math.max(0,l.delay-defense.elapsed)*2};
+          }).sort((a,b)=>a.score-b.score);
+          const l=lanes[0].lane,[x,z]=l.inside;target={x,y:g.level.base(x,z),z};
+        }
+        leg=defense.started?1:0;
+      }else if(convoy){
         leg=convoy.index;
         target=actor();
         if(convoy.dock){
@@ -35,7 +56,8 @@ function playArmedRoute({via,reward,stage}) {
       const visible=g.beasts.pool.filter(b=>b.active && see(b)).sort((a,b)=>distance(p,a)-distance(p,b));
       const enemy=visible[0],gap=enemy?distance(p,enemy):Infinity;
       const dx=next.x-p.x,dz=next.z-p.z;
-      if(gap<17)aim(Math.atan2(enemy.y+enemy.height*.75-p.y-p.eye,gap)-p.recoil,Math.atan2(p.x-enemy.x,p.z-enemy.z));
+      const range=defense?29:17;
+      if(gap<range)aim(Math.atan2(enemy.y+enemy.height*.75-p.y-p.eye,gap)-p.recoil,Math.atan2(p.x-enemy.x,p.z-enemy.z));
       else aim(0,Math.atan2(-dx,-dz));
       const yaw=p.look.rotation.y;
       const front=-dx*Math.sin(yaw)-dz*Math.cos(yaw),right=dx*Math.cos(yaw)-dz*Math.sin(yaw);
@@ -44,9 +66,11 @@ function playArmedRoute({via,reward,stage}) {
       if(Math.abs(right)>Math.abs(front)*.4)keys.add(right>0?'KeyD':'KeyA');
       if(front>0 && gap>8)keys.add('ShiftLeft');
       if(convoy && distance(p,target)<(target===loot ? .35 : convoy.dock ? 1.6 : 2.5))keys.clear();
+      if(defense && distance(p,target)<(target===loot ? .35 : .8))keys.clear();
       if(p.hp<64 && g.kit.remaining().medkit)tap('Digit1');
-      buttons(keys,gap<17);
+      buttons(keys,gap<range);
       g.step(.033);
+      if(defense?.started && !defenseDeployed){countGuards();defenseDeployed=true;}
       phases.add(g.encounter?.phase??(g.encounter?.parading?'parade':'calm'));
       if(++steps%3===0){
         camera.updateMatrixWorld(true);
@@ -64,11 +88,15 @@ function playArmedRoute({via,reward,stage}) {
         }
         const screen=Object.values(counts).reduce((n,c)=>n+c.visible,0);
         const midway=convoy && leg>=4;
-        if(!captured.has('combat') && screen>=3 && gap>=3 && gap<(convoy?17:10) && (convoy?midway:g.time>1)){
+        if(!captured.has('combat') && screen>=3 && gap>=3 && gap<(defense?14:convoy?17:10) &&
+            (defense?defense.elapsed>10:convoy?midway:g.time>1)){
           captured.add('combat');buttons(new Set(),false);return {shot:'combat'};
         }
       }
-      const landmark=stage==='sunken-rooftop-recovery' && leg===7 && p.x>-7 ? [22,8,-25] :
+      const landmark=stage==='dune-signal-terrace' && p.z>3 && p.z<10 ? [-6,11.8,-26] :
+        stage==='waterfall-temple-defense' && p.z<9 && p.z>2 ? [-25,10,-8] :
+        stage==='tower-observation-defense' && p.z<31 && p.z>19 && p.x>12 ? [-1.5,23,-13] :
+        stage==='sunken-rooftop-recovery' && leg===7 && p.x>-7 ? [22,8,-25] :
         stage==='frost-sample-escort' && leg===6 && p.x<5 ? [23,3,-4] :
         stage==='steam-service-rail' && leg===7 && p.x>-9 ? [20,9,-23] :
         stage==='storm-city-overpass' && p.x>8 && p.x<16 && p.z<0 ? [19,9.5,-16] :
@@ -84,7 +112,7 @@ function playArmedRoute({via,reward,stage}) {
     if(g.phase==='play' && g.time<165)return {};
     buttons(new Set(),false);
     return {done:{phase:g.phase,leg,lastWaypoint,at:[p.x,p.y,p.z],time:g.time,hp:p.hp,live:g.beasts.live,
-      docks:[...docks],escort:g.objective.result(g),actor:convoy && actor(),shots:g.performance.shots,kills:g.kills,ammo:[g.weapon.ammo,g.weapon.reserve],phases:[...phases],peaks,
+      docks:[...docks],escort:g.objective.result(g),actor:convoy && actor(),lanes:defense?.lanes.map(l=>l.hp),shots:g.performance.shots,kills:g.kills,ammo:[g.weapon.ammo,g.weapon.reserve],phases:[...phases],peaks,
       loot:g.loot.map(o=>o.name)}};
   }
   return {advance};

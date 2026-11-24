@@ -21,5 +21,8 @@
   {"id":"neon-northline-escape","title":"霓城北线撤离","brief":"穿过地下诊所或夜市后街，循应急地灯上检修梯，到高架接应车撤离。"},
   {"id":"sunken-rooftop-recovery","title":"沉城屋顶回收","brief":"伴随勘探无人机穿过珊瑚拱廊，沿干燥的外盘坡抵达屋顶回收吊架。"},
   {"id":"frost-sample-escort","title":"冰原样本撤运","brief":"保护携带冰原样本的技术员，穿过回温前厅和观测栈道，赶到跑道救援舱。"},
-  {"id":"steam-service-rail","title":"蒸汽检修线","brief":"伴随载有校准设备的检修车通过机器棚，沿两段折返坡道上到出厂升降机。"}
+  {"id":"steam-service-rail","title":"蒸汽检修线","brief":"伴随载有校准设备的检修车通过机器棚，沿两段折返坡道上到出厂升降机。"},
+  {"id":"dune-signal-terrace","title":"沙海信号台","brief":"由绿洲柱廊登上陵台，点亮信标，在沙暴中守住两条坡道。"},
+  {"id":"waterfall-temple-defense","title":"瀑顶神庙防线","brief":"沿河滩石梯登上瀑顶祭台，在水位变化间守住三处木栏。"},
+  {"id":"tower-observation-defense","title":"铁塔观景台防线","brief":"登上折返梯，点亮求救信标，守住四面观景台直到直升机到达。"}
 ]
