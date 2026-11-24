@@ -1,7 +1,10 @@
 import { rayBox } from '@level-kit/world.mjs';
 
-export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, stamp, scene, brighter, workColor, randomRange, dynamicMesh, updateMesh, setInstance, colors, definition }) {
+export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, stamp, scene, brighter, workColor, seededRandom, dynamicMesh, updateMesh, setInstance, colors, definition }) {
   const { projectileTint, coreTint, spark } = colors;
+  // 画质改变粒子个数时，不消耗凶兽巡逻、散布和战利品所用的随机序列。
+  const particles = seededRandom(5731);
+  const particleRange = (min, max) => min + (max - min) * particles();
   const tracers = Object.fromEntries(Object.entries(CONFIG.feedback.tracers)
     .map(([kind, style]) => [kind, { ...style, tint: brighter(style.color, 2.1) }]));
 
@@ -33,12 +36,12 @@ export function createEffectClasses({ CONFIG, THREE, V3, TAU, Y_AXIS, shapes, st
       count = Math.ceil(count * (CONFIG.graphics.particleScale ?? 1));
       for (let i = 0; i < count; i++) {
         const p = this.dots[this.nextDot++ % this.dots.length];
-        const a = randomRange(0, TAU), v = randomRange(speed * 0.3, speed);
-        p.pos.copy(where); p.vel.set(Math.cos(a) * v, randomRange(0.04, 1.0) * v, Math.sin(a) * v);
+        const a = particleRange(0, TAU), v = particleRange(speed * 0.3, speed);
+        p.pos.copy(where); p.vel.set(Math.cos(a) * v, particleRange(0.04, 1.0) * v, Math.sin(a) * v);
         p.tint.copy(color);
-        p.size = size * randomRange(0.45, 1.6); p.style = style;
-        p.life = p.max = style === 'mist' ? randomRange(0.26, 0.54)
-          : style === 'pellet' ? randomRange(.075, .15) : randomRange(0.10, 0.40);
+        p.size = size * particleRange(0.45, 1.6); p.style = style;
+        p.life = p.max = style === 'mist' ? particleRange(0.26, 0.54)
+          : style === 'pellet' ? particleRange(.075, .15) : particleRange(0.10, 0.40);
       }
     }
     update(dt) {

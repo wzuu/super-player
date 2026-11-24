@@ -1,7 +1,7 @@
 const DEFAULT_CONFIG = {
   audio: { ambient: null },
   map: { cell: 4, fog: 0.021, hash: 4, navCell: 1.25 },
-  graphics: { maxPixelRatio: 1.25, bloomScale: 0.72 },
+  graphics: { maxPixelRatio: 1.25, bloomScale: 0.72, partialInstanceUploads: true },
   feedback: {
     arcDuration: 0.8, mergeWindow: 0.1, criticalHealth: 0.3,
     impactDuration: 0.15, impactAngle: 0.033, impactFov: 3, hitStop: 0.04,
@@ -29,8 +29,12 @@ const DEFAULT_CONFIG = {
     population: 64, capacity: 96, encounterSize: 100, spawnEvery: 0.50, spawnBurst: 2,
     spawnDistance: 21, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
     memory: 7, separation: 1.35,
+    simulation: { farCadence: true, profile: false },
+    visibility: { enabled:true, occlusion:true, occlusionRange:40 },
     appearance: {
       far: 16, hysteresis: 2, gridCells: 8, corpses: 12, fallTime: 0.42,
+      detailEnabled: true, detailSpecular: true, near: 9, nearHysteresis: 1.3,
+      nearBudgets: {low: 3, medium: 8, high: 12},
       // 群袭、冲撞、抛射、首领的横向与竖向比例，共用于模型、碰撞和寻路。
       scale: [[1.28, 1.32], [1.42, 1.27], [1.20, 1.40], [1.34, 1.34]],
       minSwarmHeight: 1.28, rim: 0.23, eyeLight: 2.4, shadowRange: 16,

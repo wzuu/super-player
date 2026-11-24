@@ -592,16 +592,16 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     worldTime = 0,
     requested = 0;
   let catchUpTimer = 0;
-  const farFrames = CONFIG.beasts.farUpdateFrames;
   const reflectors = [];
   scene.traverse((node) => {
     if (node.isReflector || node.type === 'Reflector') reflectors.push(node);
   });
+  beasts.visibility.setReflectors(reflectors);
   const measure = qualityMonitor(prefs.quality, (tier) => {
+    beasts.visualQuality = tier;
     const low = tier === 'low',
       high = tier === 'high';
     CONFIG.graphics.particleScale = high ? 1 : low ? 0.3 : 0.65;
-    CONFIG.beasts.farUpdateFrames = farFrames * (high ? 1 : low ? 3 : 2);
     for (const surface of reflectors) surface.visible = !low;
     bloom.enabled = !low;
     pixelScale = high ? 1 : low ? 0.65 : 0.85;

@@ -78,6 +78,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     mesh.position.set(x, height / 2, z);
     scene.add(mesh);
     const barrier = level.box(x, z, width, depth, 0, height);
+    if (definition.weaponSkin === 'underground-lab' && !glass) level.viewOccluders.push(barrier);
     level.setBarrier(barrier, mesh, false);
     if (!panels.has(id)) panels.set(id, []);
     panels.get(id).push({ barrier, mesh });

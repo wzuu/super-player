@@ -11,6 +11,74 @@ registerHooks({ resolve(id, context, next) {
 } });
 const { createBeastClasses } = await import('../src/beasts.mjs');
 
+test('远距巡逻分频保持巡视方向与次数，接近、隔墙枪声和脚步会立即唤醒', () => {
+  const config = makeConfig({beasts:{simulation:{profile:true}}});
+  const {BeastAI, BeastManager} = createBeastClasses({CONFIG:config, V3:Vector, colors:{}, definition:{}});
+  const manager = Object.create(BeastManager.prototype);
+  manager.resetSimulationStats();
+  const level = new Level(), nav = new Navigation(level);
+  level.box(0, 0, .25, 6, 0, 4);
+  const ai = new BeastAI(level, nav, manager);
+  const p = {x:-36, y:0, z:0, protected:()=>true};
+  const g = {time:1, shotAt:-Infinity, shotHearingScale:1, footstep:{at:-Infinity}};
+  const b = {id:0, type:0, x:2, y:0, z:0, fx:1, fz:0, patrol:1, alert:0, mode:'move',
+    cooldown:0, wakeUntil:-Infinity, heardAt:-Infinity, statusEffects:new Map()};
+  const measure = enabled => {
+    manager.resetSimulationStats();
+    config.beasts.simulation.farCadence = enabled;
+    for (let frame=1; frame<=36; frame++) ai.updatePerception(b,p,g,frame,38,false);
+    return [manager.simulationStats.perceptions,manager.simulationStats.deferred,b.dx,b.dz];
+  };
+  assert.deepEqual(measure(false),[6,0,.23,0]);
+  assert.deepEqual(measure(true),[2,4,.23,0]);
+  p.x = -.8;
+  ai.updatePerception(b,p,g,37,2.8,false);
+  assert.equal(manager.simulationStats.perceptions,3);
+  assert.equal(b.alert,0); // 墙后靠近会检查视野，仍不能看穿墙。
+  p.x = -36;
+  ai.updatePerception(b,p,g,42,38,false);
+  Object.assign(g,{shotAt:g.time,shotX:-1,shotY:0,shotZ:0});
+  ai.updatePerception(b,p,g,43,38,false);
+  assert.equal(b.alert,config.beasts.memory);
+
+  g.shotAt = -Infinity;
+  g.encounter = {hearingOnly:true,shotHearing:24,memory:6};
+  b.alert = 0;
+  ai.updatePerception(b,p,g,48,38,false);
+  Object.assign(g.footstep,{at:g.time,x:-1,y:0,z:0,radius:6});
+  ai.updatePerception(b,p,g,49,38,false);
+  assert.deepEqual([b.heardX,b.heardZ,b.alert],[-1,0,6]);
+});
+
+test('处于任务、特殊动作、伤害持续期的远敌始终走原感知节奏', () => {
+  const config=makeConfig({beasts:{simulation:{profile:true}}});
+  const {BeastAI,BeastManager}=createBeastClasses({CONFIG:config,V3:Vector,colors:{},definition:{}});
+  const manager=Object.create(BeastManager.prototype);
+  manager.resetSimulationStats();
+  const ai=new BeastAI(null,null,manager);
+  let checks=0;
+  ai.perceive=()=>{checks++;};
+  for (const field of [{type:3},{role:'brood'},{affixes:['swift']},{storyWave:{}},{fieldGroup:'deep'},
+    {hunted:true},{droneRaider:true},{climbRoute:[]},{clinging:true},{stairLeg:{}},{alert:1},
+    {wakeUntil:2},{statusEffects:new Map([['burn',{}]])}]) {
+    const b={id:0,type:0,statusEffects:new Map(),alert:0,wakeUntil:-Infinity, ...field};
+    const before=checks;
+    ai.updatePerception(b,{}, {time:1,shotAt:-Infinity},6,45,false);
+    assert.equal(checks,before+1);
+  }
+  assert.equal(manager.simulationStats.deferred,0);
+});
+
+test('实验池可设 192，战役原有补兵量、遭遇总数和难度参数维持不变', () => {
+  for (const stage of [1,8,15]) {
+    const baseline = makeConfig({},stage).beasts;
+    const experiment = makeConfig({beasts:{capacity:192}},stage).beasts;
+    assert.equal(experiment.capacity,192);
+    assert.deepEqual({...experiment,capacity:baseline.capacity},baseline);
+    assert.ok(baseline.capacity<192);
+  }
+});
+
 class Vector {
   set(x, y, z) { Object.assign(this, { x, y, z }); return this; }
   length() { return Math.hypot(this.x, this.y, this.z); }

@@ -110,6 +110,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     constructor() {
       this.hash = new SpatialHash(CONFIG.map.hash);
       this.solids = [];
+      this.viewOccluders = [];
       this.near = [];
       this.spawn = new V3();
       this.gate = new V3();
