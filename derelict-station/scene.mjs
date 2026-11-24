@@ -472,6 +472,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
   }
   return {
     phase:'calm',panel:null,previous:-1,opens:0,seals:0,nextDamage:0,ejected:0,status:null,eggs,rules,
+    recoveryUnsafe({x,z}) { return this.panel && inside(x,z,this.panel.data); },
     reset(){
       intact();
       this.phase='calm';this.panel=null;this.previous=-1;this.nextDamage=0;this.ejected=0;this.status=null;

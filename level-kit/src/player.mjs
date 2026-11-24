@@ -94,7 +94,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       const exposure = game.encounter?.moveScale ?? 1;
       const terrain = game.weapon.combat.terrainScale(this.level.movementScale(this.x, this.z, this.y, game)) * game.weapon.combat.moveSpeed;
       const scale = dt * stride * exposure * impairment * terrain * (CONFIG.weapon.mobility ?? 1) / Math.max(1, Math.hypot(forward, strafe));
-      const floorBefore = this.level.foot(this.x, this.z, this.y + 0.052, this.radius);
+      const floorBefore = this.level.playerFloor(this.x, this.z, this.y + 0.052, this.radius, this.y + .025);
       this.fallPeak=Math.max(this.fallPeak,this.y);
       this.grounded = this.y <= floorBefore + 0.07 && this.vy <= 0;
       if (input.jump) {
@@ -102,7 +102,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
         if (this.grounded && !this.crouched && impairment > 0) { this.vy = p.jump; this.grounded = false; }
       }
       const moved = this.level.move(this, (x * forward - z * strafe) * scale, (z * forward + x * strafe) * scale, this.grounded ? p.step : 0.06);
-      const floor = this.level.foot(this.x, this.z, this.y + 0.06, this.radius);
+      const floor = this.level.playerFloor(this.x, this.z, this.y + 0.06, this.radius, this.y + .025);
       if (this.grounded && this.y <= floor + 0.16) {
         this.y = floor; this.vy = 0;
       } else if (this.y > floor + 0.001 || this.vy > 0) {

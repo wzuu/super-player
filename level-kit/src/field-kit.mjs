@@ -123,6 +123,9 @@ export function createFieldKit(config, keys, visual) {
     protected(now) {
       return now < invulnerable;
     },
+    stopRoll() {
+      roll = 0;
+    },
     supply(requested) {
       const id = kit.items.find((id) => id && (!requested || requested === id) && (kit.counts[id] ?? 0) < (supplies[id]?.limit ?? 2));
       if (id) kit.counts[id] = (kit.counts[id] ?? 0) + 1;

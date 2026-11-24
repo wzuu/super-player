@@ -21,6 +21,27 @@ def watch_page(page, errors, static):
                 if "api" in urlsplit(req.url).path.split("/") else None)
 
 
+def recover_at_airlock(page):
+    initial = page.evaluate("""() => {
+      const g=run.game,door=g.level.entryDoor,p=g.player;
+      if(!door.active) throw Error('开局气闸应关闭');
+      window.airlockProgress=()=>[g.story.recoveryStage,g.story.doorStates,g.time,g.kills,g.core,
+        g.weapon.ammo,g.weapon.reserve,g.loot.length,g.pickups.objects.filter(i=>i.active).length];
+      Object.assign(p,{x:(door.x0+door.x1)/2,y:door.y0,z:(door.z0+door.z1)/2});
+      if(!g.level.blocked(p.x,p.z,p.y,p.radius,p.height)) throw Error('测试落点须位于关闭门体内');
+      return airlockProgress();
+    }""")
+    page.evaluate("document.exitPointerLock()")
+    page.get_by_role("button", name="卡住脱离").click()
+    assert "已回到安全位置" in page.locator("#menu-status").inner_text()
+    assert page.evaluate("airlockProgress()") == initial
+    assert page.evaluate("""() => {const g=run.game,p=g.player,d=g.level.entryDoor;
+      return g.phase==='pause' && d.active && p.z>d.z1 && !g.level.blocked(p.x,p.z,p.y,p.radius,p.height);
+    }""")
+    page.get_by_role("button", name="继续游戏").click()
+    page.wait_for_function("run.game.phase==='play'", polling=100)
+
+
 def verify(browser, url, static=False):
     root = url.rstrip("/") + "/"
     page = browser.new_page(viewport={"width": 960, "height": 620})
@@ -54,6 +75,7 @@ def verify(browser, url, static=False):
         page.wait_for_function("!!window.run", polling=100)
         page.locator("#start").click(force=True)
         page.wait_for_function("run.game.phase==='play'", polling=100)
+        recover_at_airlock(page)
         result = page.evaluate((ROOT/"level-kit/tests/lab_live_driver.js").read_text(encoding="utf-8"))
         print(json.dumps(result, ensure_ascii=False), flush=True)
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result

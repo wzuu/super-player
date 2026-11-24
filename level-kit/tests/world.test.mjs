@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createGrid, createWorld, SpatialHash } from '../src/world.mjs';
 import { createMissionNavigation } from '../src/mission-navigation.mjs';
+import { createRecovery } from '../src/recovery.mjs';
 import { makeConfig } from '../src/config.mjs';
 
 // 使用与浏览器 importmap 相同的公共模块别名。
@@ -90,6 +91,53 @@ const CONFIG = makeConfig({ map: { cell: 2, navCell: 2 } });
 const GRID = createGrid(Array(7).fill('.......'), 2);
 const { Level, Navigation } = createWorld({ CONFIG, GRID, V3: Vector, definition: {},
   clamp: (v, min, max) => Math.min(max, Math.max(min, v)) });
+
+test('跳台斜角按水平足迹支撑，未标记能攀爬的墙只承接真实从上方着地的角色', () => {
+  const level=new Level(), r=CONFIG.player.radius;
+  const platform=level.box(0,0,1.95,.86,0,.9,true);
+  const x=platform.x1+r*.6, z=platform.z1+r*.6;
+  assert.equal(level.playerFloor(x,z,.95,r,.925),.9);
+  assert.equal(level.foot(x,z,.95,r),0);
+  assert.equal(level.blocked(x,z,.9,r,CONFIG.player.height),false);
+  assert.equal(level.blocked(x,z,.2,r,CONFIG.player.height),true);
+  platform.climb=false;
+  assert.equal(level.foot(x,z,1,r),0);
+  assert.equal(level.playerFloor(x,z,1,r,.925),.9);
+  assert.equal(level.playerFloor(x,z,1,r,.4),0);
+});
+
+test('脱困复核锁门、酸池、敌人、同层拾取和阶段入口，失败保持原位', () => {
+  const level=new Level();
+  level.spawn.set(-5,0,0);
+  const wall=level.box(0,0,.35,14,0,4), nav=new Navigation(level);
+  level.setBarrier(wall,null,false);
+  const seen={camera:0,stopped:0}, p={...level.spawn,vy:0,grounded:true,positionCamera(){seen.camera++;}};
+  const g={player:p,time:0,phase:'play',blast:0,objective:{wave:1},story:{managed:true,
+    recoveryStage:0,recoveryEntry:level.spawn,recoveryUnsafe:()=>false},
+    pickups:{objects:[]},projectiles:{puddles:[]},beasts:{pool:[]},lifts:{lifts:[]},
+    kit:{stopRoll(){seen.stopped++;}}};
+  const recovery=createRecovery({level,nav,CONFIG,definition:{}});
+  recovery.reset(g);
+  function record(x,z) {g.phase='play';Object.assign(p,{x,y:0,z});g.time++;recovery.record(g);}
+  // 真正在门两侧都留过脚印。关闭后，最近的对侧点不可选。
+  for (const [x,z] of [[2,0],[-3.9,-2.4],[-2.8,2],[-2.6,0],[-1.2,2],[-.7,0]]) record(x,z);
+  level.setBarrier(wall,null,true);
+  g.projectiles.puddles.push({life:2,pos:{x:-.7,y:0,z:0}});
+  g.beasts.pool.push({active:true,type:0,radius:.4,height:1,x:-1,y:0,z:3});
+  g.pickups.objects.push({active:true,kind:'rare',x:-2.6,y:0,z:0});
+  g.phase='pause';p.x=-.4;
+  assert.equal(recovery.recover(g),true);
+  assert.deepEqual([p.x,p.y,p.z],[-3.9,0,-2.4]);
+  assert.equal(g.phase,'pause');assert.deepEqual(seen,{camera:1,stopped:1});
+  // 没有本阶段脚印时，回到上一步已完成的站点。阶段一的足迹须全部作废。
+  g.story.recoveryEntry={x:-5,y:0,z:4};g.story.recoveryStage++;
+  g.phase='play';p.grounded=false;g.time++;recovery.record(g);
+  g.phase='pause';assert.equal(recovery.recover(g),true);
+  assert.deepEqual([p.x,p.y,p.z],[-5,0,4]);
+  g.encounter={recoveryUnsafe:()=>true};
+  assert.equal(recovery.recover(g),false);assert.deepEqual([p.x,p.y,p.z],[-5,0,4]);
+  assert.deepEqual(seen,{camera:2,stopped:2});
+});
 
 test('凶兽在矮台边缘按实际足底采样，出生场和追击场都能找到玩家路线', () => {
   const level=new Level(), radius=CONFIG.beasts.types[2].radius;

@@ -79,6 +79,7 @@ export function createTraining(config, prefs) {
   }
   return {
     kind: range ? 'range' : 'tutorial',
+    get recoveryStage() { return range ? wave : stage; },
     title: range ? '火力试验场' : '新手教程',
     kit: {
       skills: ['roll', 'pulse'],

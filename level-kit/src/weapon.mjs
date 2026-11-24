@@ -79,6 +79,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
         component(this.flashGroup, star, outer, Math.cos(a) * 0.039, Math.sin(a) * 0.039, -0.045, 0.45, 0.62, 0.45, -Math.PI / 2, Math.cos(a) * 0.62, Math.sin(a) * 0.57).renderOrder = 15;
       }
       this.dir = new V3(); this.origin = new V3(); this.end = new V3(); this.muzzle = new V3();
+      this.sight = {};
       this.reset();
     }
     reset() {
@@ -88,6 +89,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       this.emptyAt = -5;
       this.reloadTotal = 0;
       this.shoulder.body.visible = false;
+      this.aimScreen = null;
       this.lastImpact = -Infinity;
       this.combat.reset();
       this.empRecovery = 0;
@@ -137,22 +139,28 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
         if (count>1 && hits>=4) game.sound.tone(320+hits*32,130,.09,.20,'triangle');
       } else this.combat.miss();
     }
-    trace(game,penetrate,draw) {
-      const w=CONFIG.weapon;
-      const cover = game.level.hash.ray(this.origin, this.dir, w.range);
+    scanSight(game, origin, dir) {
+      const sight = this.sight;
+      sight.cover = game.level.hash.ray(origin, dir, CONFIG.weapon.range);
       let limit = game.level.hash.depth;
-      if (this.dir.y < -0.009) {
-        const floor = game.level.base(this.origin.x, this.origin.z);
-        const t = (floor - this.origin.y) / this.dir.y;
+      if (dir.y < -0.009) {
+        const floor = game.level.base(origin.x, origin.z);
+        const t = (floor - origin.y) / dir.y;
         if (t > 0) {
-          const depth = (game.level.base(this.origin.x + this.dir.x * t, this.origin.z + this.dir.z * t) - this.origin.y) / this.dir.y;
+          const depth = (game.level.base(origin.x + dir.x * t, origin.z + dir.z * t) - origin.y) / dir.y;
           limit = Math.min(limit, Math.max(0, depth));
         }
       }
-      const hazard=game.field?.ray(this.origin,this.dir,limit);
-      if(hazard) limit=hazard.distance;
-      const hit = game.beasts.hash.ray(this.origin, this.dir, limit);
-      this.end.copy(this.origin).addScaledVector(this.dir, game.beasts.hash.depth);
+      sight.hazard = game.field?.ray(origin, dir, limit);
+      sight.limit = sight.hazard?.distance ?? limit;
+      sight.hit = game.beasts.hash.ray(origin, dir, sight.limit);
+      sight.depth = game.beasts.hash.depth;
+      return sight;
+    }
+    trace(game,penetrate,draw) {
+      const w=CONFIG.weapon;
+      const {cover, hazard, limit, hit, depth} = this.scanSight(game, this.origin, this.dir);
+      this.end.copy(this.origin).addScaledVector(this.dir, depth);
       const streakKind = w.pellets ? 'pellet' : 'rifle';
       if (hit) {
         let rank = this.hitTarget(hit, game);
@@ -261,7 +269,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       const shoulder = playing && player.thirdPerson && !player.aimRequested && !this.inspectTime;
       this.group.visible = playing && !shoulder;
       this.shoulder.body.visible = false;
-      if (shoulder) this.shoulder.update(camera,player,game);
+      this.aimScreen = shoulder ? this.shoulder.update(camera,player,game) : null;
       this.rifle.magazine.position.y = -Math.sin(cycle * 1.56) * 0.18;
       this.flashGroup.visible = this.flash > 0;
       if (this.flashGroup.visible) {

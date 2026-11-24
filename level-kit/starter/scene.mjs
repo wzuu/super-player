@@ -64,7 +64,7 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, canvasTexture, bri
         const height = wall ? 2.7 : 0.9;
         city.add('box', 'wall', x, height / 2, z, width, height, depth, wall ? 0xc4cfb7 : 0x9ea280);
         city.add('box', 'trim', x, height, z, width, 0.11, depth, 0xc1c6a3);
-        level.box(x, z, width, depth, 0, height);
+        level.box(x, z, width, depth, 0, height, !wall);
       } else if (tile === 'P') {
         level.spawn.set(x, 0, z);
         city.add('cylinder', 'marker', x, 0.015, z, 1.75, 0.03, 1.75, brighter(0x518575));

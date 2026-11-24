@@ -32,6 +32,8 @@ def stage_page(browser, stage, query="", custom=False):
 def start(page):
     page.click("#start")
     page.wait_for_function("run.game.phase==='play' && !!document.pointerLockElement")
+    # 试验场开局就有敌人。输入用例在同一处反复暂停和读数，隔离敌人的致死伤害。
+    page.evaluate("if (run.game.training?.kind==='range') run.game.player.hurtDelay=Infinity")
 
 
 def check_weapon_model(page):
@@ -189,6 +191,10 @@ def check_sound_storage(page):
 
 
 def check(browser):
+    from aiming_browser import check_aiming
+    from mouse_motion_browser import check_mouse_motion
+    check_aiming(browser)
+    check_mouse_motion(browser)
     for stage,query,crouch,deep,custom in [
         ("practice","?mode=tutorial",True,False,False),
         ("practice","?mode=range",True,False,True),
