@@ -13,8 +13,7 @@ const CONFIG = {
       { hp: 790, damage: 23, summonCount: 7 },
     ],
   },
-  pickups: { ammoDrop: 26, ammoCache: 180 },
-  moon: { period: 120, duration: 20, warning: 8, nightfall: 58, speed: 1.14, damage: 1.30, ammo: 12, health: 9 },
+  moon: { period: 120, duration: 20, warning: 8, nightfall: 58, speed: 1.14, damage: 1.30, health: 9 },
   lava: { depth: -0.40, damage: 14, cooldown: 0.55 },
 };
 
@@ -409,8 +408,7 @@ function createEncounter({ CONFIG: setup, sound }) {
     phase: 'calm', status: null, guardsPlaced: false,
     get beastSpeedScale() { return this.phase === 'active' ? moon.speed : 1; },
     get beastDamageScale() { return this.phase === 'active' ? moon.damage : 1; },
-    get bonusAmmo() { return this.phase === 'active' ? moon.ammo : 0; },
-    get bonusHealth() { return this.phase === 'active' ? moon.health : 0; },
+    killHealing() { return this.phase === 'active' ? moon.health : 0; },
     reset() {
       this.phase = 'calm';
       this.status = null;
@@ -428,12 +426,12 @@ function createEncounter({ CONFIG: setup, sound }) {
       const phase = active ? 'active' : warning ? 'warning' : 'calm';
       if (phase !== this.phase) {
         this.phase = phase;
-        game.ui.notify(active ? '血月已至，击杀额外掉落弹药与圣露' : warning ? '月色转红，血月将至' : '血月退去', 2.6);
+        game.ui.notify(active ? '血月已至，少数凶兽会掉落圣露' : warning ? '月色转红，血月将至' : '血月退去', 2.6);
         game.ui.tick = 0;
         if (active) sound.tone(125, 43, 1.14, 0.31, 'triangle');
       }
       status.title = active ? '血月当空' : '血月将至';
-      status.detail = active ? '凶兽移速与伤害提高，击杀多掉弹药和圣露' : '凶兽即将强化';
+      status.detail = active ? '凶兽移速与伤害提高，偶有圣露掉落' : '凶兽即将强化';
       status.remaining = (active ? moon.duration : moon.period) - cycle;
       this.status = active || warning ? status : null;
 
@@ -890,7 +888,7 @@ export default {
   text: {
     tag: '第二关 / 山海秘境', title: '上古秘境', enter: '穿过石牌坊',
     enemy: '上古凶兽', bossName: '饕餮', keyItem: '雷火符', portal: '封印传送门', loot: '秘境宝物',
-    brief: '沿竹林、古城和墓园之间的荒原移动。完成凶兽击杀目标，从饕餮身上取得雷火符，在祭坛北侧引爆封印。血月约每两分钟来临，凶兽增强，击杀掉落更多弹药与圣露。',
+    brief: '沿竹林、古城和墓园之间的荒原移动。完成凶兽击杀目标，从饕餮身上取得雷火符，在祭坛北侧引爆封印。血月约每两分钟来临，凶兽增强，少数凶兽会掉落圣露。',
     rage: '饕餮甲壳开裂，正在召唤狰幼崽',
     detonating: '符文锁链断裂，封印正在崩解',
     winBrief: '雷火击碎了封印。你穿过传送门，将拾得的宝物带往远古之地。',

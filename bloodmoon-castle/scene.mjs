@@ -11,7 +11,7 @@ const CONFIG = {
       { hp: 780, speed: 3.61, rageSpeed: 5.92, radius: 0.97, height: 3.35, summonCount: 8 },
     ],
   },
-  bloodMoon: { period: 120, warning: 8, duration: 20, speed: 1.18, damage: 1.30, ammo: 12, health: 9, veilDuration: 1.65 },
+  bloodMoon: { period: 120, warning: 8, duration: 20, speed: 1.18, damage: 1.30, health: 9, veilDuration: 1.65 },
 };
 
 const MAP_GRID = [
@@ -525,8 +525,7 @@ function createEncounter({ CONFIG: setup, sound }) {
     phase: 'calm', status: null, veilUntil: -Infinity,
     get beastSpeedScale() { return this.phase === 'active' ? rules.speed : 1; },
     get beastDamageScale() { return this.phase === 'active' ? rules.damage : 1; },
-    get bonusAmmo() { return this.phase === 'active' ? rules.ammo : 0; },
-    get bonusHealth() { return this.phase === 'active' ? rules.health : 0; },
+    killHealing() { return this.phase === 'active' ? rules.health : 0; },
     reset() {
       this.phase = 'calm'; this.status = null; this.veilUntil = -Infinity;
     },
@@ -541,14 +540,14 @@ function createEncounter({ CONFIG: setup, sound }) {
       const phase = active ? 'active' : warning ? 'warning' : 'calm';
       if (phase !== this.phase) {
         this.phase = phase;
-        const message = active ? '血月升起，击杀额外掉落弹药和圣露' :
+        const message = active ? '血月升起，少数亡灵会掉落圣露' :
           warning ? '血月即将升起' : '血月退去';
         game.ui.notify(message, 2.6);
         game.ui.tick = 0;
         if (active) sound.tone(139, 55, 0.88, 0.31, 'triangle');
       }
       status.title = active ? '血月当空' : '血月将升';
-      status.detail = active ? '凶兽强化 / 击杀掉落弹药和圣露' : '凶兽即将强化';
+      status.detail = active ? '凶兽强化 / 偶有圣露掉落' : '凶兽即将强化';
       status.remaining = (active ? rules.duration : rules.period) - cycle;
       this.status = active || warning ? status : null;
     },
@@ -976,7 +975,7 @@ export default {
   text: {
     tag: '第十一关 / 月夜古堡', title: '血月古堡', enter: '踏上吊桥',
     enemy: '亡灵和蝠群', bossName: '吸血鬼伯爵', keyItem: '血月圣杯', portal: '血月传送门', loot: '古堡宝物',
-    brief: '穿过吊桥，绕行庭院、花园和墓穴。完成亡灵击杀目标，夺取伯爵的血月圣杯，再到大教堂解除圣印。血月升起时，亡灵更凶猛，击杀可获得额外弹药和圣露。',
+    brief: '穿过吊桥，绕行庭院、花园和墓穴。完成亡灵击杀目标，夺取伯爵的血月圣杯，再到大教堂解除圣印。血月升起时，亡灵更凶猛，少数亡灵会掉落圣露。',
     rage: '吸血鬼伯爵化为蝠群，正在召集蝙蝠',
     winBrief: '圣印崩解，净化冲击波驱散了主厅的亡灵。你带着搜集到的宝物撤离。',
     safe: '吊桥安全区',

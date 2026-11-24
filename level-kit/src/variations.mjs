@@ -19,7 +19,7 @@ export const variations = [
     value: 1.25,
   },
   { id: 'patrol', name: '精英巡逻', detail: '巡逻队有精英个体', weight: 1, elites: 2 },
-  { id: 'plenty', name: '补给丰年', detail: '弹药补给增加，宝物价值降低', weight: 2, ammo: 1.5, value: 0.8 },
+  { id: 'plenty', name: '补给丰年', detail: '固定弹箱配给增加 50%，宝物价值降低', weight: 2, ammo: 1.5, value: 0.8 },
   { id: 'quiet', name: '静默', detail: '枪声和脚步更难引起远处凶兽注意', weight: 1, hearing: 0.55 },
 ];
 export function drawVariation(stage, previous, random = Math.random) {

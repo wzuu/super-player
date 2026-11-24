@@ -583,7 +583,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       for (const b of group) b.waveMember=true;
       this.openingPending=false;
       this.pendingWave=null;
-      if (!opening) game.objective.advanceWave(game);
+      if (!opening) game.objective.advanceWave(game, group.length);
     }
     randomType() {
       const r = Math.random();
@@ -681,7 +681,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.retire(b, game, source, hit);
       game.field?.defeated(b,game);
       const dropY = this.dropHeight(b);
-      this.traits.defeated(b,game);
+      // 在关卡移除灯笼行列等身份之前判定掉落；同一死亡只进入这里一次。
+      game.pickups.dropFromKill(b, dropY, campaignStage, game.encounter?.killHealing?.(b));
+      this.traits.defeated(b);
       if (source === 'weapon' || source === 'electric') combat.onKill(b, hit, game);
       if (type === 3) {
         game.bossDead = true; this.boss = null;
@@ -715,19 +717,6 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         this.air.set(b.x, b.y + b.height * 0.52, b.z);
         game.effects.spray(this.air, ichor, type === 3 ? 65 : 18, type === 3 ? 10 : 6.4, 0.12, 'mist');
         game.effects.spray(this.air, type === 3 ? coreTint : projectileTint, type === 3 ? 28 : 7, 6.2, 0.061, 'spark');
-      }
-      const bonusAmmo = game.encounter?.bonusAmmo ?? 0;
-      if (bonusAmmo > 0 || type === 3 || game.weapon.reserve < CONFIG.weapon.magazine || game.kills % 2 === 0) {
-        const rounds = (CONFIG.pickups.ammoDrop + bonusAmmo) * (type === 3 ? 3 : 1) * (game.variation?.ammo ?? 1);
-        const amount = Math.ceil(CONFIG.weapon.pellets ? rounds / 6 : rounds);
-        game.pickups.add('ammo', b.x + 0.17, b.z, dropY, CONFIG.weapon.pellets ? '霰弹' : '步枪弹药', amount);
-      }
-      if (type !== 3 && game.kills % CONFIG.pickups.grenadeEvery === 0) {
-        game.pickups.add('grenade', b.x-.20, b.z, dropY, '手雷', 1);
-      }
-      const bonusHealth = game.encounter?.bonusHealth ?? 0;
-      if (bonusHealth > 0) {
-        game.pickups.add('health', b.x - 0.26, b.z, dropY, '圣露', bonusHealth);
       }
       return true;
     }

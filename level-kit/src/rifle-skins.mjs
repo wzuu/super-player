@@ -16,7 +16,7 @@ export const rifleSkins = {
     backdrop:'#283345',key:'#ffce99',fill:'#a4cdef',metalness:.58,roughness:.44,
   },
   'underground-lab': {
-    name: '生化防护型', detail: '白灰防护漆、黄黑警示纹和荧光绿样本管。腐蚀弹逐层削弱护甲，回收样本管可强化下一弹匣。红色警报期间射速提升。',
+    name: '生化防护型', detail: '白灰防护漆、黄黑警示纹和荧光绿样本管。腐蚀弹逐层削弱护甲，击杀时偶尔蓄存样本能量，强化下一弹匣。红色警报期间射速提升。',
     base: '#c9cac1', trim: '#f7bc38', dark: '#343d3a', light: '#a7ff44',
     backdrop: '#1b2825', key: '#f3fff4', fill: '#7bad92', metalness: .22, roughness: .6,
   },
@@ -26,7 +26,7 @@ export const rifleSkins = {
     backdrop: '#2d2118', key: '#ffe1b8', fill: '#659e83', metalness: .7, roughness: .55,
   },
   'rain-city': {
-    name: '锈蚀街头型', detail: '锈钢、脱漆涂鸦、缠带和雨水留下的湿痕。命中使目标潮湿，更易受到电伤。重击可击退敌人，幸运射击造成双倍伤害并掉落补给。',
+    name: '锈蚀街头型', detail: '锈钢、脱漆涂鸦、缠带和雨水留下的湿痕。命中使目标潮湿，更易受到电伤。重击可击退敌人，幸运射击造成双倍伤害。',
     base: '#6c777b', trim: '#de9056', dark: '#313c41', light: '#8ad7ed',
     backdrop: '#162534', key: '#b3dcff', fill: '#628ebc', metalness: .55, roughness: .79,
   },
@@ -66,7 +66,7 @@ export const rifleSkins = {
     backdrop: '#1a2e26', key: '#ecffd0', fill: '#5da786', metalness: .14, roughness: .34,
   },
   'bloodmoon-castle': {
-    name: '哥特猩红型', detail: '银色尖拱和蔷薇窗、暗红绒面与微光圣露瓶。按实际伤害吸血，血月期间回复翻倍。对古堡亡灵有加成，献祭射击击杀可掉落圣露。',
+    name: '哥特猩红型', detail: '银色尖拱和蔷薇窗、暗红绒面与微光圣露瓶。按实际伤害吸血，血月期间回复翻倍。对古堡亡灵有加成，献祭射击会造成双倍伤害。',
     base: '#34323c', trim: '#d7c7cb', dark: '#5b1528', light: '#ff3653',
     backdrop: '#321922', key: '#ff8d9b', fill: '#ac688c', metalness: .79, roughness: .28,
   },

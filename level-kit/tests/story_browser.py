@@ -122,12 +122,19 @@ def verify(browser,ids):
           const report={},defaultMode=choose.value;
           start('endless');
           if (g.story.managed || !g.beasts.boss || g.beasts.live<35) throw Error('无尽增援未保留 '+[g.story.managed,Boolean(g.beasts.boss),g.beasts.live]);
+          const stations=[...g.pickups.ammoStations];
+          if(stations.length<2||stations.some(box=>!box.active||!box.permanent||box.value!==g.pickups.cacheAmount()))
+            throw Error('无尽地图缺少开局固定弹箱');
+          if(!stations.some(box=>nav.dist[nav.index(box.x,box.z)]>=0 && !g.level.blocked(box.x,box.z,box.y,c.player.radius,c.player.height)))
+            throw Error('出生区不能走到任何固定弹箱');
           const tick=(dt)=>{g.time+=dt;g.beasts.releaseSplits(g);g.objective.step(dt,g);g.story.step(dt,g);};
           const manager=g.beasts, spawn=manager.spawnGroup.bind(manager);
+          let deployed=0;
           manager.spawnGroup=(entries,options)=>{
             const group=spawn(entries,options);
             if(entries.length!==100)return group;
             if(group.length!==100)throw Error('当前交战区未能一次部署百只 '+[g.story.stage,g.player.x,g.player.z]);
+            deployed++;
             for(const [i,b] of group.entries()){
               if(g.level.blocked(b.x,b.z,b.y,b.radius,b.height)||g.level.inSafeZone(b.x,b.z)||
                  Math.hypot(b.x-g.player.x,b.z-g.player.z)<6)throw Error('出生净空或距离异常 '+[b.type,b.x,b.z]);
@@ -231,6 +238,11 @@ def verify(browser,ids):
           if(defaultMode==='classic' && !g.core && g.phase!=='win')throw Error('缺少核心');
           const mandatory=g.story.encounters.reduce((n,e)=>n+e.spawned,0);
           if(g.stageKillTarget!==mandatory+Number(Boolean(g.bossDead)))throw Error('限时或撤离增援被计入必清评分');
+          if(!location.pathname.includes('/underground-lab/')){
+            const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='战区入口弹药');
+            if(boxes.length!==deployed || boxes.some(i=>i.value!==g.pickups.cacheAmount(100*c.pickups.roundsPerGuard)))
+              throw Error('每个实际战区应有一份入口配给 '+[deployed,boxes.length]);
+          }
           const result={mode:defaultMode,steps:seen.size,kills:g.kills,blocked,unreachable,climbs:climbs.size,groups:g.story.encounters};
           start(defaultMode);
           if(g.kills || g.story.elapsed || g.objective.escortHealth!==100)throw Error('重开状态残留');

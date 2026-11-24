@@ -213,11 +213,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (item.kind === 'fight') {
       director.droneDocked = Boolean(item.escort);
       director.encounters.push({name: item.name, enteredAt: g.time, spawned: creatures.length});
-      if (spec.type !== 'lab') {
-        const t = item.target;
-        const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
-        if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药', g.pickups.cacheAmount(), true);
-      }
+    }
+    if (spec.type !== 'lab') {
+      const t = item.target;
+      const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
+      if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药',
+        g.pickups.cacheAmount(creatures.length * CONFIG.pickups.roundsPerGuard), true);
     }
     g.ui.notify((item.warning ?? item.name ?? '通道') + '的敌群已集结，留意橙色入口', 2);
     for (const entrance of entrances) g.sound.stageEvent?.('warning', g, entrance);

@@ -126,8 +126,8 @@ test('防护型腐蚀封顶、样本在下次换弹生效，警报仅在所属�
   assert.ok(c.damageScale(b, 'weapon', 0) > 1);
   assert.equal(c.damageScale(b, 'weapon', 6), 1);
   c.onKill(b, {}, game);
-  assert.equal(drops[0][0], 'sample');
-  c.samplePending = true;
+  assert.deepEqual(drops, []);
+  assert.equal(c.samplePending, true);
   c.reloaded();
   assert.equal(hit().damage, 26);
   c.reloaded();
@@ -168,7 +168,7 @@ test('街头湿身、电伤加成与重甲击退减半', () => {
   assert.equal(c.damageScale(b, 'electric', 0), 1.25);
   assert.equal(c.damageScale(b, 'electric-environment', 0), 1.25);
   assert.equal(c.damageScale(b, 'weapon', 0), 1);
-  assert.equal(drops[0][0], 'ammo');
+  assert.deepEqual(drops, []);
 });
 
 test('金沙连续四中、脱靶中断、爆头标记与蹲伏听距', () => {
@@ -288,16 +288,15 @@ test('哥特跨关吸血、亡灵圣击及致死献祭', () => {
   assert.equal(h.lifeSteal, 0.06);
   assert.equal(h.damage, 46);
   c.onKill(b, h, game);
-  assert.equal(drops[0][0], 'health');
   c.onKill(b, null, game);
-  assert.equal(drops.length, 1);
+  assert.deepEqual(drops, []);
   c.stage = 'brass-factory';
   assert.equal(hit().lifeSteal, 0.03);
 });
 
-test('百鬼封印、花瓣范围减速、铜铃与灯笼掉落', () => {
+test('百鬼封印、花瓣范围减速和铜铃独立于掉落', () => {
   const { c, b, a, game, hit, drops, visuals } = setup('sakura-night-town', {
-    force: ['bell', 'lantern', 'blossom'],
+    force: ['bell', 'blossom'],
   });
   game.encounter.isLantern = (t) => t === b;
   hit();
@@ -311,10 +310,7 @@ test('百鬼封印、花瓣范围减速、铜铃与灯笼掉落', () => {
   c.onKill(a, {}, game);
   assert.equal(drops.length, 0);
   c.onKill(b, {}, game);
-  assert.deepEqual(
-    drops.map((d) => d[0]),
-    ['ammo', 'health'],
-  );
+  assert.deepEqual(drops, []);
 });
 
 test('蒸汽十五中后下一发释放、机械四层停机、蒸汽区域灼伤及击杀射速', () => {
@@ -344,7 +340,7 @@ test('狂欢连续命中、气球弱点、八音盒、幸运门票及设施共�
   for (let i = 0; i < 4; i++) hit();
   assert.equal(hit().damage, 52);
   assert.ok(b.statusEffects.has('rooted'));
-  assert.equal(drops.length, 5);
+  assert.deepEqual(drops, []);
   game.time = 6;
   game.encounter.rideActive = true;
   let probability;

@@ -290,6 +290,8 @@ export function createFieldOperations(context, campaign) {
     if (!members.length) return false;
     markGuards(members, tag);
     field.guards = members;
+    if (tag === 'vault') g.pickups.add('ammo', anchor.x, anchor.z, anchor.y, '宝库入口弹药',
+      g.pickups.cacheAmount(count * CONFIG.pickups.roundsPerGuard), true);
     return true;
   }
   function releaseTrap(t, g) {
@@ -369,7 +371,7 @@ export function createFieldOperations(context, campaign) {
       if (exitBeacon) exitBeacon.visible = false;
       if (level.highPost) {
         const p = level.highPost;
-        g.pickups.add('ammo', p.x, p.z, p.y, '高台弹药', 26, true);
+        g.pickups.add('ammo', p.x, p.z, p.y, '高台弹药', g.pickups.cacheAmount(26), true);
       }
       if (this.hunting) this.startHunt(g);
     },
@@ -602,8 +604,9 @@ export function createFieldOperations(context, campaign) {
       if (beginWave(g, 'deep', cfg.deepGuards)) this.deep = 'guards';
       g.pickups.deepSupplies = true;
       for (const item of g.pickups.objects)
-        if (item.active && ['health', 'ammo', 'grenade', 'sample'].includes(item.kind)) item.active = false;
-      g.pickups.add('ammo', deepRoom.front.x, deepRoom.front.z, deepRoom.front.y, '深入配给', CONFIG.weapon.pellets ? 80 : 600, true);
+        if (item.active && ['health', 'ammo', 'grenade'].includes(item.kind)) item.active = false;
+      g.pickups.add('ammo', deepRoom.front.x, deepRoom.front.z, deepRoom.front.y, '深入配给',
+        g.pickups.cacheAmount(cfg.deepGuards * CONFIG.pickups.roundsPerGuard), true);
       g.journal?.mark(g, '选择深入');
       g.ui.notify('原撤离点已关闭 · 突破深层宝库', 2);
     },
@@ -650,7 +653,8 @@ export function createFieldOperations(context, campaign) {
         const award = (claimed) => {
           if (token !== runNumber || g.phase === 'fail' || g.phase === 'win') return;
           if (!claimed) treasure(g, secret.center, '秘藏·' + cfg.relic, cfg.value, 'secret');
-          else g.pickups.add('ammo', secret.center.x, secret.center.z, secret.center.y, '密室补给', 24);
+          else if (!g.pickups.deepSupplies) g.pickups.add('ammo', secret.center.x, secret.center.z, secret.center.y, '密室补给',
+            g.pickups.cacheAmount(24), true);
         };
         if (campaign)
           campaign

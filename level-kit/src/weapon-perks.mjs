@@ -88,11 +88,6 @@ function push(target, origin, speed) {
   target.perkPushZ += (z / distance) * strength;
 }
 
-function drop(target, game, kind, name, value) {
-  const y = game.beasts.dropHeight(target);
-  game.pickups.add(kind, target.x - 0.19, target.z + 0.23, y, name, value);
-}
-
 function bloodMoon(combat, game) {
   return (
     (combat.stage === 'bloodmoon-castle' || combat.stage === 'shanhai-secret-realm') &&
@@ -185,8 +180,8 @@ export const weaponPerks = {
     (c, b, h, g) => {
       put(b, 'corrosion', g.time, 6, 5);
     },
-    (c, b, h, g) => {
-      if (c.roll('sample', 0.01)) drop(b, g, 'sample', '样本管', 1);
+    c => {
+      if (c.roll('sample', 0.01)) c.samplePending = true;
     },
     (c, dt, g) => {
       if (c.stage === 'underground-lab' && g.encounter?.active) c.fireRate = 1.15;
@@ -208,10 +203,7 @@ export const weaponPerks = {
   'rain-city': perk((c, b, h, g) => {
     put(b, 'wet', g.time, 5);
     if (c.roll('heavy', 0.05)) {h.heavy=true;push(b, g.player, b.type === 1 ? 4 : 8);}
-    if (c.roll('luck', 0.01)) {
-      h.damage *= 2;
-      drop(b, g, 'ammo', '街头补给', 14);
-    }
+    if (c.roll('luck', 0.01)) h.damage *= 2;
   }),
   'buried-tomb': perk((c, b, h, g) => {
     slow(b, g.time, 2, 0.7);
@@ -306,13 +298,7 @@ export const weaponPerks = {
         if (c.roll('holy', 0.05)) push(b, g.player, 8);
       }
       h.lifeSteal = bloodMoon(c, g) ? 0.06 : 0.03;
-      if (c.roll('sacrifice', 0.01)) {
-        h.damage *= 2;
-        h.dew = true;
-      }
-    },
-    (c, b, h, g) => {
-      if (h?.dew) drop(b, g, 'health', '圣露', 9);
+      if (c.roll('sacrifice', 0.01)) h.damage *= 2;
     },
   ),
   'sakura-night-town': perk(
@@ -338,11 +324,6 @@ export const weaponPerks = {
         c.visual(b, g, 'petal');
         area(c, b, 5, g, (other) => slow(other, g.time, 2, 0.8));
       }
-    },
-    (c, b, h, g) => {
-      if (!g.encounter?.isLantern?.(b)) return;
-      drop(b, g, 'ammo', '灯笼回响', 14);
-      if (c.roll('lantern', 0.01)) drop(b, g, 'health', '灯火圣露', 9);
     },
   ),
   'brass-factory': perk(
@@ -375,10 +356,7 @@ export const weaponPerks = {
     }
     if (c.stage === 'haunted-midway' && b.type === 2) h.damage *= 1.3;
     if (c.roll('music', 0.08)) timedControl(c, b, 'confused', 1, g);
-    if (c.roll('ticket', 0.01)) {
-      h.damage *= 2;
-      drop(b, g, 'ammo', '幸运门票', 14);
-    }
+    if (c.roll('ticket', 0.01)) h.damage *= 2;
     if (c.roll('ridePush', g.encounter?.rideActive ? 0.1 : 0.05)) push(b, g.player, 7);
   }),
 };

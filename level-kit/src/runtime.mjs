@@ -226,7 +226,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.attackPauseUntil=0;
       this.blast = 0;
       this.blastClock = 0;
-      if (gateShield) gateShield.active = true;
+      if (gateShield) level.setBarrier(gateShield,null,true);
       kit.reset(training ? structuredClone(training.kit) : packed);
       objective.reset(training ? 'classic' : modeSelect.value, this);
       deck.start(this);
@@ -240,7 +240,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       beasts.reset(player, this);
       projectiles.reset();
       effects.reset();
-      pickups.reset();
+      pickups.reset(this);
       story.reset(this);
       nav.rebuild(player.x,player.z);
       field?.reset(this);
@@ -262,7 +262,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (!this.ready() || !this.nearGate() || this.blast > 0) return;
       this.blast = 0.001;
       this.blastClock = 0;
-      if (gateShield) gateShield.active = false;
+      if (gateShield) level.setBarrier(gateShield,null,false);
       sound.blast();
       burstPoint.copy(level.gate);
       burstPoint.y += 1.8;

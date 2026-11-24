@@ -59,6 +59,8 @@ def verify(browser, url, static=False):
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result
         assert result["missed"] and result["gunBreaks"] and result["pulseBreaks"], result
         assert result["spawned"] == [100,100,100] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
+        assert result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
+        assert sum(result["startingAmmo"]) + sum(b["taken"] for b in result["boxes"]) == result["shots"] + sum(result["ammo"]), result
         if static:
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')", polling=100)
             page.locator("#campaign-home").click(force=True)
@@ -79,7 +81,10 @@ def verify(browser, url, static=False):
             print("PASS IndexedDB 刷新回读同一局胜利与击杀数，第二关已解锁", flush=True)
         else:
             page.wait_for_function("async()=> (await (await fetch('/api/progress')).json()).levels[1].unlocked", polling=100)
-            assert page.request.get(root + "api/progress").json()["battleCount"] == 1
+            saved = page.request.get(root + "api/progress").json()
+            record = saved["battles"][0]
+            assert saved["battleCount"] == 1 and saved["levels"][0]["cleared"] and saved["levels"][1]["unlocked"], saved
+            assert record["level"] == "underground-lab" and record["won"] and record["kills"] == result["kills"], record
         assert not errors, errors
     finally:
         page.close()
