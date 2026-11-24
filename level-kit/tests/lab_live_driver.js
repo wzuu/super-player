@@ -1,7 +1,17 @@
-function playLaboratoryCampaign() {
-  const { game: g, input, camera, config } = run,
+function playLaboratoryCampaign(browserControls) {
+  const flow = fight();
+  if (browserControls) return flow;
+  let result;
+  do { result = flow.next(); } while (!result.done);
+  return result.value;
+
+  function* fight() {
+  const { game: g, input: runtimeInput, camera, config } = run,
     p = g.player,
     w = g.weapon;
+  const input = browserControls?.input ?? runtimeInput;
+  const aim = (pitch, yaw) => browserControls ? browserControls.aim(pitch,yaw) : p.look.rotation.set(pitch,yaw,0,'YXZ');
+  const kit = slot => browserControls ? browserControls.tap(['KeyQ','KeyE','Digit1','Digit2'][slot]) : g.kit.use(slot,g);
   let seed = 617;
   Math.random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
   const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -47,7 +57,7 @@ function playLaboratoryCampaign() {
     if (!t || distance(p, t) < 0.15) return;
     let dx = t.x - p.x,
       dz = t.z - p.z;
-    const yaw = p.look.rotation.y;
+    const yaw = browserControls?.yaw ?? p.look.rotation.y;
     // 和玩家绕过紫色掉落一样，按左右平移从拾取半径外侧经过。
     for (const item of g.pickups.objects) {
       if (!item.active || item.style !== 'precious' || distance(p, item) > config.pickups.grab + 1.1)
@@ -152,6 +162,7 @@ function playLaboratoryCampaign() {
         items:g.pickups.objects.filter(o=>o.active&&distance(p,o)<5).map(pick)};
       break;
     }
+    browserControls?.begin();
     input.down.clear();
     input.fire = false;
     if (state === 'boss' && b) {
@@ -196,15 +207,13 @@ function playLaboratoryCampaign() {
     }
     if (enemy) {
       const d = distance(p, enemy);
-      p.look.rotation.set(
+      aim(
         Math.atan2(enemy.y + enemy.height * 0.86 - p.y - p.eye, d) - p.recoil,
         Math.atan2(p.x - enemy.x, p.z - enemy.z),
-        0,
-        'YXZ',
       );
       input.fire = true;
       if (!dest) dest = strafe(creatures, step);
-    } else if (dest) p.look.rotation.set(0, Math.atan2(p.x - dest.x, p.z - dest.z), 0, 'YXZ');
+    } else if (dest) aim(0, Math.atan2(p.x - dest.x, p.z - dest.z));
     const med = g.pickups.objects
       .filter((i) => i.active && i.permanent && i.kind === 'health' && distance(p, i) < 16)
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
@@ -224,31 +233,36 @@ function playLaboratoryCampaign() {
     if (!enemy && !g.beasts.live && state !== 'fight' && w.ammo < config.weapon.magazine)
       input.reload = true;
     const stock=g.kit.remaining();
-    if (stock.medkit && p.hp < 70 && (!enemy || distance(p,enemy)>5)) g.kit.use(2,g);
+    if (stock.medkit && p.hp < 70 && (!enemy || distance(p,enemy)>5)) kit(2);
     if (stock.grenade && enemy && state === 'fight' && distance(p,enemy)>6 &&
-        creatures.filter(a=>distance(a,enemy)<4.5).length>=7) g.kit.use(3,g);
+        creatures.filter(a=>distance(a,enemy)<4.5).length>=7) kit(3);
     if (enemy && dest && (state==='fight'||state==='boss') && g.time>=nextRoll && distance(p,enemy)<4.8 &&
         distance(p,dest)>2.6) {
       rollAim=Math.atan2(p.x-dest.x,p.z-dest.z);
       rollingUntil=g.time+.32;
       nextRoll=g.time+6.1;
-      g.kit.use(0,g);
+      kit(0);
     }
     if (g.time<rollingUntil) {
-      p.look.rotation.set(0,rollAim,0,'YXZ');
+      aim(0,rollAim);
       input.fire=false;
       input.down.add('ShiftLeft');
     } else if (enemy && dest && (state === 'fight' || state === 'boss') && distance(p,enemy)<6 &&
         !p.tired && (!w.ammo || g.time-p.lastHurt<2 || p.hp<65)) {
-      p.look.rotation.set(0,Math.atan2(p.x-dest.x,p.z-dest.z),0,'YXZ');
+      aim(0,Math.atan2(p.x-dest.x,p.z-dest.z));
       input.fire=false;
       input.down.add('ShiftLeft');
     }
     if (state !== 'use' || p.hp >= 99 || g.beasts.live) move(dest);
+    if (browserControls) {
+      browserControls.probe({group,route,move,visible});
+      yield browserControls.command();
+    }
     const beforeBreaks = b?.fight.breaks,
       cooldown = g.field.deviceAt;
     const lastX=p.x, lastZ=p.z;
     g.step(0.04);
+    browserControls?.observe();
     if(g.core)report.exitMetres=(report.exitMetres??0)+Math.hypot(p.x-lastX,p.z-lastZ);
     if (b && b.fight.breaks > beforeBreaks) {
       if (g.field.deviceAt > cooldown) report.pulseBreaks++;
@@ -277,4 +291,5 @@ function playLaboratoryCampaign() {
     spawned: g.story.encounters.map((e) => e.spawned),
     ...(g.phase === 'win' ? {} : { log, task: g.story.guide(g, { keyItem: '核心' })?.title }),
   };
+}
 }

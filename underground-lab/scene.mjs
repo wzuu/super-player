@@ -6,12 +6,13 @@ const CONFIG = {
   audio: { ambient: { frequency: 190, q: 0.64, activeGain: 0.20, pauseGain: 0.12 } },
   player: { safeTime: 13, hurtCooldown: 0.36 },
   weapon: { recoil: 0.011, maxSpread: 0.030, hearingRadius: 22 },
+  feedback: { chargeWindup: 0.90 },
   beasts: {
     spawnDistance: 18, sight: 21, memory: 5.5,
     types: [
-      { hp: 56, damage: 7 },
-      { hp: 144, damage: 15 },
-      { hp: 84, reach: 16.5, damage: 9, projectileGravity: 5.2, hazardLife: 4.4 },
+      { hp: 56, damage: 7, speed: 4.6 },
+      { hp: 144, damage: 15, speed: 3.0, chargeSpeed: 9.6, chargeTime: 1.05 },
+      { hp: 84, speed: 3.5, reach: 16.5, damage: 9, projectileGravity: 5.2, hazardLife: 4.4 },
       { hp: 690, height: 3.45, summonCount: 7 },
     ],
   },
@@ -46,23 +47,28 @@ for(const [n,c,title,lname,rname,mix] of [
   const z0=c-16,z1=c+16;
   const door=mainDoor(['security','samples','power'][n],z1,'开启'+title+'隔离门');
   course.push(door);
+  const firstSide=n===1 ? 1 : -1;
+  const sideDoorZ=[];
   for(const sign of [-1,1]){
-    const doorZ=c+sign*4;
+    const first=sign===firstSide;
+    const doorZ=c+(first ? 1.5 : -8.5);
+    sideDoorZ.push(doorZ);
     sideWall(sign*7.7,z0,z1,doorZ);
     for(const v of [z0+3,z1-3])horizontal(sign<0?-23:7.7,sign<0?-7.7:23,v);
+    // 实体消杀隔板让侧房守卫绕过门廊再接敌。远门仅在靠入口的一端与内室相通。
+    vertical(sign*13,first ? c-6 : z0+3,first ? c+2.5 : c+3);
     decor.push([sign*17.3,c+sign*2,2.5,3,1.4,n]);
   }
-  for(const [x,dz] of [[-5.2,-8],[5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
+  for(const [x,dz] of [[firstSide*5.2,-8],[-firstSide*5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
   const parts=[
     {name:title,count:48,bounds:[-7.15,z0+.8,7.15,z1-.8],anchor:[0,c-4]},
-    {name:lname,count:26,bounds:[-22.5,z0+3.7,-8.2,z1-3.7],anchor:[-16,c-2]},
-    {name:rname,count:26,bounds:[8.2,z0+3.7,22.5,z1-3.7],anchor:[16,c+1]}
+    {name:lname,count:26,bounds:[-22.5,z0+3.7,-9.7,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
+    {name:rname,count:26,bounds:[9.7,z0+3.7,22.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]}
   ];
   for (const part of parts.slice(1)) {
-    const [left, back, right] = part.bounds;
-    part.reward = {name: part.name + '查获记录', value: 120, at: [(left+right)/2, back+2]};
+    part.reward = {name: part.name + '查获记录', value: 120, at: [Math.sign(part.anchor[0])*15.35,z0+5.7]};
   }
-  sections.push({title,parts,z0,z1});
+  sections.push({title,parts,z0,z1,sideDoorZ});
   course.push({kind:'fight',name:title,parts,at:[0,z1+1],range:4,entries:parts.map(s=>s.anchor),mix,
     label:'清剿'+title+'，确认两侧房间',bounds:parts.map(s=>s.bounds)});
   course.push({kind:'use',at:[0,z0+2.4],label:['领取安保卡','读取封存记录','恢复反应堆供电'][n]});
@@ -76,7 +82,39 @@ const bossSupplies=[[.4,-42],[9.5,-58.5],[-10,-63]];
 ammo.push([2.5,62],...bossSupplies);health.push([-9,-63,65],[8,-53,60]);
 for(const [x,z] of [[-7,-54],[7,-68],[-12.5,-67],[13,-54]])decor.push([x,z,2.1,2.8,1.4,3]);
 const roomBounds = sections.flatMap(section => section.parts);
-const labStory={type:'lab',turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
+// 守卫在自己的驻点巡视。枪声只给出开火位置，看到玩家或被击中才交给追击 AI。
+const guardNeighbors = [];
+function watchRooms(b, g, dt, canSee, config) {
+  const post = b.guardPost, p = g.player;
+  const sense = (g.beasts.frame + b.id) % 6 === 0;
+  if (b.hp < b.maxHP || b.stun > 0 || (sense && Math.hypot(p.x-b.x,p.z-b.z) < config.beasts.sight && canSee(b,p))) return false;
+  if (g.time - g.shotAt < .35 && b.heardAt !== g.shotAt &&
+      Math.hypot(g.shotX-b.x,g.shotZ-b.z) < config.weapon.hearingRadius * g.shotHearingScale) {
+    b.heardAt = g.shotAt; b.heardX = g.shotX; b.heardZ = g.shotZ;
+  }
+  const listening = g.time - b.heardAt < config.beasts.memory;
+  const angle = post.yaw + .9 * Math.sin(g.time * .65 + b.id);
+  const heading = listening ? Math.atan2(b.heardX-post.x,b.heardZ-post.z) : angle;
+  const pace = listening ? 2.4 : (b.id % 3 === 0 ? 1.15 * Math.sin(g.time * .48 + b.id) : 0);
+  const [left,back,right,front] = b.roomBounds;
+  const x = Math.max(left,Math.min(right,post.x + Math.sin(heading)*pace));
+  const z = Math.max(back,Math.min(front,post.z + Math.cos(heading)*pace));
+  const dx = x-b.x, dz = z-b.z, gap = Math.hypot(dx,dz);
+  const step = Math.min(gap,dt * (listening ? .95 : .55) * b.perkMoveScale);
+  b.stride = 0;
+  if (gap > .08 && step > 0) {
+    const mx = dx/gap*step, mz = dz/gap*step, range = b.radius + 1.5;
+    const near = g.beasts.hash.query(b.x-range,b.z-range,b.x+range,b.z+range,guardNeighbors);
+    const blocked = near.some(other => other !== b && Math.abs(other.y-b.y)<1.3 &&
+      Math.hypot(b.x+mx-other.x,b.z+mz-other.z) < b.radius+other.radius+.08 &&
+      (other.x-b.x)*mx + (other.z-b.z)*mz > 0);
+    if (!blocked) b.stride = g.level.move(b,mx,mz,.47)/dt;
+  }
+  const facing = listening ? Math.atan2(b.heardX-b.x,b.heardZ-b.z) : angle;
+  b.fx = Math.sin(facing); b.fz = Math.cos(facing); b.yaw = facing;
+  return true;
+}
+const labStory={type:'lab',watchRooms,turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
   terminals:course.filter(t=>t.kind==='use').map(t=>t.at),locks:locks.map(([id,x,z])=>({id,at:[x,z],why:'需完成上一项任务'})),route:course};
 const MAP_GRID=Array.from({length:88},(_,i)=>{
  const z=i*2-87;
@@ -192,15 +230,14 @@ function buildMap(ctx) {
   }
 
   // 中轴青绿双线持续指向更深的隔离门。房间支线从敞开侧门接到领取台。
-  for(const {title,z0,z1,parts} of sections){
+  for(const {z0,z1,parts,sideDoorZ} of sections){
     const center=(z0+z1)/2;
     for(const side of [-1,1]){
       glow(side*1.72,.016,center,.072,.026,29,JADE,.95);
-      const doorZ=center+side*4;
+      const doorZ=sideDoorZ[side<0 ? 0 : 1];
       glow(side*5,.018,doorZ,6,.03,.075,ICE,.92);
       const part=parts[side<0?1:2];
-      const [x0,back,x1]=part.bounds;
-      const lx=(x0+x1)/2,lz=back+2;
+      const [lx,lz]=part.reward.at;
       // 领取点前方保留无碰撞的空地，台座贴在后方实体墙上。
       box('metal',lx,.53,lz-1.4,1.8,1.06,.56,STEEL);
       level.box(lx,lz-1.4,1.8,.56,0,1.06);
@@ -245,7 +282,7 @@ function buildMap(ctx) {
     header(0,z1,0,6.8,4.1,JADE);
     sign(0,4.85,z1+.39,0,code,'ISOLATION ACCESS',title,tint);
     for(const signX of [-1,1]){
-      const east=signX>0, doorZ=c+signX*4;
+      const east=signX>0, doorZ=section.sideDoorZ[east ? 1 : 0];
       header(7.7*signX,doorZ,Math.PI/2,6,3.76,ICE);
       sign(signX*7.29,4.34,doorZ,-signX*Math.PI/2,code+(east?'E':'W'),
         east?'EAST WING':'WEST WING',parts[east?2:1].name,tint);

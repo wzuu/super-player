@@ -10,6 +10,47 @@ export function rotateLook(rotation, dx, dy, speed) {
   rotation.x = Math.max(-pitchLimit, Math.min(pitchLimit, rotation.x - radians(dy)));
 }
 
+// 合并包的总位移可能超过单采样保护阈值；按时间顺序处理真实子采样，不能再累加外层事件。
+export function applyMouseLook(rotation, event, speed, lockStartedAt, onSample) {
+  if (event.timeStamp < lockStartedAt) return false;
+  let handled = false;
+  const apply = (dx, dy, time) => {
+    if (!dx && !dy) return;
+    handled = true;
+    rotateLook(rotation, dx, dy, speed);
+    onSample?.(dx, dy, time);
+  };
+  const samples = event.getCoalescedEvents?.();
+  if (!samples?.length) {
+    apply(event.movementX, event.movementY, event.timeStamp);
+    return handled;
+  }
+  let hasX = false, hasY = false, stale = false;
+  for (const sample of samples) {
+    if (sample.timeStamp < lockStartedAt) { stale = true; continue; }
+    hasX ||= Boolean(sample.movementX);
+    hasY ||= Boolean(sample.movementY);
+    apply(sample.movementX, sample.movementY, sample.timeStamp);
+  }
+  // 一些实现只在外层报告某轴相对位移。跨越重锁的包不能用总量，否则会带回旧锁的输入。
+  if (!stale) apply(hasX ? 0 : event.movementX, hasY ? 0 : event.movementY, event.timeStamp);
+  return handled || stale;
+}
+
+export async function requestMouseLock(canvas, onMode) {
+  let raw = true, result;
+  try {
+    result = canvas.requestPointerLock({unadjustedMovement: true});
+    await result;
+  } catch (error) {
+    if (error?.name !== 'NotSupportedError' && error?.name !== 'TypeError') throw error;
+    raw = false;
+    await canvas.requestPointerLock();
+  }
+  // 旧的 void API 可以忽略多余参数，无法据此确认系统加速度是否关闭。
+  onMode?.(raw ? (typeof result?.then === 'function' ? 'unadjusted' : 'unconfirmed') : 'default');
+}
+
 // 摇杆离开起动圈后才转向，回到较小的停止圈时归零。按径向行程连续映射，保留斜向角度。
 export class StickLook {
   peak = 0;

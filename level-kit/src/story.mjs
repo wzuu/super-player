@@ -223,8 +223,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       beast.storyWave = group.tag;
       beast.sectionRoom=parts?.[i].name;
       beast.roomBounds=parts?.[i].bounds;
-      beast.roomAlert = !parts || (stage===item && parts[i]===stage.parts[0]);
-      beast.alert = CONFIG.beasts.memory + 6;
+      beast.roomAlert = !parts || (!spec.watchRooms && stage===item && parts[i]===stage.parts[0]);
+      beast.guardPost = parts && spec.watchRooms ? {x:beast.x, z:beast.z, yaw:beast.yaw} : null;
+      beast.alert = beast.guardPost ? 0 : CONFIG.beasts.memory + 6;
       beast.droneRaider = Boolean(stage.escort && i % 2 === 0);
       if (stage.climbs) {
         beast.climbRoute = stage.climbs[i % entrances.length];
@@ -241,7 +242,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (!group) return waitForSpace(g);
     retryAt = 0;
     group.markedUntil = g.time + 1.25;
-    for (const b of members(g)) if (b.sectionRoom===item.parts?.[0].name) b.roomAlert = true;
+    if (!spec.watchRooms) {
+      for (const b of members(g)) if (b.sectionRoom===item.parts?.[0].name) b.roomAlert = true;
+    }
     if (item.kind === 'fight') {
       director.droneDocked = Boolean(item.escort);
       group.record = {name:item.name, deployedAt:group.deployedAt, enteredAt:g.time, spawned:item.count};
@@ -611,7 +614,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       }
     },
     stepBeast(b, g, dt) {
-      if(b.storyWave && b.roomBounds && !b.roomAlert){
+      if (b.storyWave && b.guardPost && !b.roomAlert) {
+        if (spec.watchRooms(b, g, dt, clearLine, CONFIG)) return true;
+        b.roomAlert = true;
+        b.alert = CONFIG.beasts.memory;
+      } else if(b.storyWave && b.roomBounds && !b.roomAlert){
         const [left,back,right,front]=b.roomBounds, p=g.player;
         const distance=Math.hypot(p.x-b.x,p.z-b.z);
         const nearRoom=p.z>=back && p.z<=front && p.x>=left-2 && p.x<=right+2;

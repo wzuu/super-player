@@ -1,4 +1,5 @@
 """通过打包后的离线入口验证右键停用、低顶蹲伏和战前/暂停说明。"""
+import json
 import os
 import re
 from playwright.sync_api import sync_playwright
@@ -195,10 +196,12 @@ def check_sound_storage(page):
 def check(browser):
     from aiming_browser import check_aiming
     from mouse_motion_browser import check_mouse_motion
+    from pointer_samples_browser import verify as check_pointer_samples
     check_aiming(browser)
     check_mouse_motion(browser)
+    check_pointer_samples(browser, ROOT)
     for stage,query,crouch,deep,custom in [
-        ("practice","?mode=tutorial",True,False,False),
+        ("practice","?mode=tutorial&lookTrace=1",True,False,False),
         ("practice","?mode=range",True,False,True),
         ("buried-tomb","",True,True,True),
         ("underground-lab","",False,False,False),
@@ -214,8 +217,21 @@ def check(browser):
                 weapon_controls(page,custom)
             if stage=="practice":
                 mute_checks(page,custom)
+            if "lookTrace=1" in query:
+                page.mouse.move(448,302,steps=3)
+                page.evaluate("new Promise(resolve=>requestAnimationFrame(resolve))")
             page.keyboard.press("Escape")
             page.wait_for_function("run.game.phase==='pause'")
+            download_button = page.locator("#look-trace-download")
+            if "lookTrace=1" in query:
+                with page.expect_download() as downloaded:
+                    download_button.click()
+                with downloaded.value.path().open(encoding="utf8") as source:
+                    trace = json.load(source)
+                assert trace["stage"] == "tutorial" and trace["frames"] and trace["mouse"], trace.keys()
+                assert any(row[1] for row in trace["lock"]) and not trace["lock"][-1][1], trace["lock"]
+            else:
+                assert download_button.is_hidden()
             menu(page,crouch,deep,custom)
             start(page)
             right_button_checks(page, False)
