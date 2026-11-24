@@ -168,10 +168,17 @@ export async function openBrowserStore(levels, path, onUpgradeBlocked) {
         earned: rows.reduce((sum,row)=>sum+row.loot.reduce((value,item)=>value+item.value,0),0),
         cleared:[...new Set(rows.filter(row=>row.won).map(row=>row.level))]};
     }),
-    writeGear: ({revision,state}) => transaction('settings','readwrite',async tx => {
+    writeGear: ({revision,state,purchaseId,acknowledgePurchase}) => transaction('settings','readwrite',async tx => {
       const settings = tx.objectStore('settings');
+      if (acknowledgePurchase) {
+        await result(settings.delete('purchase:' + acknowledgePurchase));
+        return {saved:true};
+      }
+      const key = purchaseId && 'purchase:' + purchaseId;
+      if (key && await result(settings.count(key))) return {saved:true};
       if (((await result(settings.get('gear')))?.revision ?? 0) !== revision) return {saved:false};
       await result(settings.put({revision:revision+1,state},'gear'));
+      if (key) await result(settings.add(true,key));
       return {saved:true};
     }),
     loadout: () => transaction('settings', 'readonly', async tx => ({

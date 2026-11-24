@@ -83,6 +83,36 @@ def boss_measure(page, burst):
     }""", burst)
 
 
+def verify_boss_feedback(page):
+    page.evaluate("""() => {
+      const {game:g}=run, w=g.weapon;
+      document.querySelector('#mission-mode').value='endless';g.reset();g.phase='play';
+      const b=g.beasts.boss, f=b.fight;
+      w.origin.set(b.x,b.y+1,b.z+5);
+      w.end.set(b.x,b.y+b.height*.86,b.z);w.dir.set(0,0,-1);
+      if(w.hitTarget(b,g)!==1 || f.charge)throw Error('装甲命中误报弱点');
+      f.weakUntil=g.time+3;
+      if(w.hitTarget(b,g)!==2 || f.charge!==1)throw Error('发光核心未计入破甲');
+      const device=g.field.device;
+      Object.assign(g.player,device);
+      Object.assign(b,{x:device.x+7.5,z:device.z,y:device.y});
+      g.field.interact(g);
+      if(g.field.deviceAt || f.breaks)throw Error('范围外消耗破甲脉冲');
+      Object.assign(b,{x:device.x-1,z:device.z});
+      for(let i=0;i<f.rules.breakHits && !f.breaks;i++)g.beasts.damage(b,1,g,'weapon',{headshot:true});
+      if(f.breaks!==1 || !g.field.hint(g).includes('已破甲'))throw Error('枪械破甲后仍提示释放脉冲');
+      if(!g.field.interact(g) || g.field.deviceAt || f.breaks!==1)throw Error('已破甲时消耗脉冲');
+      g.beasts.damage(b,1e6,g,'weapon');
+      if(f.transitionUntil<=g.time || !g.field.hint(g).includes('正在转阶段'))throw Error('转阶段仍提示释放脉冲');
+      if(!g.field.interact(g) || g.field.deviceAt || f.breaks!==1)throw Error('转阶段时消耗脉冲');
+      g.time=f.transitionUntil;
+      if(!g.field.hint(g).includes('释放脉冲') || !g.field.interact(g) || f.breaks!==2 || g.field.deviceAt<=g.time)
+        throw Error('范围内脉冲未破甲');
+      g.reset();
+      if(g.field.deviceAt || g.beasts.boss.fight.breaks)throw Error('重开留下脉冲冷却或破甲状态');
+    }""")
+
+
 def verify_roles(page):
     page.evaluate("""()=>{
       const g=run.game,m=g.beasts,p=g.player;
@@ -180,11 +210,13 @@ def main():
         try:
             for stage in ["underground-lab","rain-city"]:
                 page=level_page(browser,stage)
+                if stage=="underground-lab": verify_boss_feedback(page)
                 pickup_views(page,stage,os.environ.get('PICKUP_CAPTURE'))
                 for burst in [False,True]:
                     result=boss_measure(page,burst)
                     print(stage,'高爆发' if burst else '默认火力',result,flush=True)
-                    assert 60 <= result['seconds'] <= 90, (stage,burst,result)
+                    low, high = (45,60) if stage == 'underground-lab' and burst else (60,90)
+                    assert low <= result['seconds'] <= high, (stage,burst,result)
                 if stage=="rain-city": verify_roles(page)
                 page.close()
             page=level_page(browser,'paris-tower')

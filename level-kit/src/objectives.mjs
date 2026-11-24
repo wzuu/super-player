@@ -11,7 +11,7 @@ export const missionNames = {
 export function campaignMission(stage) {
   return variants[stage] ?? 'classic';
 }
-export function createObjective(stage, { THREE, scene }, config) {
+export function createObjective(stage, { THREE, scene }) {
   const drone = new THREE.Mesh(
     new THREE.OctahedronGeometry(0.42),
     new THREE.MeshBasicMaterial({ color: 0x8effdb }),
@@ -94,7 +94,7 @@ export function createObjective(stage, { THREE, scene }, config) {
       if (mode === 'escort') return escorted;
       if (mode === 'timed') return g.core && g.bossDead;
       if (mode === 'endless') return false;
-      return g.kills >= config.beasts.killsToWin && g.bossDead && g.core;
+      return mode === 'classic' && g.bossDead && g.core;
     },
     get held() { return hold; },
     damageDrone(amount, g) {
@@ -141,7 +141,7 @@ export function createObjective(stage, { THREE, scene }, config) {
       const gate = g.level.gate;
       const step = (stage, title, target = null, detail = '') => ({ stage, title, target, detail });
       if (g.blast) return step('blast', text.detonating);
-      const route = g.story?.guide(g,text);
+      const route = g.story?.guide?.(g,text);
       if (route && !(mode === 'escort' && waiting && !g.story.droneDocked))
         return mode === 'escort' ? { ...route, detail: [route.detail, underAttackUntil>g.time?'无人机受袭':'', '无人机耐久 ' + goal.escortHealth + '%'].filter(Boolean).join(' · ') } : route;
       if (mode === 'endless') return step('wave-' + wave, '击退第 ' + wave + ' 波凶兽', null,
@@ -162,15 +162,14 @@ export function createObjective(stage, { THREE, scene }, config) {
         return step('escort', '护送无人机前往' + text.portal, gate,
           health + ' · 距撤离点 ' + Math.round(drone.position.distanceTo(gate)) + ' 米');
       }
-      if (!g.bossDead) return step(g.kills >= config.beasts.killsToWin && mode === 'classic' ? 'boss-last' : 'boss',
+      if (!g.bossDead) return step('boss',
         '击败' + text.bossName, g.beasts.boss ?? g.level.bossAnchor, mode === 'timed' ? goal.label(g) : '');
       if (!g.core) {
         const near = g.pickups.nearKey(g.player);
         return step(near ? 'collect' : 'find-core', (near ? '按 F 拾取' : '前往拾取') + text.keyItem,
           near ? null : g.pickups.keyItem);
       }
-      return step('clear', '继续清剿' + text.enemy, null,
-        '还需击败 ' + Math.max(0, config.beasts.killsToWin - g.kills) + ' 只');
+      return step('exit', text.exitObjective, gate);
     },
   };
   return goal;

@@ -786,8 +786,8 @@ function machineModel(type,{THREE,shapes,mergeGeometries},rage=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'管道集市坡道口',at:[10.65,17.4],entries:[[17,17],[-1,16]]},
-    {name:'全息广告广场',at:[-10,8],entries:[[-17,12],[0,3]]},
+    {name:'管道集市坡道口',cap:9,interval:0.33,at:[10.65,17.4],entries:[[17,17],[-1,16]]},
+    {name:'全息广告广场',cap:12,interval:0.29,at:[-10,8],entries:[[-17,12],[0,3]]},
   ]},
   weaponSkin: 'neon-undercity',
   pageTitle:'霓雨下城 | 第九关',

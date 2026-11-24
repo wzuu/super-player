@@ -27,7 +27,19 @@ def verify(browser):
         result=page.evaluate("""() => {
           const {game:g,nav}=run,f=g.field;
           document.querySelector('#mission-mode').value='endless';g.reset();g.phase='play';
-          nav.rebuild(g.level.spawn.x,g.level.spawn.z);
+          const p=g.player,door=g.level.entryDoor;
+          if(door){
+            if(!door.active)throw Error('出生时实验室气闸应关闭');
+            const outside=door.z0-2;
+            for(let i=0;i<180 && p.z>outside;i++){
+              g.time+=.02;
+              g.encounter.update(g,.02);
+              g.level.move(p,0,-.09,run.config.player.step);
+            }
+            if(door.active || p.z>outside)throw Error('从出生点未能穿过自动气闸');
+          }
+          window.fieldAnchor={x:p.x,z:p.z};
+          nav.rebuild(p.x,p.z);
           const approach=room=>{
             if(!room)return false;
             const {x,y,z}=room.front;
@@ -44,16 +56,28 @@ def verify(browser):
             details=page.evaluate("""() => {
               const {game:g,nav,config}=run,f=g.field;
               const check=(ok,msg)=>{if(!ok)throw Error(msg)};
-              const move=p=>Object.assign(g.player,{x:p.x,y:p.y,z:p.z});
+              const move=p=>{Object.assign(g.player,{x:p.x,y:p.y,z:p.z});nav.rebuild(p.x,p.z);};
               const clear=()=>{for(const b of g.beasts.pool)b.active=false;g.beasts.live=0;g.beasts.boss=null;g.beasts.refreshHash();};
               const reset=mode=>{document.querySelector('#mission-mode').value=mode;g.reset();g.phase='play';g.time=20;};
               const beat=b=>{for(let i=0;b.active && i<9;i++)g.beasts.damage(b,1e7,g,'weapon');check(!b.active,'guard survived');};
               const tick=(s=.4)=>{g.time+=s;f.step(s,g);};
-              const wave=tag=>{for(let i=0;i<30;i++){
+              const wave=tag=>{for(let i=0;i<150;i++){
                 for(const b of [...f.guards])if(b.active && b.fieldGroup===tag)beat(b);
                 tick();
                 if(!f.waitingGuards&&!f.guards.some(b=>b.active&&b.fieldGroup===tag))break;
               }};
+              if (run.config.beasts && g.beasts.boss) {
+                const drops=g.pickups, boss=g.beasts.boss, poolSize=drops.objects.length;
+                for(let i=0;i<poolSize+5;i++) drops.add('rare',1,1,0,'稀有掉落',200);
+                for(let phase=0;boss.active && phase<3;phase++){g.time+=2;g.beasts.damage(boss,1e7,g,'weapon');}
+                check(drops.keyItem?.active && drops.objects.length===poolSize,'full pool blocked core');
+                for(let i=0;i<8;i++) drops.add('ammo',i,1,0,'固定弹箱',26,true);
+                const rewards=['宝库甲','宝库乙','秘藏','传奇'].map(name=>drops.add('rare',1,1,0,name,200,true));
+                check(rewards.every(item=>item?.active) && new Set([...rewards,drops.keyItem]).size===5,
+                  'core displaced a protected reward');
+                move(drops.keyItem);check(drops.takeKey(g.player,g),'full pool core unreachable');
+                reset('endless');
+              }
               clear();move(f.vault.front);check(f.hint(g).includes('可选'),'vault hint');
               check(f.interact(g),'start vault');tick(2);check(f.guards.length>0,'no first wave');wave('vault');
               tick(3);check(f.guards.some(b=>b.active&&b.fieldGroup==='vault'),'no finite reinforcements');wave('vault');
@@ -63,7 +87,7 @@ def verify(browser):
               move(f.lever);check(f.vault.shortcut.box.active!==false && f.interact(g),'switch blocked');
               check(f.vault.shortcut.box.active===false && !f.vault.shortcut.mesh.visible,'open mismatch');
               check(!f.interact(g),'one-shot mechanism reused');
-              nav.rebuild(g.level.spawn.x,g.level.spawn.z);
+              nav.rebuild(fieldAnchor.x,fieldAnchor.z);
               check(nav.dist[nav.index(f.vault.center.x,f.vault.center.z)]>=0,'vault disconnected');
               move({...f.secret.front,y:f.secret.front.y+4});check(!f.interact(g)&&!f.secretOpen,'secret opened across floors');
               move(f.secret.front);check(f.interact(g)&&f.secretOpen&&!f.secret.door.box.active,'secret did not open');
@@ -95,7 +119,7 @@ def verify(browser):
                 reset('hunt');g.time=f.huntLimit;f.step(0,g);check(g.phase==='fail','hunt time limit');
               }
               if(f.cfg.deep){
-                const unlock=()=>{reset('classic');clear();g.story.blocksExit=false;g.kills=config.beasts.killsToWin;g.core=g.bossDead=true;move(g.level.gate);};
+                const unlock=()=>{reset('classic');clear();g.story.blocksExit=false;g.kills=0;g.core=g.bossDead=true;move(g.level.gate);};
                 unlock();
                 check(g.ready()&&f.deepRoom.door.box.active,'base gate or deep lock');f.deepen(g);check(!f.deep,'missing confirmation');f.deepen(g);
                 check(f.deep==='guards'&&!g.ready()&&f.interact(g),'base gate still open');
@@ -107,7 +131,10 @@ def verify(browser):
                 g.objective.step(300,g);check(g.phase==='play','deep has hard deadline');
                 check(!g.pickups.add('ammo',g.player.x,g.player.z,g.player.y,'通常掉落',22),'deep sources leaked');
                 wave('deep');check(f.deep==='reward'&&f.legend?.active,'missing legendary');
-                move(f.legend);g.pickups.collect(f.legend,g.player,g);tick();check(f.deep==='exit','legendary prematurely settled');
+                move(f.legend);g.pickups.collect(f.legend,g.player,g);
+                // 拾取和下一帧之间死亡掉落可重新使用刚释放的槽。
+                const reused=g.pickups.add('rare',g.player.x,g.player.z,g.player.y,'新掉落',20,true);
+                check(reused===f.legend,'legend slot was not reused');tick();check(f.deep==='exit','legendary collection lost');
                 move(f.deepExit);check(f.interact(g)&&g.phase==='win'&&f.deepFinished,'deep extraction');
                 unlock();f.deepen(g);f.deepen(g);g.finish(false);
                 check(g.phase==='fail'&&!g.loot.length&&g.value===0,'deep failure retained rewards');
@@ -115,6 +142,30 @@ def verify(browser):
               return [f.cfg.name,'vault/secret/switch/rays/attribution',f.cfg.hunt?'hunt':'',f.cfg.deep?'deep':''];
             }""")
             print("PASS",level['id'],details,flush=True)
+        if level['id']=='ember-fortress':
+            routes=page.evaluate("""() => {
+              const {game:g,config}=run, p=g.player;
+              document.getElementById('mission-mode').value='classic';g.reset();g.phase='play';
+              function traverse(time,x,z) {
+                Object.assign(p,{x:-4,y:0,z:30,lastHurt:-Infinity});
+                g.time=time;g.encounter.update(g);
+                const target={x,y:0,z}, task=g.story.navigation({target},{player:p,time,beasts:{pool:[]}});
+                if(!task.path?.length)throw Error('没有通往目标的路线');
+                for(const turn of task.path) {
+                  const dx=turn.x-p.x,dz=turn.z-p.z,steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.08));
+                  for(let i=0;i<steps;i++) {
+                    g.level.move(p,dx/steps,dz/steps,config.player.step);
+                    p.y=g.level.foot(p.x,p.z,p.y+config.player.step,p.radius);
+                  }
+                  if(Math.hypot(p.x-turn.x,p.z-turn.z)>.01)throw Error('推荐路线被真实移动规则拦下');
+                }
+                if(Math.hypot(p.x-x,p.z-z)>.01)throw Error('未到达标记');
+                return task.path.length;
+              }
+              return [traverse(20,-4,20),traverse(130,-4,20),traverse(130,17,10),traverse(170,-4,20)];
+            }""")
+            assert routes[0]==routes[3]==1 and min(routes[1:3])>1,routes
+            print("PASS 低潮、涨潮绕行及退潮后的实际移动",routes,flush=True)
     assert not errors,errors
     page.close()
 

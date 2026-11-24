@@ -41,6 +41,8 @@ function engage(b, game) {
     f.started = true;
     f.startedAt = game.time;
     f.next = game.time + 2.6;
+    if (game.story?.stage === 'boss' && game.field?.device && f.pattern === 1)
+      game.ui.notify('躲开喷涌，核心亮起时射击 · 青色脉冲柱可破甲', 3);
   }
 }
 export function bossDamage(b, amount, game, hit) {
@@ -80,7 +82,7 @@ export function bossDamage(b, amount, game, hit) {
 }
 export function breakBoss(b, game) {
   const f = b.fight;
-  if (!f || game.time < f.transitionUntil || game.time < f.brokenUntil) return;
+  if (!f || game.time < f.transitionUntil || game.time < f.brokenUntil) return false;
   f.brokenUntil = game.time + f.rules.vulnerable;
   f.charge = 0;
   f.breaks++;
@@ -90,6 +92,7 @@ export function breakBoss(b, game) {
   game.player.attackKick = Math.max(game.player.attackKick, 0.3);
   game.sound.tone(780, 160, 0.18, 0.2, 'triangle');
   game.ui.notify('首领破甲 · 集中攻击', 1.4);
+  return true;
 }
 export function bossStep(b, g, realPlayer, level) {
   const f = b.fight,

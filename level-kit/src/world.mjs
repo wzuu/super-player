@@ -119,6 +119,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.spawnPitch = definition.spawnPitch ?? -0.012;
       this.sites = [];
       this.terrainRevision = 0;
+      this.globalTerrainRevision = 0;
       this.barrierChanges = new Map();
     }
     box(x, z, width, depth, low, high, climb = false) {
@@ -134,6 +135,9 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       barrier.active = closed;
       this.terrainRevision++;
       this.barrierChanges.set(barrier,this.terrainRevision);
+    }
+    terrainChanged() {
+      this.globalTerrainRevision = ++this.terrainRevision;
     }
     base(x, z) {
       const base=definition.terrain?.ground?.(x,z)??0;
@@ -224,7 +228,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
   }
 
   class RouteField {
-    constructor(level, body, collectSites) {
+    constructor(level, body, collectSites, checkEdges = false) {
       this.level = level;
       this.body = body;
       this.cell = CONFIG.map.navCell;
@@ -232,17 +236,44 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.height = Math.ceil(GRID.halfZ * 2 / this.cell);
       const count = this.width * this.height;
       this.walkable = new Uint8Array(count);
+      this.floors = checkEdges ? new Float32Array(count) : null;
       this.dist = new Int32Array(count);
       this.queue = new Int32Array(count);
       for (let i = 0; i < count; i++) {
         const x = this.x(i), z = this.z(i);
-        const y = level.surface(x, z, level.base(x, z) + 0.50);
+        const y = this.ground(x, z, i);
         this.walkable[i] = !level.blocked(x, z, y, body.radius, body.height);
         if (collectSites && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
       }
       this.target = -1;
       this.terrainRevision = -1;
       this.routes = definition.terrain?.routeOpen ? new Uint8Array(count) : this.walkable;
+      this.edges = checkEdges ? new Uint8Array(count) : null;
+    }
+    ground(x, z, i) {
+      const ceiling = this.level.base(x,z) + .50;
+      if (!this.floors) return this.level.surface(x,z,ceiling);
+      return this.floors[i] = this.level.foot(x,z,ceiling,this.body.radius);
+    }
+    canWalk(a,b) {
+      const samples = Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(this.body.radius*.8)));
+      const body = { x:a.x, y:a.y, z:a.z, radius:this.body.radius, height:this.body.height };
+      const allowed = definition.terrain?.routeOpen;
+      let open = allowed?.(a.x,a.z,this.level) ?? true;
+      for (let j=1; j<=samples; j++) {
+        const x=a.x+(b.x-a.x)*j/samples, z=a.z+(b.z-a.z)*j/samples;
+        const floor=this.level.foot(x,z,body.y+this.body.step,body.radius);
+        const nextOpen = allowed?.(x,z,this.level) ?? true;
+        // 玩家可以走出脚下刚刚上涨的岩浆，但导航不能把开放路段拉直成穿越禁行带的近路。
+        // 水平移动逐轴结算。斜线掠过沟道拐角时，两个端点都可能在干地上。
+        if ((open && !nextOpen) || (definition.terrain?.canEnter &&
+            (!this.level.canEnter(body,x,z,floor) || !this.level.canEnter(body,x,body.z,floor) ||
+             !this.level.canEnter(body,body.x,z,floor))) ||
+            Math.abs(floor-body.y)>this.body.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height)) return false;
+        body.x=x;body.z=z;body.y=floor;
+        open=nextOpen;
+      }
+      return Math.abs(body.y-b.y)<.65;
     }
     x(i) { return (i % this.width + 0.5) * this.cell - GRID.halfX; }
     z(i) { return (Math.floor(i / this.width) + 0.5) * this.cell - GRID.halfZ; }
@@ -254,6 +285,13 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
     rebuild(x, z) {
       const routes = this.routes;
       if (this.terrainRevision !== this.level.terrainRevision) {
+        const dirty = this.edges && this.terrainRevision >= this.level.globalTerrainRevision ? new Set() : null;
+        const changed = i => {
+          if (!dirty) return;
+          dirty.add(i);
+          if (i % this.width) dirty.add(i-1);
+          if (i >= this.width) dirty.add(i-this.width);
+        };
         // 门体可能在寻路场创建之后加入。只重新采样门体周边各体型能通过的格子。
         for (const [box, revision] of this.level.barrierChanges) {
           if (revision <= this.terrainRevision) continue;
@@ -261,14 +299,33 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
           const width=b%this.width-a%this.width;
           for(let row=a;row<=b;row+=this.width) for(let col=0;col<=width;col++) {
             const i=row+col, x=this.x(i), z=this.z(i);
-            const y=this.level.surface(x,z,this.level.base(x,z)+.5);
+            const y=this.ground(x,z,i);
             this.walkable[i]=!this.level.blocked(x,z,y,radius,height);
+            changed(i);
           }
         }
         this.target = -1;
         this.terrainRevision = this.level.terrainRevision;
         if (routes !== this.walkable) for (let i = 0; i < routes.length; i++) {
-          routes[i] = this.walkable[i] && definition.terrain.routeOpen(this.x(i), this.z(i), this.level);
+          const open = Number(Boolean(this.walkable[i] && definition.terrain.routeOpen(this.x(i), this.z(i), this.level)));
+          if (routes[i] !== open) changed(i);
+          routes[i] = open;
+        }
+        if (this.edges) {
+          // 隔墙可能正好横跨两个可站立格之间。玩家路标同时检查边界处的净空。
+          for (const i of dirty ?? routes.keys()) {
+            const x = this.x(i), z = this.z(i);
+            for (const [j, bit, reverse] of [[i + 1, 2, 1], [i + this.width, 8, 4]]) {
+              if (j >= routes.length || (bit === 2 && j % this.width === 0)) continue;
+              this.edges[i] &= ~bit;
+              this.edges[j] &= ~reverse;
+              if (!routes[i] || !routes[j]) continue;
+              if (this.canWalk({x,y:this.floors[i],z}, {x:this.x(j),y:this.floors[j],z:this.z(j)})) {
+                this.edges[i] |= bit;
+                this.edges[j] |= reverse;
+              }
+            }
+          }
         }
       }
       let start = this.index(x, z);
@@ -294,10 +351,11 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         const left = i % n > 0 ? i - 1 : -1;
         const right = i % n < n - 1 ? i + 1 : -1;
         const up = i - n, down = i + n;
-        if (routes[left] && this.dist[left] < 0) { this.dist[left] = d; this.queue[count++] = left; }
-        if (routes[right] && this.dist[right] < 0) { this.dist[right] = d; this.queue[count++] = right; }
-        if (routes[up] && this.dist[up] < 0) { this.dist[up] = d; this.queue[count++] = up; }
-        if (routes[down] && this.dist[down] < 0) { this.dist[down] = d; this.queue[count++] = down; }
+        const edges = this.edges ? this.edges[i] : 15;
+        if ((edges & 1) && routes[left] && this.dist[left] < 0) { this.dist[left] = d; this.queue[count++] = left; }
+        if ((edges & 2) && routes[right] && this.dist[right] < 0) { this.dist[right] = d; this.queue[count++] = right; }
+        if ((edges & 4) && routes[up] && this.dist[up] < 0) { this.dist[up] = d; this.queue[count++] = up; }
+        if ((edges & 8) && routes[down] && this.dist[down] < 0) { this.dist[down] = d; this.queue[count++] = down; }
       }
     }
     next(x, z) {
@@ -305,7 +363,8 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       let best = i, cost = this.dist[i] < 0 ? Infinity : this.dist[i];
       const left = i % n > 0 ? i - 1 : -1;
       const right = i % n < n - 1 ? i + 1 : -1;
-      for (const candidate of [left, right, i - n, i + n]) {
+      const edges = this.edges ? this.edges[i] : 15;
+      for (const candidate of [(edges & 1) ? left : -1, (edges & 2) ? right : -1, (edges & 4) ? i-n : -1, (edges & 8) ? i+n : -1]) {
         const d = this.dist[candidate];
         if (d >= 0 && d < cost) { best = candidate; cost = d; }
       }
@@ -315,6 +374,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
 
   // 每种体型共享自己的目标距离场。同一格内移动不会重复计算路径。
   class Navigation extends RouteField {
+    playerRoute() { return new RouteField(this.level, CONFIG.player, false, true); }
     routeFor(type) { return new RouteField(this.level,CONFIG.beasts.types[type],false); }
     constructor(level) {
       const types = CONFIG.beasts.types;

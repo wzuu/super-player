@@ -21,12 +21,12 @@ const DEFAULT_CONFIG = {
     safeDrop:4.5, fallDamagePerMeter:7,
   },
   weapon: {
-    fireRate: 10, magazine: 60, reserve: 300, maxReserve: 540, reloadTime: 1.8,
+    fireRate: 10, magazine: 120, reserve: 600, maxReserve: 1080, reloadTime: 1.8,
     damage: 24, range: 92, baseSpread: 0.0045, maxSpread: 0.033, recoil: 0.012,
     heatPerShot: 0.061, heatRecovery: 1.1, hitStop: 0.03, hearingRadius: 32,
   },
   beasts: {
-    population: 64, capacity: 96, killsToWin: 150, spawnEvery: 0.50, spawnBurst: 2,
+    population: 64, capacity: 96, encounterSize: 100, spawnEvery: 0.50, spawnBurst: 2,
     spawnDistance: 21, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
     memory: 7, separation: 1.35,
     appearance: {
@@ -61,7 +61,7 @@ const DEFAULT_CONFIG = {
     ],
   },
   pickups: {
-    pool: 220, grab: 1.18, ammoDrop: 14, ammoCache: 65, grenadeEvery: 12,
+    pool: 220, grab: 1.18, ammoDrop: 24, ammoCache: 180, grenadeEvery: 12,
     iconRange: 15, nameRange: 5, rareNameRange: 9, labelLimit: 5,
     mergeRange: 0.85, lifetime: 75, blinkTime: 7, preciousValue: 300,
     styles: {
@@ -131,7 +131,7 @@ export function makeConfig(overrides = {}, campaignStage = 0) {
     ['weapon.magazine', config.weapon.magazine, 1],
     ['beasts.population', config.beasts.population, 1],
     ['beasts.capacity', config.beasts.capacity, config.beasts.population],
-    ['beasts.killsToWin', config.beasts.killsToWin, 1],
+    ['beasts.encounterSize', config.beasts.encounterSize, 1],
     ['beasts.farUpdateFrames', config.beasts.farUpdateFrames, 1],
     ['effects.particles', config.effects.particles, 1],
     ['effects.tracers', config.effects.tracers, 1],

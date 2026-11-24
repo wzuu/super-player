@@ -145,7 +145,8 @@ def field(page, url):
         page.wait_for_function("!document.querySelector('#shop-item').disabled")
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
-    assert page.evaluate("run.game.weapon.ammo") == 75
+    assert page.evaluate("run.game.weapon.ammo") == 150
+    page.wait_for_function("document.querySelector('#ammo').textContent === '150'")
     assert page.evaluate("Math.abs(run.config.weapon.reloadTime - 1.8*1.16) < .0001 && Math.abs(run.config.weapon.fireRate-8.8)<.0001")
     assert page.evaluate("run.config.graphics.particleScale") == .3
     assert page.evaluate("[run.config.feedback.hitShake, run.config.feedback.directionIndicators]") == [.4, False]
@@ -183,8 +184,9 @@ def field(page, url):
         pickups.add('core', player.x, player.z, player.y, '核心', 1);
         const slot = pickups.keyItem;
         if (!pickups.takeKey(player, run.game)) return false;
-        pickups.add('ammo', player.x, player.z, player.y, '弹药', 1);
-        return slot.kind === 'ammo' && !pickups.takeKey(player, run.game) && slot.active;
+        const rounds = pickups.add('ammo', player.x, player.z, player.y, '弹药', 1);
+        return !slot.active && rounds !== slot && rounds?.active && rounds.kind === 'ammo' &&
+            pickups.keyItem === null && !pickups.takeKey(player, run.game);
     }""")
     refresh = []
     page.route("**/api/gear", lambda route: refresh.append(route))

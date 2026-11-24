@@ -1,4 +1,4 @@
-// 王陵主题参数。通用的机关枪、150 击杀目标与胜负流程来自 level-kit。
+// 王陵主题参数。共享步枪、分区遭遇与胜负流程来自 level-kit。
 const CONFIG = {
   map: { cell: 3.6, fog: 0.014, navCell: 1.25 },
   graphics: { maxPixelRatio: 1.15, bloomScale: 0.68, dustCount: 2800 },
@@ -414,7 +414,7 @@ function createEncounter({ CONFIG: options, sound }) {
         const quiet = game.player.crouched && game.time - Math.max(game.shotAt, game.footstep.at) > .40;
         this.status = {
           title: '沙暴中', remaining: rules.duration - elapsed,
-          detail: quiet ? '已压低声响，凶兽仍会搜索最后听见的位置' : '凶兽循声搜索。按住 C 蹲伏，松开左键停火',
+          detail: quiet ? '已压低声响，凶兽仍会搜索最后听见的位置' : '凶兽循声搜索。按住 ' + options.crouchLabel + ' 蹲伏，松开左键停火',
         };
       } else if (rules.interval - elapsed <= rules.warning) {
         this.status = { title: '沙暴将至', remaining: rules.interval - elapsed, detail: '能见度将下降，准备找掩体或蹲伏停火' };
@@ -707,8 +707,8 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'陵前沙地',at:[-10,24],entries:[[-17,21],[-2,18]]},
-    {name:'西侧柱廊',at:[-23,3],entries:[[-32,7],[-25,-5]]},
+    {name:'陵前沙地',cap:12,interval:0.27,at:[-10,24],entries:[[-17,21],[-2,18]]},
+    {name:'西侧柱廊',cap:14,interval:0.29,at:[-23,3],entries:[[-32,7],[-25,-5]]},
   ]},
   weaponSkin: 'buried-tomb',
   pageTitle: '流沙王陵 | 第四关',
@@ -761,7 +761,7 @@ export default {
     tag: '第四关 / 上古王陵',
     title: '流沙王陵',
     enter: '进入王陵',
-    brief: '从半埋的南门进入王陵，夺取太阳圣核，登上金字塔引爆金色光柱。沙暴来临时，按住 C 蹲伏并停火，可避开循声搜寻的凶兽。',
+    brief: '从半埋的南门进入王陵，夺取太阳圣核，登上金字塔引爆金色光柱。沙暴来临时，蹲伏并停火可压低声响。',
     enemy: '凶兽',
     bossName: '巨型守墓者',
     keyItem: '太阳圣核',

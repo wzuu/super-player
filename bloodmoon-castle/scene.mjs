@@ -927,8 +927,8 @@ function createPortal({ THREE, scene, level, brighter, TAU }) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'吊桥南庭院',at:[-8,25],entries:[[-16,23],[0,18]]},
-    {name:'大教堂侧廊',at:[7,1],entries:[[13,3],[3,-6]]},
+    {name:'吊桥南庭院',cap:9,interval:0.33,at:[-8,25],entries:[[-16,23],[0,18]]},
+    {name:'大教堂侧廊',cap:11,interval:0.32,at:[7,1],entries:[[13,3],[3,-6]]},
   ]},
   weaponSkin: 'bloodmoon-castle',
   pageTitle: '血月古堡 | 第十一关',

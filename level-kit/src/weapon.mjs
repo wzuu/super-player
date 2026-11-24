@@ -48,11 +48,18 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       this.group.add(this.rifle.root);
       this.shoulder = createShoulderView(THREE, scene, this.rifle);
       this.sight = new THREE.Group();
-      this.sight.position.set(0,.23,-.20);
+      const shotgun = Boolean(CONFIG.weapon.pellets);
+      this.adsDistance = shotgun ? 1.09 : .99;
+      this.sight.position.set(0,shotgun ? .40 : .36,-.20);
       this.group.add(this.sight);
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(.068,.009,6,24), new THREE.MeshStandardMaterial({color:0x28343c,metalness:.55,roughness:.4}));
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(.063,24), new THREE.MeshBasicMaterial({color:0x87ced2,transparent:true,opacity:.10,depthWrite:false}));
-      this.sight.add(rim,lens);
+      const metal = new THREE.MeshStandardMaterial({color:0x28343c,metalness:.55,roughness:.4});
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(.060,.005,6,32),metal);
+      const lens = new THREE.Mesh(new THREE.CircleGeometry(.056,32),new THREE.MeshBasicMaterial({color:0x87ced2,transparent:true,opacity:.035,depthWrite:false}));
+      // 镜座连到机匣，光轴和准星在两把武器上都穿过镜片中心。
+      const mountHeight = this.sight.position.y - .06 - (shotgun ? .10 : .12);
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(.031,mountHeight,.054),metal);
+      mount.position.y = -.06 - mountHeight / 2;
+      this.sight.add(rim,lens,mount);
       this.signals = {};
       this.empRecovery = 0;
       const glove = new THREE.MeshStandardMaterial({ color: 0x35373b, roughness: .86 });
@@ -107,7 +114,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       const w = CONFIG.weapon, p = game.player;
       this.ammo--; this.heat = Math.min(1, this.heat + w.heatPerShot);
       this.kick = Math.min(0.21, this.kick + 0.081 + 0.028 * this.heat);
-      this.flash = 0.047;
+      this.flash = lerp(.047,.031,p.ads);
       p.recoil = Math.min(0.085, p.recoil + w.recoil * (1 + 1.1 * this.heat));
       p.recoilRoll += randomRange(-0.004, 0.004) * (1 + this.heat);
       game.shotAt = game.time; game.shotX = p.x; game.shotY = p.y; game.shotZ = p.z;
@@ -178,7 +185,9 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       const distance=this.origin.distanceTo(this.end);
       const hit = { damage: pelletDamage(distance,CONFIG.weapon), pellet:Boolean(CONFIG.weapon.pellets), heavy: CONFIG.weapon.pellets && distance<=CONFIG.weapon.falloffStart,
         quietImpact:this.impactParticles++>=3,
-        headshot: this.end.y >= target.y + target.height * .75 };
+        headshot: this.end.y >= target.y + target.height * .75 &&
+          (!target.fight || game.time >= target.fight.transitionUntil &&
+            (game.time < target.fight.weakUntil || game.time < target.fight.brokenUntil)) };
       this.combat.hit(target, hit, game);
       if (CONFIG.weapon.split && !this.splitUsed) {
         this.splitUsed=true;
@@ -256,17 +265,17 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       }
       this.group.position.x *= 1-ads;
       this.group.position.y = lerp(this.group.position.y,-this.sight.position.y,ads);
-      this.group.position.z = lerp(this.group.position.z,-.38,ads);
+      this.group.position.z = lerp(this.group.position.z,-this.adsDistance,ads);
       this.group.rotation.set(this.group.rotation.x*(1-ads),this.group.rotation.y*(1-ads),this.group.rotation.z*(1-ads));
       const playing = game.phase === 'play' && !game.blast;
-      const shoulder = playing && player.thirdPerson && !player.aiming && !this.inspectTime;
+      const shoulder = playing && player.thirdPerson && !player.aimRequested && !this.inspectTime;
       this.group.visible = playing && !shoulder;
       this.shoulder.body.visible = false;
       if (shoulder) this.shoulder.update(camera,player,game);
       this.rifle.magazine.position.y = -Math.sin(cycle * 1.56) * 0.18;
       this.flashGroup.visible = this.flash > 0;
       if (this.flashGroup.visible) {
-        this.flashGroup.scale.setScalar(Math.max(0.55, this.flash * 18 + 0.25));
+        this.flashGroup.scale.setScalar(Math.max(0.55, this.flash * 18 + 0.25) * lerp(1,.55,ads));
         this.flashGroup.rotation.z += 0.42;
       }
     }

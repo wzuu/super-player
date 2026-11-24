@@ -540,8 +540,8 @@ function createEnvironment(context) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'鸟居参道',at:[-8,18],entries:[[-15,15],[0,10]]},
-    {name:'东侧河岸',at:[26,7],entries:[[29,5],[18,0]]},
+    {name:'鸟居参道',cap:9,interval:0.33,at:[-8,18],entries:[[-15,15],[0,10]]},
+    {name:'东侧河岸',cap:11,interval:0.30,at:[26,7],entries:[[29,5],[18,0]]},
   ]},
   config: CONFIG,
   grid: MAP_GRID,

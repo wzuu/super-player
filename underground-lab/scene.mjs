@@ -5,7 +5,7 @@ const CONFIG = {
   graphics: { maxPixelRatio: 1.25, bloomScale: 0.62, reflectionSize: 256, reflectionInterval: 0.085 },
   audio: { ambient: { frequency: 190, q: 0.64, activeGain: 0.20, pauseGain: 0.12 } },
   player: { safeTime: 13, hurtCooldown: 0.36 },
-  weapon: { reserve: 330, recoil: 0.011, maxSpread: 0.030, hearingRadius: 22 },
+  weapon: { recoil: 0.011, maxSpread: 0.030, hearingRadius: 22 },
   beasts: {
     spawnDistance: 18, sight: 21, memory: 5.5, spawnEvery: 1, spawnBurst: 2,
     types: [
@@ -15,7 +15,7 @@ const CONFIG = {
       { hp: 690, height: 3.45, summonCount: 7 },
     ],
   },
-  pickups: { ammoDrop: 18, ammoCache: 78 },
+  pickups: { ammoDrop: 24, ammoCache: 360 },
   alarm: {
     streakKills: 5, streakWindow: 8, sustainedFire: 4, shotGap: 0.36,
     duration: 32, cooldown: 10, extraPopulation: 18, spawnEvery: 0.26, spawnBurst: 3,
@@ -39,6 +39,7 @@ function isolationRoom(id,x,z,w,d,doorX,gap) {
 }
 const labStory = {
   type:'lab',
+  turnDirections:true, pulseAt:[8,3], bossSupplies:[[6.3,11.4], [-7.9,-4], [10,5.8]],
   walls:[
     [null,-20,22,40,.46,5.4,true],[null,21.6,22,36.8,.46,5.4,true],['security',1.6,22,3.2,.48,5.4],
     ...isolationRoom('power',27,-12,20,17,29,3.5),
@@ -53,34 +54,36 @@ const labStory = {
     {id:'service',at:[-9,-16.5],why:'需取得零号核心权限卡，在裂隙控制台解除封锁'},
   ],
   route:[
-    {kind:'fight',name:'气闸安检室',label:'清理安检室守卫',at:[2,27.2],entries:[[-4,25],[5,24]],count:4,cap:3,mix:[0],range:10},
-    {kind:'use',label:'从值班台领取安保卡',at:[2.6,26]},
+    {kind:'fight',name:'气闸安检室',label:'清理安检室守卫',at:[0,29.8],entries:[[-4,25],[5,24]],cap:6,interval:.56,vanguard:3,mix:[0,0,0,2],range:2.4},
+    {kind:'use',label:'从值班台领取任务物品 · 安保卡',at:[2.6,26]},
     {kind:'use',label:'刷安保卡开启样本走廊',door:'security',at:[1.6,23.1]},
-    {kind:'fight',name:'西侧样本走廊',label:'清理走廊转角',at:[-10,15.5],entries:[[-16.9,14.4],[-15.6,9]],count:4,cap:3,mix:[0,0,2],range:12},
-    {kind:'fight',name:'西侧培养室',label:'清理培养罐之间的守卫',at:[-23,-8],entries:[[-30,-8],[-24,-15]],count:7,cap:4,mix:[0,2,0,1]},
-    {kind:'use',label:'从培养舱取样本封存模块',at:[-24,-9]},
+    {kind:'reach',label:'沿西侧样本走廊前往培养室',at:[-10,15.5]},
+    {kind:'fight',name:'西侧培养室',label:'击退从两侧培养舱赶来的守卫',at:[-23,-8],entries:[[-30,-8],[-24,-15]],cap:10,interval:.33,mix:[0,2,0,1,0]},
+    {kind:'use',label:'从培养舱取任务物品 · 样本封存模块',at:[-24,-9]},
     {kind:'use',label:'以封存模块解锁机房',door:'power',at:[29,-2.5]},
-    {kind:'fight',name:'服务器机房',label:'击退维修通道与机柜守卫',at:[28,-9],entries:[[29,-15],[19,-13]],count:6,cap:4,mix:[1,0,2,0]},
-    {kind:'use',label:'恢复机房供电并取通行证',at:[29,-9]},
-    {kind:'fight',name:'机房检修口',label:'击退红色警报增援',alarm:true,at:[29,-9],entries:[[29,-17],[19,-12]],count:5,cap:3,mix:[0,2,0]},
-    {kind:'use',label:'刷反应堆通行证开门',door:'reactor',at:[6.3,10.6]},
+    {kind:'fight',name:'服务器机房',label:'守住机柜通道，拦截三路实验体',alarm:true,at:[28,-9],entries:[[29,-15],[19,-13],[35,-6.5]],cap:14,interval:.26,mix:[0,1,0,2,0,1,2]},
+    {kind:'use',label:'恢复机房供电并取任务物品 · 通行证',at:[29,-9]},
+    {kind:'reach',label:'前往反应堆门前补给',at:[6.3,11.4]},
+    {kind:'use',label:'刷通行证开启反应堆门',door:'reactor',at:[6.3,10.6]},
     {kind:'boss',label:'击败反应堆的零号实验体'},
     {kind:'use',label:'用核心权限卡解除裂隙封锁',door:'service',at:[0,-9.5]},
-    {kind:'fight',name:'北侧检修通道',label:'击退检修通道守卫',at:[-9,-17.5],entries:[[-9,-22],[-7,-24]],count:4,cap:3,mix:[0,0,2],range:10},
     {kind:'reach',label:'穿过检修通道，抵达撤离气闸',at:[-9,-23],win:true},
   ],
 };
+const SIDE_STORES = [
+  {x:-17.5,z:15,tag:'W06'}, {x:19,z:11.5,tag:'E07'},
+];
 const LANDMARKS = {
   spawn: [0, 0, 36.6], boss: [6.8, 0, -3.5], gate: [0, 0.16, -10.6],
   loot: [
     [-5.6, 24, '装卸调度芯片', 90], [15, 28, '应急能量电池', 110],
-    [6.4, 6, '反应堆诊断芯片', 155], [7.4, -11.7, '零号实验体日志', 330],
-    [-23, -9, '完整细胞样本箱', 240], [-31, -5.0, '培养舱监控记录', 165],
-    [25, -12.8, '离线备份芯片', 220], [34.8, -6, '超导能量电池', 185],
-    [-31, -27.3, '失联班组日志', 270], [24, -31, '封存逆变器样本', 310],
+    [6.4, 6, '反应堆诊断芯片', 155], [-17.5, 14.8, '零号实验体日志', 330],
+    [-18.9, 14.0, '完整细胞样本箱', 240], [-31, -5.0, '培养舱监控记录', 165],
+    [20.4, 12.4, '离线备份芯片', 220], [34.8, -6, '超导能量电池', 185],
+    [20.4, 10.6, '失联班组日志', 270], [18.1, 10.5, '封存逆变器样本', 310],
   ],
-  ammo: [[-2.7, 35.9], [4.5, 21.7], [-15, 26], [14, 18], [-7.9, -4.0],
-    [10, 5.8], [-25, -13.7], [29.4, -16.6], [-20, -31], [10, -31]],
+  ammo: [[-2.7, 35.9], [4.5, 21.7], [-10, 15.5], ...labStory.bossSupplies,
+    [-25, -13.7], [29.4, -16.6], [2.6, 26], [28,-9]],
 };
 
 // 墙段是地图坐标，横墙固定 z，纵墙固定 x。段之间的空隙就是门洞。
@@ -103,6 +106,11 @@ const WALLS = [
   ['z', -32.5, -35, -25, 'baffle'], ['z', -32.5, -21, -9.2, 'baffle'],
   ['z', -32.5, 9.2, 21, 'baffle'], ['z', -32.5, 25, 35, 'baffle'],
 ];
+// 支路储藏间只有一扇敞开的侧门，保留足够的折返净宽。
+for (const {x,z} of SIDE_STORES) {
+  WALLS.push(['x', x-2.8, z-2.5, z+2.5], ['x', x+2.8, z-2.5, z+2.5],
+    ['z', z-2.5, x-2.8, x+2.8], ['z', z+2.5, x-2.8, x-1.4], ['z', z+2.5, x+1.4, x+2.8]);
+}
 for (const side of [-1, 1]) {
   for (const z of [-2.3, 2.3]) {
     for (const [a, b, kind] of [[13, 17, 'glass'], [21, 28, 'glass'], [34, 39.6, 'panel']]) {
@@ -290,6 +298,8 @@ function buildMap(ctx) {
     const board = new THREE.Mesh(new THREE.PlaneGeometry(3.84, 1.08), new THREE.MeshBasicMaterial({ map }));
     board.position.set(x, y, z); board.rotation.y = yaw; scene.add(board);
   };
+  for (const {x,z,tag} of SIDE_STORES) sign(x,3.3,z+2.8,0,tag,'OPTIONAL STORAGE','可选搜集','#ffd389');
+  sign(6.3,3.2,10,0,'R01','AMMUNITION','首领门前补给','#9affce');
   sign(0, 4.0, 32.41, 0, 'A01', 'ENTRY AIRLOCK', '入口气闸', '#9de4ff');
   sign(0, 4.63, 14.325, 0, 'R00', 'REACTOR CHAMBER', '核心实验大厅', '#a1e7ff');
   sign(-12.67, 4.05, 0, Math.PI / 2, 'W02', 'SPECIMEN WARD', '样本培养室', '#8af4d0');
@@ -460,6 +470,7 @@ function buildMap(ctx) {
   level.bossAnchor.copy(level.bossSpawn);
   level.gate.set(...LANDMARKS.gate);
   const airlock = buildDoor(ctx, AIRLOCK, materials, false);
+  level.entryDoor = airlock.collider;
   const hatch = buildDoor(ctx, HATCH, materials, true);
   // 静态导航保留闸口单元，开局即使闸门闭合也能在安全区外布置实验体。
   level.serviceHatch = hatch.collider;
@@ -510,10 +521,7 @@ function buildDoor({ THREE, scene, level, brighter }, spec, materials, hidden) {
       this.progress = open ? Math.min(1, this.progress + dt * 1.85) : Math.max(0, this.progress - dt * 1.45);
       // 门叶从中间向两侧滑动。直到动画结束的安全开度才放开碰撞。
       const active = this.progress < 0.94;
-      if (active !== collider.active) {
-        collider.active = active;
-        if (hidden) level.terrainRevision++;
-      }
+      level.setBarrier(collider, null, active);
       this.pose();
     },
   };
@@ -801,6 +809,17 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 
 export default {
   story:labStory,
+  health: [[4.5,25,40], [-21,8,50], [29,0,60], [10,5.8,50]],
+  // 无尽开场时气闸尚未开启，守卫预先部署在门外连通区。
+  initialPopulationAnchor:[0,28],
+  navigationApproach(player, target, level) {
+    // 门关闭时先指向能触发感应器的一侧。门完全打开后，路径场会连接两侧。
+    const side = Math.sign(player.z - AIRLOCK.z);
+    if (level.entryDoor.active && side !== Math.sign(target.z - AIRLOCK.z) &&
+        (player.z > AIRLOCK.z || target.z > AIRLOCK.z))
+      return { x: AIRLOCK.x, y: 0, z: AIRLOCK.z + side * 2 };
+    return target;
+  },
   weaponSkin: 'underground-lab',
   config: CONFIG,
   grid: MAP_GRID,

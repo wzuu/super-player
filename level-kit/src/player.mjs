@@ -18,7 +18,7 @@ export function createPlayerClass({ CONFIG, THREE, V3, camera, clamp, lerp, rand
       this.escaped = false;
       this.crouched = false; this.height = p.height; this.eye = p.eye;
       this.hp = p.health; this.energy = p.stamina;
-      this.ads = 0; this.aiming = this.thirdPerson = false;
+      this.ads = 0; this.aimRequested = this.aiming = this.thirdPerson = false;
       this.vy = 0; this.grounded = true; this.tired = false;
       this.sprinting = false; this.lastHurt = -Infinity; this.hurtDelay = 0;
       this.slowUntil = -Infinity; this.slowScale = 1;

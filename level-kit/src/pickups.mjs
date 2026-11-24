@@ -20,6 +20,8 @@ export function createPickupClass(context) {
       this.deepSupplies = false;
       this.keyItem = null;
       for (const p of this.objects) p.active = false;
+      for (const [x,z,amount] of definition.health ?? [])
+        this.add('health', x, z, this.level.base(x,z), '应急医疗补给', amount, true);
       for (const [x, z, name, value, height] of definition.loot ?? []) {
         this.add(
           'rare',
@@ -32,7 +34,10 @@ export function createPickupClass(context) {
         );
       }
       for (const [x, z] of definition.ammo ?? [])
-        this.add('ammo', x, z, this.level.base(x, z), '补给弹药', CONFIG.pickups.ammoCache, true);
+        this.add('ammo', x, z, this.level.base(x, z), '补给弹药', this.cacheAmount(), true);
+    }
+    cacheAmount() {
+      return CONFIG.weapon.pellets ? Math.ceil(cfg.ammoCache / 6) : cfg.ammoCache;
     }
     add(kind, x, z, y, name, value, permanent = false) {
       if (this.deepSupplies && !permanent && ['ammo','health','grenade','sample'].includes(kind)) return;
@@ -51,11 +56,15 @@ export function createPickupClass(context) {
           return p;
         }
       }
-      let object = this.objects.find((p) => !p.active);
+      // 在长局中稀有掉落可以占满普通槽。给两件宝库奖励、秘藏、传奇和任务核心留位。
+      if (kind === 'core' && this.keyItem?.active) return this.keyItem;
+      const end = this.objects.length - (permanent && kind === 'rare' ? 1 : 5);
+      let object = kind === 'core' ? this.objects.at(-1) : this.objects.find((p, i) => i < end && !p.active);
       if (!object) {
-        for (const p of this.objects) {
+        for (let i = 0; i < end; i++) {
+          const p = this.objects[i];
           if (
-            !p.permanent &&
+            p.active && !p.permanent &&
             ['ammo', 'health', 'sample', 'grenade'].includes(p.kind) &&
             (!object || p.born < object.born)
           )
@@ -65,7 +74,8 @@ export function createPickupClass(context) {
       if (!object) return;
       if (kind === 'core') this.keyItem = object;
       const style = kind === 'rare' && value >= cfg.preciousValue ? 'precious' : kind;
-      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent, origin:null, born: this.age });
+      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent,
+        origin: kind === 'rare' && !permanent ? 'drop' : null, born: this.age });
       return object;
     }
     withinReach(item, player) {

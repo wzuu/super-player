@@ -4,7 +4,7 @@ export const supplies = {
   slow: { name: '减速力场', skill: true, cooldown: 18, stage: 4, detail: '附近目标短暂减速' },
   decoy: { name: '诱饵', skill: true, cooldown: 18, stage: 6, detail: '干扰附近目标的攻击方向' },
   shield: { name: '护盾', skill: true, cooldown: 22, stage: 10, detail: '短时间抵挡伤害' },
-  grenade: { name: '手雷', price: 60, limit: 3, stage: 0, detail: '对前方区域造成范围伤害' },
+  grenade: { name: '手雷', price: 60, limit: 3, stage: 0, detail: '朝瞄准方向投出，延时爆炸，对无遮挡的凶兽造成范围伤害' },
   medkit: { name: '急救包', price: 40, limit: 2, stage: 0, detail: '治疗 30%，使用期间受伤会中断' },
   ammo: { name: '弹药包', price: 35, limit: 2, stage: 0, detail: '补充两个弹匣的备弹' },
   mine: { name: '地雷', price: 90, limit: 2, stage: 8, detail: '放置后由靠近的凶兽触发' },
@@ -85,12 +85,24 @@ export function packKit(state, items, weapon='*') {
   return { skills: [...state.skills], items: [...state.items], counts, build,
     mods:Object.fromEntries(Object.values(build).filter(id=>state.mods[id] && modifications[id]).map(id=>[id,true])) };
 }
-export async function updateGear(store, mutate) {
+export async function updateGear(store, mutate, operation) {
   for (let attempt = 0; attempt < 8; attempt++) {
+    // 回执丢失时原样重发同一修订。后端先认收据，再检查版本和余额。
+    if (operation?.request) {
+      if ((await store.writeGear(operation.request)).saved) return operation.value;
+      operation.request = null;
+    }
     const snapshot = await store.gear();
     const state = defaultGear(snapshot.state);
     const value = mutate(state, snapshot);
-    if ((await store.writeGear({ revision: snapshot.revision, state })).saved) return value;
+    const request = { revision: snapshot.revision, state };
+    if (operation) {
+      request.purchaseId = operation.token;
+      operation.request = request;
+      operation.value = value;
+    }
+    if ((await store.writeGear(request)).saved) return value;
+    if (operation) operation.request = null;
   }
   throw Error('存档正在其他窗口使用，请重试');
 }

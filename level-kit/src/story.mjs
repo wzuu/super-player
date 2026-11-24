@@ -1,6 +1,9 @@
+import { createMissionNavigation } from '@level-kit/mission-navigation.mjs';
+
 // 主线使用关卡指定的位置和有限队列。无尽使用原持续增援。
 export function createStory({ THREE, scene, level, nav, CONFIG, definition, colors }, rules) {
   const spec = definition.story;
+  let route;
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
   const xyz = (a) => new THREE.Vector3(...a);
   const separation = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -90,14 +93,10 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     const d = trace.length();
     return d < 0.01 || level.visible(origin, trace.divideScalar(d), d);
   }
-  function ordinarySectors(g) {
-    const authored = spec.sectors.map((zone) => ({ ...zone, center: point(zone.at) }));
-    const classic = g.objective.mode === 'classic';
-    return authored.map((zone, i) => ({
+  function ordinarySectors() {
+    return spec.sectors.map((zone, i) => ({
       ...zone,
       kind: 'fight',
-      count: classic ? Math.ceil(CONFIG.beasts.killsToWin / authored.length) : (zone.count ?? 6),
-      cap: zone.cap ?? Math.round(9 * Math.sqrt(CONFIG.player.incoming)),
       label: '清理' + zone.name,
       lead: '前往' + zone.name,
       range: 13,
@@ -109,13 +108,17 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     item = null,
     group = null,
     stageTime = 0,
-    waveNumber = 0,
     nextBatch = 0;
   const asPoint = (a) => (a?.isVector3 ? a : a.length === 3 ? xyz(a) : point(a));
-  function enter(g) {
+  function enter(g, continuing = null) {
     item = stages[index] ?? null;
-    group = null;
-    waveNumber = 0;
+    group = continuing;
+    if (group) {
+      // 爆破后的敌人改从封锁线进入，已入场者和剩余名额仍属于原来的遭遇。
+      if (item.entries) group.entrance = item.entries.map(asPoint);
+      if (item.cap) group.tag.cap = group.cap = item.cap;
+      if (item.mix) group.mix = item.mix;
+    }
     stageTime = 0;
     nextBatch = 0;
     director.stage = item?.id ?? item?.kind ?? 'complete';
@@ -140,23 +143,28 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function advance(g) {
     g.journal?.complete(g, item?.label ?? item?.name);
     if (item?.kind === 'hold') g.sound.stageEvent?.('clear', g, item.target);
+    const continuing = item.encounter && item.encounter === stages[index + 1]?.encounter;
     index++;
-    enter(g);
+    enter(g, continuing ? group : null);
   }
   function startGroup(g, n, entrances, cap, mix, escort = false) {
     group = {
       left: n,
-      total: n,
       cap,
       mix,
       deployed: 0,
       entrance: entrances.map(asPoint),
       escort,
       tag: { cap },
-      warning: g.time + 1.35,
+      warning: g.time + (item.vanguard ? 0 : 0.85),
       timer: 0,
       tickets: 0,
     };
+    if (item.kind === 'fight' && spec.type !== 'lab') {
+      const t = item.target;
+      const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
+      if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药', g.pickups.cacheAmount(), true);
+    }
     g.ui.notify((item.warning ?? item.name ?? '通道') + '出现动静，留意橙色入口', 2);
     for (const entrance of group.entrance) g.sound.stageEvent?.('warning', g, entrance);
   }
@@ -175,7 +183,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const y = level.surface(x, z, entry.y + 0.5);
       if (
         level.blocked(x, z, y, stats.radius, stats.height) ||
-        (item.kind !== 'defend' && field.dist[field.index(x, z)] < 0) ||
+        (!item.climbs && field.dist[field.index(x, z)] < 0) ||
         Math.hypot(g.player.x - x, g.player.y - y, g.player.z - z) < 3.3 ||
         g.beasts.pool.some(
           (b) =>
@@ -193,9 +201,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     }
     return null;
   }
+  function pressureStage() {
+    return group.deployed < 20 ? 0 : group.deployed < 55 ? 1 : 2;
+  }
   function deploy(g, dt) {
     if (!group) return;
-    const alive = members(g);
     const warning = group.warning - g.time;
     if (warning > 0) {
       group.entrance.slice(0, beacons.length).forEach((p, i) => {
@@ -207,19 +217,22 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       return;
     }
     group.timer -= dt;
-    if (
-      group.timer > 0 ||
-      !group.left ||
-      alive.length >= group.cap ||
-      g.beasts.pool.filter((b) => b.active && b.storyWave).length >= group.cap
-    )
-      return;
+    if (group.timer > 0 || !group.left) return;
+    // 前二十只试探，随后两批提高近场压力；接缝处不停发。
+    let active = 0;
+    for (const b of g.beasts.pool) if (b.active && b.storyWave) active++;
+    if (active >= director.cap) return;
     const type = group.mix[group.deployed % group.mix.length];
-    const entryIndex = group.tickets++ % group.entrance.length,
+    const routes = item.kind === 'defend' && director.elapsed < 30 ? 2 : group.entrance.length;
+    const entryIndex = group.tickets++ % routes,
       entry = group.entrance[entryIndex];
     const creature = spawnAt(g, group.tickets, type, entry);
-    group.timer = creature ? 0.32 : 0.22;
-    if (!creature) return;
+    if (!creature) {
+      group.timer = 0.16;
+      return;
+    }
+    const opening = group.deployed + 1 < (item.vanguard ?? 0);
+    group.timer = opening ? 0.13 : (item.interval ?? 0.34) * [1.12, 1, 0.84][pressureStage()];
     creature.storyWave = group.tag;
     creature.droneRaider = group.escort && group.deployed % 2 === 0;
     if (item.climbs) {
@@ -228,10 +241,6 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     }
     group.left--;
     group.deployed++;
-    if (group.deployed % group.cap === 0 && group.left) {
-      group.warning = g.time + 1.35;
-      g.sound.tone(240, 460, 0.23, 0.1, 'triangle');
-    }
   }
   function build(g) {
     const mode = g.objective.mode,
@@ -251,12 +260,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           range: 3.2,
         },
         { kind: 'use', id: 'beacon', at: spec.beacon, label: '启动观景台救援信标' },
-        { kind: 'defend', at: spec.beacon, label: '守住观景台，等待直升机', platform: p, climbs },
-        { kind: 'rescue', at: spec.rescue, label: '登上塔侧救援直升机', climbs },
+        { kind: 'defend', encounter: 'tower-rescue', at: spec.beacon, label: '守住观景台，等待直升机', platform: p, climbs },
+        { kind: 'rescue', encounter: 'tower-rescue', at: spec.rescue, label: '登上塔侧救援直升机', climbs },
       ];
     }
     if (type === 'escort' && mode === 'escort') return spec.route;
-    return [...ordinarySectors(g), { kind: 'boss', label: '击败' + definition.text.bossName }];
+    return [...ordinarySectors(), { kind: 'boss', label: '击败' + definition.text.bossName }];
   }
   const director = {
     managed: false,
@@ -270,7 +279,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       return Boolean(spec && ['classic', 'timed', 'hold', 'escort', 'rescue'].includes(mode));
     },
     get cap() {
-      return this.managed ? (item?.kind === 'boss' ? 9 : (group?.cap ?? 14)) : CONFIG.beasts.capacity;
+      if (!this.managed) return CONFIG.beasts.capacity;
+      if (!group) return item?.kind === 'boss' ? 9 : 14;
+      if (item.kind === 'defend' && this.elapsed < 30) return 8;
+      if (item.kind === 'fight') return Math.ceil(group.cap * [0.55, 0.78, 1][pressureStage()]);
+      return group.cap;
     },
     prepare(mode) {
       this.managed = this.supports(mode);
@@ -289,16 +302,16 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       this.elapsed = 0;
       this.rescueTime = 0;
       this.encounters = [];
-      stages = this.managed ? build(g).map((s) => ({ ...s, target: s.at ? asPoint(s.at) : s.center })) : [];
+      stages = this.managed ? build(g).map((s) => ({
+        ...s,
+        count: ['fight', 'hold', 'countdown', 'breakout', 'defend', 'rescue'].includes(s.kind)
+          ? (s.count ?? CONFIG.beasts.encounterSize) : 0,
+        target: s.at ? asPoint(s.at) : undefined,
+      })) : [];
       this.detonated = stages.some((stage) => stage.kind === 'countdown') ? false : null;
-      g.stageKillTarget =
-        (spec?.type === 'lab' && g.objective.mode === 'classic') ||
-        ['hold', 'rescue', 'escort', 'timed'].includes(g.objective.mode)
-          ? Math.max(
-              1,
-              stages.reduce((sum, s) => sum + (s.count ?? 0) + (s.kind === 'boss' ? 1 : 0), 0),
-            )
-          : CONFIG.beasts.killsToWin;
+      // 只以必清场次估算击杀评分，倒计时和突围的未入场敌人无需等待。
+      g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight' ? s.count : Number(s.kind === 'boss')), 0)
+        || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
       index = 0;
@@ -352,7 +365,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           ) {
             this.droneDocked = Boolean(item.escort);
             startGroup(g, item.count, item.entries, item.cap ?? 6, item.mix ?? [0, 0, 1, 2], item.escort);
-            this.encounters.push({ name: item.name, enteredAt: g.time, spawned: 0 });
+            this.encounters.push({ name: item.name, enteredAt: g.time, spawned: 0, cap: group.cap });
           }
           if (group) {
             deploy(g, dt);
@@ -376,18 +389,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           if (g.bossDead && g.core) advance(g);
           break;
         case 'hold':
-          if (!group || (!group.left && !members(g).length && g.time >= nextBatch)) {
-            if (near(p, t, 11) && waveNumber < 4) {
-              startGroup(g, 5 + waveNumber, item.entries, 7, [0, 0, 2, 1]);
-              waveNumber++;
-              nextBatch = g.time + 8;
-            }
-          }
+          if (!group && near(p, t, 11)) startGroup(g, item.count, item.entries, 7, [0, 0, 2, 1]);
           deploy(g, dt);
           if (g.objective.held >= rules.holdSeconds) advance(g);
           break;
         case 'countdown': {
-          if (!group) startGroup(g, 7, item.entries, 7, [0, 0, 2]);
+          if (!group) startGroup(g, item.count, item.entries, 7, [0, 0, 2]);
           deploy(g, dt);
           const sec = Math.ceil(rules.demolitionSeconds - stageTime);
           if (sec > 0 && nextBatch !== sec) {
@@ -423,21 +430,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
             p.x >= pl.x0 && p.x <= pl.x1 && p.z >= pl.z0 && p.z <= pl.z1 && Math.abs(p.y - pl.y) < 2.6;
           if (item.kind === 'defend' && onDeck)
             this.elapsed = Math.min(rules.rescueSeconds, this.elapsed + dt);
-          if ((!group || !group.left) && g.time >= nextBatch) {
-            const routes = this.elapsed < 30 ? item.climbs.slice(0, 2) : item.climbs;
-            const cap = this.elapsed < 30 ? 8 : 14,
-              total = g.beasts.pool.filter((b) => b.active && b.storyWave).length;
-            if (total < cap) {
-              startGroup(
-                g,
-                Math.min(6, cap - total),
-                routes.map((r) => r[0]),
-                cap,
-                this.elapsed < 30 ? [0, 0, 2] : [0, 1, 0, 2],
-              );
-              nextBatch = g.time + 7;
-            }
-          }
+          if (!group) startGroup(g, item.count, item.climbs.map((r) => r[0]), 14, [0, 0, 1, 2]);
           deploy(g, dt);
           if (item.kind === 'defend' && this.elapsed >= rules.rescueSeconds) {
             advance(g);
@@ -482,9 +475,23 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         case 'boss':
           if (g.bossDead) {
             if (g.core) return null;
-            title = (g.pickups.nearKey(g.player) ? '按 F 拾取' : '前往拾取') + text.keyItem;
+            title = (g.pickups.nearKey(g.player) ? '按 F 拾取任务物品 · ' : '前往拾取任务物品 · ') + text.keyItem;
             target = g.pickups.keyItem;
-          } else target = g.beasts.boss ?? level.bossAnchor;
+          } else {
+            target = g.beasts.boss ?? level.bossAnchor;
+            if (spec.pulseAt) {
+              detail = '青色脉冲柱可破甲 · 核心亮起时射击';
+              if (g.weapon.ammo + g.weapon.reserve < CONFIG.weapon.magazine) {
+                const supply = g.pickups.objects.filter(i => i.active && i.kind === 'ammo' && i.permanent &&
+                  spec.bossSupplies?.some(([x,z]) => x===i.x && z===i.z))
+                  .sort((a,b) => separation(a,g.player) - separation(b,g.player))[0];
+                if (supply) {
+                  target = supply;
+                  detail = '弹药不足 · 跟随补给标记领取弹药';
+                }
+              }
+            }
+          }
           break;
         case 'fight':
           if (!group) title = item.lead ?? '前往' + item.name;
@@ -524,10 +531,23 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         detail,
       };
     },
+    navigation(task, g) {
+      if (!this.managed || !task.target) return task;
+      const p = g.player;
+      const engaged = g.time - p.lastHurt < 1.2 || g.beasts.pool.some(b =>
+        b.active && b.playerVisible && b.alert > 0 && Math.hypot(b.x-p.x,b.y-p.y,b.z-p.z) <= 13);
+      if (engaged && task.target.kind !== 'ammo') return { ...task, engaged };
+      // 桥上、塔内等分层目标保留高度和升降机标记。二维网格只用于当前地面层。
+      const ground = q => level.surface(q.x, q.z, level.base(q.x,q.z) + CONFIG.player.step);
+      if (Math.abs(ground(p)-p.y) > .65 || Math.abs(ground(task.target)-task.target.y) > .65) return task;
+      route ??= createMissionNavigation(nav);
+      const path = route(p, definition.navigationApproach?.(p, task.target, level) ?? task.target);
+      return path.length || spec.turnDirections ? { ...task, path, waypoint: path[0] } : task;
+    },
     marker(task, g) {
-      sign.visible = Boolean(task?.target && !g.encounter?.hudOffline && g.phase === 'play');
+      const t = task?.path ? task.waypoint : task?.target;
+      sign.visible = Boolean(t && !task.engaged && !g.encounter?.hudOffline && g.phase === 'play');
       if (sign.visible) {
-        const t = task.target;
         sign.position.set(t.x, t.y + (t.height ?? 1.3) + 0.45, t.z);
         sign.rotation.y = g.time * 1.5;
       }
