@@ -1,5 +1,10 @@
 // 外观以关卡 ID 为稳定键，用于默认装备、收藏和存档。
 export const rifleSkins = {
+  'moonlit-stained-glass-keep': {
+    name:'玫瑰窗仪仗型',detail:'深紫烤漆、磨砂银饰和点状琥珀色玻璃镶嵌。',
+    base:'#675d77',trim:'#b8ada5',dark:'#403947',light:'#e7b883',
+    backdrop:'#302a38',key:'#e3d4bf',fill:'#b2a4c8',metalness:.53,roughness:.42,
+  },
   'orbital-brood-ring': {
     name:'轨道值勤型',detail:'蓝灰隔热机匣，配有停靠舱的琥珀色防撞饰条与青绿状态灯。',
     base:'#637986',trim:'#ce965e',dark:'#354453',light:'#82e0d6',

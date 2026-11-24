@@ -26,7 +26,7 @@ export function createPickupClass(context) {
       for (const [x,z,amount] of definition.health ?? [])
         this.add('health', x, z, this.level.base(x,z), '应急医疗补给', amount, true);
       for (const [x, z, name, value, height] of definition.loot ?? []) {
-        this.add(
+        const item = this.add(
           'rare',
           x,
           z,
@@ -35,6 +35,7 @@ export function createPickupClass(context) {
           value,
           true,
         );
+        if (item && definition.manualLoot) item.manual = true;
       }
       for (const [x, z] of definition.ammo ?? []) {
         const box = this.add('ammo', x, z, this.level.base(x, z), '补给弹药', this.cacheAmount(), true);

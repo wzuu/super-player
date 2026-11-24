@@ -125,6 +125,7 @@ def verify(browser,ids):
         expected = {
             'underground-lab': {'objectiveCounts':[43,43], 'encounters':[100,100,100]},
             'orbital-brood-ring': {'objectiveCounts':[10,12], 'encounters':[24,29]},
+            'moonlit-stained-glass-keep': {'objectiveCounts':[9,11], 'encounters':[20,28]},
         }.get(stage)
         result=page.evaluate("""expected => {
           const {game:g,nav,config:c}=run, choose=document.getElementById('mission-mode');

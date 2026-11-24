@@ -14,5 +14,6 @@
   {"id":"brass-factory","title":"黄铜机坊","brief":"穿过运转的流水线，引诱机械凶兽踏入爆裂管道的蒸汽。"},
   {"id":"haunted-midway","title":"永夜游园","brief":"躲开飞驰的过山车，在摩天轮下解开团长怀表的封印。"},
   {"id":"paris-tower","title":"巴黎铁塔：高塔救援","brief":"从战神广场登上铁塔，守住观景台信标，等待直升机撤离。"},
-  {"id":"orbital-brood-ring","title":"环轨母巢","brief":"在指挥舱领取身份凭证，穿过外窗西环恢复压差联锁，深入反应堆歼灭母体。"}
+  {"id":"orbital-brood-ring","title":"环轨母巢","brief":"在指挥舱领取身份凭证，穿过外窗西环恢复压差联锁，深入反应堆歼灭母体。"},
+  {"id":"moonlit-stained-glass-keep","title":"月下彩窗堡","brief":"从吊桥下到墓穴寻找钥匙，在钟楼转动绞盘，进入彩窗下的大厅歼灭伯爵。"}
 ]

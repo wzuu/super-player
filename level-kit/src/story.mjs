@@ -86,16 +86,23 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       }),
     );
     const floor = annihilation ? level.base(x,z) : 0;
+    const raised = spec.decorateDoor?.({THREE,id,mesh,width,depth,height})?.raised;
     mesh.position.set(x, floor + height / 2, z);
     scene.add(mesh);
     const barrier = level.box(x, z, width, depth, floor, floor+height);
     if (annihilation && !glass) level.viewOccluders.push(barrier);
     level.setBarrier(barrier, mesh, false);
     if (!panels.has(id)) panels.set(id, []);
-    panels.get(id).push({ barrier, mesh });
+    panels.get(id).push({ barrier, mesh, raised, height, floor });
   }
   function close(id, closed) {
-    for (const entry of panels.get(id) ?? []) level.setBarrier(entry.barrier, entry.mesh, closed);
+    for (const entry of panels.get(id) ?? []) {
+      level.setBarrier(entry.barrier, entry.mesh, closed);
+      if(entry.raised) {
+        entry.mesh.visible=true;
+        entry.mesh.position.y=entry.floor+entry.height*(closed ? .5 : 1.5);
+      }
+    }
   }
   const trace = new THREE.Vector3(),
     origin = new THREE.Vector3();
@@ -548,6 +555,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       switch (item.kind) {
         case 'boss':
           if (g.bossDead) {
+            if (item.victory) return {stage:'complete', title:item.victory, detail:'', target:null};
             if (g.core) return null;
             title = (g.pickups.nearKey(g.player) ? '按 F 拾取任务物品 · ' : '前往拾取任务物品 · ') + text.keyItem;
             target = g.pickups.keyItem;

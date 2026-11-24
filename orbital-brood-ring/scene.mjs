@@ -181,12 +181,12 @@ function createEncounter({level,sound}) {
 }
 export default {
   pageTitle:'环轨母巢',weaponSkin:'orbital-brood-ring',grid:floorPlan(areas,72,78),story,
-  config:{map:{cell:2,navCell:1.1,fog:.01},beasts:{sight:21,memory:5.4},feedback:{chargeWindup:.82}},
+  config:{map:{cell:2,navCell:1.1,fog:.01},beasts:{sight:21,memory:5.4,bossFight:{hpScale:7.6}},feedback:{chargeWindup:.82}},
   ammo:[[16,61],[11,39],[-9,28],[18,9],[-31,8],[-58,-22],[-38,-38],[16,-37],[5,-25],[26,-15]],
   loot:[[9,68,'停泊铭牌',80],[19,46,'转运封签',90],[-8,35,'航图底片',105],[42,27,'货运样本',120],
     [17,7,'中继芯片',90],[-23,6,'环桥测距尺',110],[-55,-27,'维修磁钥',130],
     [-18,-23,'冬眠计时器',155],[-25,-44,'星光记录片',120],[27,-12,'母巢结晶',170]],
-  background:0x0d1729,fog:0x283849,terrain:{ground},
+  manualLoot:true,background:0x0d1729,fog:0x283849,terrain:{ground},
   buildMap:ctx=>buildFacility(ctx,plan),createEncounter,buildBeastModel:alienModel,
   buildRageModel:helpers=>alienModel(3,helpers,true),
   area(x,z){return areas.find(({bounds:[x0,z0,x1,z1]})=>x>=x0&&x<x1&&z>=z0&&z<z1)?.name??'环轨设施';},
