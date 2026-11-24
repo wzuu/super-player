@@ -2,6 +2,7 @@
 
 from collections import Counter
 from functools import partial
+from hashlib import sha256
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from threading import Thread
 
 from playwright.sync_api import sync_playwright
 from campaign_browser import LEVELS, expose_game, finish_at_gate
+from pages_browser import smoke
 
 
 class StaticFiles(SimpleHTTPRequestHandler):
@@ -148,7 +150,11 @@ if __name__ == "__main__":
                 with sync_playwright() as pw:
                     browser = pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER", "chrome"))
                     try:
-                        verify(browser, f"http://127.0.0.1:{server.server_port}/super-player/", site)
+                        root = f"http://127.0.0.1:{server.server_port}/super-player/"
+                        verify(browser, root, site)
+                        home = sha256((site / "index.html").read_bytes()).hexdigest()
+                        lab = sha256((site / "underground-lab/index.html").read_bytes()).hexdigest()
+                        smoke(browser, root, home, lab)
                     finally:
                         browser.close()
             finally:

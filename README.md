@@ -1,6 +1,6 @@
 # 超级玩家
 
-在线试玩已关闭。可按下方「快速开始」在本地游玩。
+用桌面浏览器打开[在线试玩](https://wzuu.github.io/super-player/)。首次进入可以选择新手教程，练习转向、移动和射击。游玩时点击游戏画面锁定鼠标，按 Esc 暂停并释放鼠标。
 
 ![雨夜废城实机战斗](campaign/images/gameplay.gif)
 
@@ -23,7 +23,7 @@ python3 server.py
 
 ## 玩法与存档
 
-- **在线战役**：使用静态发布目录启动站点后，从首页进入。通关、战利品、对战记录和佩戴选择保存在当前浏览器的 IndexedDB 中。清除该站点数据会清除在线进度。
+- **在线战役**使用当前浏览器的 IndexedDB 保存通关、战利品、对战记录和佩戴选择。下次用同一浏览器和用户配置打开试玩地址即可继续。清除该站点数据会清除在线进度。
 
 - **本机 SQLite 战役**：通过上面的本机服务进入首页，已发布的关卡按顺序解锁。成功撤离才会带回本局战利品并计入图鉴，失败保留对战记录但带回计为零。武器外观的佩戴也保存在同一份 SQLite 存档里。
 - **单关离线**：直接双击任意关卡目录下的 `index.html`（例如 `rain-city/index.html`）即可开玩，适合练习。这种方式不写战役存档。各关卡通过相对路径引用 `level-kit/vendor/three-r160.js`，所以请保留仓库的目录结构。
@@ -156,7 +156,10 @@ node level-kit/pack.mjs my-level/scene.mjs
 
 `npm test` 运行核心模块测试。`npm run build` 重新生成所有关卡。使用 `npm run build -- dist` 可将纯静态站点写入新建的发布目录（命令会创建该目录），支持部署在仓库名子路径下。
 
-GitHub Actions 在 PR 中验证 SQLite 战役和静态战役。当前公开站点仅发布下线提示。恢复试玩时，将仓库变量 `PAGES_DEMO_ENABLED` 设为 `true`，再从 `main` 运行工作流。
+GitHub Actions 的 `Campaign` 工作流在 PR 中验证本机 SQLite 和浏览器静态战役。`main` 通过同一套测试后才发布。开放试玩时，发布后还会从公网核对首页与第一关文件，实际进入教程、射击并验证战役存档。
+
+- **开放或恢复试玩**时，将仓库的 Actions 变量 `PAGES_DEMO_ENABLED` 设为 `true`，从 Actions → Campaign → Run workflow 选择 `main` 运行，也可由该分支的下一次推送触发。检查 `deploy` 与 `verify-public-game` 均通过。
+- **关闭试玩**时，将同一变量设为 `false` 或删除它，再从 `main` 运行 `Campaign`。等 `deploy` 成功后，打开试玩地址确认显示「在线试玩已关闭」。这个切换只更换公开站点内容，玩家下次开放时可继续使用同一浏览器里的存档。
 
 ## 第三方声明
 
