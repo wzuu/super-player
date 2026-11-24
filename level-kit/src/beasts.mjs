@@ -1,15 +1,29 @@
-import { distantBody, detailedBody, fitBeastModel, hideTexture } from '@level-kit/beast-visuals.mjs';
+import { createBeastBatches } from '@level-kit/beast-model-batches.mjs';
+import { BeastDetailBudget } from '@level-kit/beast-lod.mjs';
 import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 import { FoeTraits, roleRules, affixTitles } from '@level-kit/foe-traits.mjs';
 import { bossDamage, bossStep, createBossFight } from '@level-kit/boss-fight.mjs';
+import { BeastVisibility } from '@level-kit/beast-visibility.mjs';
 import { stairWaypoint } from '@level-kit/stair-navigation.mjs';
 
-export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, setInstance, mergeGeometries, colors, definition, TEXT, campaignStage }) {
+export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canvasTexture, camera, workColor, brighter, clamp, lerp, randomRange, dynamicMesh, updateMesh, markInstancePrefix, setInstance, mergeGeometries, colors, definition, TEXT, campaignStage }) {
   const tactic=stageTactic(definition?.weaponSkin);
   const { projectileTint, ichor, coreTint } = colors;
   const chargeSegments = 8;
+
+  function hearsShot(b, game, hearingOnly) {
+    if (game.time - game.shotAt >= .35) return false;
+    const radius = (hearingOnly ? game.encounter.shotHearing : CONFIG.weapon.hearingRadius) * game.shotHearingScale;
+    const vertical = hearingOnly ? 2 * (b.y - game.shotY) : 0;
+    return (b.x-game.shotX)**2 + (b.z-game.shotZ)**2 + vertical**2 < radius**2;
+  }
+  function hearsStep(b, game) {
+    const step = game.footstep;
+    return game.time - step.at < .28 &&
+      (b.x-step.x)**2 + (b.z-step.z)**2 + (2*(b.y-step.y))**2 < step.radius**2;
+  }
 
   function beastModel(type) {
     const body = [], emit = [];
@@ -114,6 +128,13 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       }
     }
 
+    nextCell(b) {
+      const profile = CONFIG.beasts.simulation.profile, start = profile ? performance.now() : 0;
+      const next = this.nav.fields[b.type].next(b.x, b.z);
+      if (profile) this.beasts.simulationStats.navigationMs += performance.now() - start;
+      return next;
+    }
+
     chargeWindup(b, p, game, fx, fz) {
       const confusion = b.statusEffects.get('confused');
       const yaw = Math.atan2(fx, fz) + (confusion?.angle ?? 0);
@@ -140,10 +161,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     listen(b, p, game) {
       const rules = game.encounter, step = game.footstep;
-      const heardShot = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, (b.y - game.shotY) * 2, b.z - game.shotZ) < rules.shotHearing * game.shotHearingScale;
-      const heardStep = game.time - step.at < 0.28 &&
-        Math.hypot(b.x - step.x, (b.y - step.y) * 2, b.z - step.z) < step.radius;
+      const heardShot = hearsShot(b, game, true);
+      const heardStep = hearsStep(b, game);
       if (heardShot || heardStep) {
         const shot = heardShot && (!heardStep || game.shotAt >= step.at);
         const at = shot ? game.shotAt : step.at;
@@ -186,7 +205,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const route = this.nav.fields[b.type];
       const point = route.target;
       if ((!clear || b.stuck > 0.24) && point >= 0 && Math.hypot(this.nav.x(point) - x, this.nav.z(point) - z) < this.nav.cell * 2) {
-        const next = route.next(b.x, b.z);
+        const next = this.nextCell(b);
         if (next !== this.nav.index(b.x, b.z)) {
           const nx = this.nav.x(next) - b.x, nz = this.nav.z(next) - b.z;
           const n = Math.max(0.05, Math.hypot(nx, nz));
@@ -210,13 +229,14 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.dir.divideScalar(Math.max(0.01, lineDistance));
       const inSight = distance < settings.sight && (b.alert > 0 || distance < 4.5 || towardX * b.fx + towardZ * b.fz > settings.sightDot);
       const sees = inSight && this.level.visible(this.from, this.dir, lineDistance);
-      const hearing = game.time - game.shotAt < 0.35 &&
-        Math.hypot(b.x - game.shotX, b.z - game.shotZ) < CONFIG.weapon.hearingRadius * game.shotHearingScale;
+      const hearing = hearsShot(b, game, false);
       if (sees || hearing) b.alert = settings.memory;
       if (b.alert <= 0) { this.patrol(b); return; }
 
       b.playerVisible = sees;
+      const profile = settings.simulation.profile, start = profile ? performance.now() : 0;
       const stair = stairWaypoint(b,p,this.level,this.nav);
+      if (profile) this.beasts.simulationStats.navigationMs += performance.now() - start;
       if (stair && !(b.type===2 && Math.hypot(stair.x-b.x,stair.z-b.z)<1.1 && sees && distance<type.reach && b.cooldown<=0)) {
         const sx=stair.x-b.x, sz=stair.z-b.z, d=Math.hypot(sx,sz);
         b.dx=d>.18 ? sx/d : 0;b.dz=d>.18 ? sz/d : 0;
@@ -241,7 +261,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       if (waypoint) {
         aimX = waypoint.x - b.x; aimZ = waypoint.z - b.z;
       } else if (!sees || b.stuck > 0.24) {
-        const next = this.nav.fields[b.type].next(b.x, b.z);
+        const next = this.nextCell(b);
         if (next !== this.nav.index(b.x, b.z)) {
           aimX = this.nav.x(next) - b.x; aimZ = this.nav.z(next) - b.z;
         }
@@ -258,6 +278,36 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       }
       const length = Math.max(0.05, Math.hypot(aimX, aimZ));
       b.dx = aimX / length * stride; b.dz = aimZ / length * stride;
+    }
+
+    updatePerception(b, p, game, frame, distance, changed) {
+      const rules = CONFIG.beasts, period = distance > rules.farDistance ? rules.farUpdateFrames : 3;
+      const due = (frame + b.id) % period === 0;
+      let wake = changed;
+      if (rules.simulation.farCadence && (due || b.idlePerception)) {
+        // 仅视距外且未参与任务的普通巡逻者可降频。移动、攻击、持续伤害仍逐步执行。
+        const idle = distance > Math.max(rules.farDistance, rules.sight) && b.alert <= 0 && game.time >= b.wakeUntil &&
+          b.type !== 3 && !b.role && !b.affixes && !b.storyWave && !b.fieldGroup && !b.hunted &&
+          !b.droneRaider && !b.climbRoute && !b.clinging && !b.stairLeg && !b.statusEffects.size;
+        const storm = game.encounter?.hearingOnly;
+        const heard = idle && (hearsShot(b, game, storm) || (storm && hearsStep(b, game)));
+        wake ||= b.idlePerception && (!idle || heard);
+        b.idlePerception = idle && !heard;
+        if (due && !wake && b.idlePerception && (frame + b.id) % (period * 3) !== 0) {
+          // 原有巡视转向照常发生，固定种子的方向和后续随机掉落不因省去感知射线而漂移。
+          this.patrol(b);
+          if (rules.simulation.profile) this.beasts.simulationStats.deferred++;
+          return;
+        }
+      } else if (!rules.simulation.farCadence) b.idlePerception = false;
+      if (!due && !wake) return;
+      const profile = rules.simulation.profile, stats = this.beasts.simulationStats;
+      const start = profile ? performance.now() : 0, previousNav = profile ? stats.navigationMs : 0;
+      this.perceive(b, p, game);
+      if (profile) {
+        stats.perceptions++;
+        stats.perceptionMs += Math.max(0, performance.now() - start - (stats.navigationMs - previousNav));
+      }
     }
 
     update(b, p, game, dt, frame) {
@@ -302,7 +352,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         b.stride = 0;
         return;
       }
-      if (game.field?.huntStep(b,game,dt) || game.story?.stepBeast(b,game,dt) || game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
+      if (game.field?.huntStep(b,game,dt)) return;
+      if (game.story?.stepBeast(b,game,dt)) return true; // 攀爬和袭击无人机的脚本直接设定朝向。
+      if (game.encounter?.stepScriptedBeast?.(b, game, dt)) return;
       const confusion = b.statusEffects.get('confused');
       let x = 0, z = 0;
       if (b.stun > 0) {
@@ -344,8 +396,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           }
         }
       } else {
-        const period = distance > CONFIG.beasts.farDistance ? CONFIG.beasts.farUpdateFrames : 3;
-        if (justChanged || (frame + b.id) % period === 0) this.perceive(b, p, game);
+        this.updatePerception(b, p, game, frame, distance, justChanged);
         if (b.mode === 'move') {
           const range = b.radius + 1.10;
           const nearby = this.beasts.hash.query(b.x - range, b.z - range, b.x + range, b.z + range, this.near);
@@ -400,61 +451,21 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
 
   class BeastManager {
     constructor(level, nav) {
+      this.visibility = new BeastVisibility(THREE, CONFIG.beasts.visibility, level);
       this.level = level; this.nav = nav;
       this.hash = new SpatialHash(CONFIG.map.hash);
+      this.resetSimulationStats();
       this.pool = Array.from({ length: CONFIG.beasts.capacity }, (_, id) => ({ id, active: false, mark: 0, aim: new V3() }));
       this.air = new V3(); this.line = new V3();
       const modelContext = { THREE, shapes, mergeGeometries, CONFIG };
-      const appearance=CONFIG.beasts.appearance, textures=new Map();
-      const surfaces=appearance.surfaces[definition.weaponSkin] ?? [];
+      const appearance=CONFIG.beasts.appearance;
       this.corpses=Array.from({length:appearance.corpses},()=>({until:0}));
       this.nextCorpse=0;
-      const createBatch = ([body, eye], capacity, surface) => {
-        if (surface && !textures.has(surface)) textures.set(surface,hideTexture(canvasTexture,surface));
-        const texture=textures.get(surface);
-        const material=surface ? new THREE.MeshPhongMaterial({
-          vertexColors:true,map:texture,specularMap:texture,
-          specular:surface==='metal'?0x565e69:0x241f1d,shininess:surface==='metal'?32:8,
-        }) : new THREE.MeshLambertMaterial({vertexColors:true});
-        // 把受击强度作为实例属性，保留原本的顶点色和各部位区分。
-        const flash = new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(THREE.DynamicDrawUsage);
-        body.setAttribute('beastFlash', flash);
-        material.onBeforeCompile = shader => {
-          shader.vertexShader = 'attribute float beastFlash; varying float vBeastFlash;\n' + shader.vertexShader
-            .replace('#include <begin_vertex>', '#include <begin_vertex>\n vBeastFlash = beastFlash;');
-          shader.fragmentShader = 'varying float vBeastFlash;\n' + shader.fragmentShader
-            .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-              float edge = 1.0 - abs(dot(normal, normalize(vViewPosition)));
-              totalEmissiveRadiance += vec3(1.25) * vBeastFlash
-                + diffuseColor.rgb * edge * edge * ${Number(appearance.rim).toFixed(4)};`);
-        };
-        const eyes = new THREE.MeshBasicMaterial({ vertexColors: true, fog:false });
-        return [dynamicMesh(body, material, capacity), dynamicMesh(eye, eyes, capacity)];
-      };
-      this.modelBatches=[];
-      this.footprints=[];
-      const far=[];
-      CONFIG.beasts.types.forEach((stats,type)=>{
-        const [body,eye]=definition.buildBeastModel?.(type,modelContext) ?? beastModel(type);
-        const capacity=(type===3 ? 1 : this.pool.length)+appearance.corpses;
-        const rage = type === 3 ? definition.buildRageModel?.(modelContext) ?? [body,eye.clone()] : null;
-        const nearBody = detailedBody(modelContext,body,type,appearance);
-        const farBody = type !== 3 ? distantBody(THREE,body,appearance.gridCells) : null;
-        this.footprints.push(fitBeastModel(nearBody,eye,farBody,stats,appearance.scale[type][0]));
-        this.modelBatches.push(createBatch([nearBody,eye],capacity,surfaces[type] ?? 'hide'));
-        if(farBody) far.push(createBatch([farBody,eye],capacity,false));
-        if(type===3){
-          const [rageBody,rageEye]=rage;
-          this.rageBatch=this.modelBatches.length;
-          const detailed = detailedBody(modelContext,rageBody,type,appearance,true);
-          this.footprints.push(fitBeastModel(detailed,rageEye,null,stats,appearance.scale[type][0]));
-          this.modelBatches.push(createBatch([detailed,rageEye],capacity,surfaces[type] ?? 'hide'));
-          if(rageBody!==body) rageBody.dispose();
-        }
-        body.dispose();
-      });
-      this.farStart=this.modelBatches.length;
-      this.modelBatches.push(...far);
+      this.visualQuality='high';
+      this.detail=new BeastDetailBudget();
+      this.lodCounts=this.detail.counts;
+      this.detailParts=createBeastBatches(this,modelContext,definition,beastModel,
+        {canvasTexture,dynamicMesh,updateMesh,markInstancePrefix});
       this.chargeMarks = dynamicMesh(shapes.box,
         new THREE.MeshBasicMaterial({color: 0xffa447, fog:false, toneMapped:false}), this.pool.length * chargeSegments);
       this.healthBG = dynamicMesh(shapes.plane, new THREE.MeshBasicMaterial({ color: 0x101523, side: THREE.DoubleSide }), this.pool.length);
@@ -521,20 +532,25 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       return b;
     }
     spawn(type, x, z, y = this.level.base(x, z), angle = randomRange(0, TAU)) {
+      const profile = CONFIG.beasts.simulation.profile, start = profile ? performance.now() : 0;
       const b = this.pool.find(item => !item.active);
+      if (profile) {
+        this.simulationStats.spawnScans++;
+        this.simulationStats.spawnScanMs += performance.now() - start;
+      }
       if (!b) return null;
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
         active: true, storyWave:null, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
-        farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
+        nearLOD:false, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
         traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,
         fx: Math.sin(angle), fz: Math.cos(angle), dx: Math.sin(angle) * 0.11, dz: Math.cos(angle) * 0.11,
         lane: Math.random() > 0.5 ? 1 : -1, yaw: angle, blink: randomRange(0, TAU), stride: 0, alert: 0,
         mode: 'move', phaseTime: 0, cooldown: randomRange(0.5, 1.3), stun: 0, flash: 0, patrol: randomRange(0.5, 2),
         knockX: 0, knockZ: 0, stuck: 0, rage: false, summon: 0, playerVisible: false,
-        surfaceRoll: 0, clinging: false, surfaceSide: 1,
+        surfaceRoll: 0, clinging: false, surfaceSide: 1, idlePerception: false, wakeUntil: -Infinity,
         hearingOnly: false, heardAt: -Infinity, heardX: x, heardY: y, heardZ: z, reinforcement: false,
       });
       resetTargetEffects(b);
@@ -547,12 +563,21 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       return b;
     }
     refreshHash() {
+      const profile = CONFIG.beasts.simulation.profile, start = profile ? performance.now() : 0;
       this.hash.clear();
       for (const b of this.pool) {
         if (!b.active) continue;
         this.bodyBounds(b);
         this.hash.insert(b);
       }
+      if (profile) this.simulationStats.hashMs += performance.now() - start;
+    }
+
+    resetSimulationStats() {
+      this.simulationStats = {
+        steps: 0, actors: 0, perceptions: 0, deferred: 0, spawnScans: 0,
+        perceptionMs: 0, navigationMs: 0, statusMs: 0, hashMs: 0, spawnScanMs: 0,
+      };
     }
     visibleToPlayer(x, y, z, viewDirection) {
       const dx = x - camera.position.x, dz = z - camera.position.z;
@@ -610,6 +635,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       amount *= combat.damageScale(b,source,game.time);
       const applied = Math.min(b.hp,b.fight ? bossDamage(b,amount,game,hit) : amount);
       b.hp -= applied;
+      if (applied > 0) b.wakeUntil = game.time + CONFIG.beasts.memory;
       if (hit?.lifeSteal) game.player.hp = Math.min(CONFIG.player.health, game.player.hp + applied * hit.lifeSteal);
       if (b.hp > 0) return false;
       this.retire(b, game, source, hit);
@@ -629,7 +655,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         this.nextCorpse = (this.nextCorpse + 1) % this.corpses.length;
         Object.assign(corpse, {
           x: b.x, y: b.y, z: b.z, yaw: b.yaw, roll: b.surfaceRoll, type, rage: b.rage,
-          farLOD: b.farLOD, until: game.time + CONFIG.beasts.appearance.fallTime,
+          nearLOD: b.nearLOD, farLOD: b.farLOD, scale: b.scale, until: game.time + CONFIG.beasts.appearance.fallTime,
         });
         const origin = hit?.blastOrigin;
         const lift = Boolean(origin || hit?.pellet);
@@ -672,10 +698,13 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     update(dt, player, game) {
       if (dt <= 0) return;
+      const profile = CONFIG.beasts.simulation.profile, stats = this.simulationStats;
+      if (profile) stats.steps++;
       this.frame++;
       this.navTime -= dt;
       const encounter = game.encounter;
       if (this.navTime <= 0) {
+        const start = profile ? performance.now() : 0;
         if (encounter?.hearingOnly) {
           const step = game.footstep;
           const latest = Math.max(game.shotAt, step.at);
@@ -683,17 +712,26 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
             this.nav.rebuild(game.shotAt >= step.at ? game.shotX : step.x, game.shotAt >= step.at ? game.shotZ : step.z);
           }
         } else this.nav.rebuild(player.x, player.z);
+        if (profile) stats.navigationMs += performance.now() - start;
         this.navTime = 0.24;
       }
       this.refreshHash();
       this.releaseSplits(game);
       for (const b of this.pool) {
         if (!b.active) continue;
+        if (profile) stats.actors++;
         if (b.role || b.affixes) this.traits.step(b,game,dt);
         if (!b.active || game.phase!=='play') continue;
+        const start = profile ? performance.now() : 0;
         game.weapon.combat.updateTarget(b, game);
+        if (profile) stats.statusMs += performance.now() - start;
         if (!b.active) continue;
-        this.ai.update(b, player, game, dt, this.frame);
+        const scriptedFacing = this.ai.update(b, player, game, dt, this.frame);
+        if (!scriptedFacing) {
+          // 朝向参与下一次哈希刷新与射线命中盒计算，只在模拟步内推进。
+          const delta = Math.atan2(b.fx, b.fz) - b.yaw;
+          b.yaw += Math.atan2(Math.sin(delta), Math.cos(delta)) * Math.min(1, dt * 16);
+        }
       }
       this.spawnTime -= dt;
       if (this.spawnTime <= 0 && !game.story?.managed && !game.field?.hunting) {
@@ -739,13 +777,67 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.refreshHash();
     }
     fadeHitFlashes(dt, game) {
+      const profile = CONFIG.beasts.simulation.profile, start = profile ? performance.now() : 0;
+      if (profile) this.simulationStats.steps++;
       for (const b of this.pool) {
         if (!b.active) continue;
+        if (profile) this.simulationStats.actors++;
         game.weapon.combat.updateTarget(b, game);
         if (b.flash > 0) b.flash = Math.max(0, b.flash - dt);
       }
+      if (profile) this.simulationStats.statusMs += performance.now() - start;
+    }
+    bodyBatch(form,near,far) {
+      if (!CONFIG.beasts.appearance.detailEnabled) return far ? this.legacyFarStart+form : form;
+      return (far ? this.farStart : near ? this.nearStart : this.midStart)+form;
+    }
+    writeBody(b,t,disabled) {
+      const type=b.type, form=b.rage && type===3 ? this.rageBatch : type;
+      const batch=this.bodyBatch(form,b.nearLOD,b.farLOD), i=this.counts[batch]++;
+      this.lodCounts[b.farLOD?'far':b.nearLOD?'near':'mid']++;
+      const [body,eye]=this.modelBatches[batch], appearance=CONFIG.beasts.appearance;
+      const walk=t*appearance.walkHz[type]+b.blink;
+      const action=disabled ? 0 : b.mode==='windup' ? appearance.windupTilt[type] : b.mode==='charge' ? .23 : 0;
+      const bob=(disabled ? 0 : Math.sin(walk*2))*.075*clamp(b.stride/3,.15,1);
+      const roll=b.surfaceRoll+(disabled ? 0 : Math.cos(walk)*.062);
+      const y=b.y+bob+(b.surfaceRoll ? b.height*.5*(1-Math.cos(b.surfaceRoll)) : 0);
+      const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
+      const flash=Math.min(1,b.flash*12), light=disabled ? .31 : b.rage ? 3.2 : b.mode==='windup' ? 2.85 : appearance.eyeLight;
+      body.geometry.attributes.beastFlash.setX(i,flash);
+      setInstance(body,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,null,b.yaw,action,roll);
+      workColor.setScalar(light);
+      setInstance(eye,i,b.x,y,b.z,b.scale,breath*b.scale,b.scale,workColor,b.yaw,action,roll);
+      if (!b.nearLOD) return;
+      body.geometry.attributes.beastLight.setX(i,light);
+      const winding=b.mode==='windup' || b.fight?.winding;
+      const headPitch=disabled ? 0 : flash*.18+(winding ? (type===1?.22:-.22) : b.mode==='charge'?.19:0);
+      const turn=Math.atan2(b.fx,b.fz)-b.yaw;
+      const headYaw=disabled ? 0 : clamp(Math.atan2(Math.sin(turn),Math.cos(turn)),-.22,.22);
+      const tailYaw=disabled ? 0 : Math.sin(walk*.6)*clamp(b.stride*.045+.04,.04,.20);
+      this.detailParts.apply(form,i,body,headPitch,headYaw,-headPitch*.5,tailYaw,flash,light);
+    }
+    writeCorpse(c,t,x,y,z,roll,fall) {
+      const form=c.rage && c.type===3 ? this.rageBatch : c.type;
+      const near=c.nearLOD && CONFIG.beasts.appearance.detailEnabled && (c.type===3 || this.detail.corpseSlots>0);
+      if (near && c.type!==3) this.detail.corpseSlots--;
+      const batch=this.bodyBatch(form,near,c.farLOD), i=this.counts[batch]++;
+      const [body,eye]=this.modelBatches[batch], flash=Math.max(0,1-5*fall);
+      const scale=c.scale,light=1-fall;
+      setInstance(body,i,x,y,z,scale,scale,scale,null,c.yaw,0,roll);
+      workColor.setScalar(light);
+      setInstance(eye,i,x,y,z,scale,scale,scale,workColor,c.yaw,0,roll);
+      body.geometry.attributes.beastFlash.setX(i,flash);
+      if(near) {
+        body.geometry.attributes.beastLight.setX(i,light);
+        this.detailParts.apply(form,i,body,.25*fall,.10*fall,-.16*fall,.22*fall,flash,light);
+      }
     }
     render(dt = 0, t = 0, disabled = false) {
+      const view = this.visibility;
+      view.begin(camera);
+      view.prepareBodies(this.pool, this.footprints);
+      const appearance = CONFIG.beasts.appearance;
+      this.detail.select(this.pool, camera, appearance, this.visualQuality);
       this.counts.fill(0);
       const badges={shield:0,brood:0,volatile:0,elite:0};
       this.traitLabel='';
@@ -754,42 +846,28 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       for (const b of this.pool) {
         if (!b.active) continue;
         const type = b.type;
-        const appearance=CONFIG.beasts.appearance;
         const range2=(camera.position.x-b.x)**2+(camera.position.z-b.z)**2+(camera.position.y-b.y)**2;
-        const threshold=appearance.far+(b.farLOD?-appearance.hysteresis:appearance.hysteresis);
-        b.farLOD=type!==3 && range2>threshold**2;
-        const batch=b.farLOD ? this.farStart+type : b.rage && type===3 ? this.rageBatch : type;
-        const i = this.counts[batch]++;
-        const [body, luminous] = this.modelBatches[batch];
-        const angle = Math.atan2(b.fx, b.fz);
+        if (b.submitBody) this.writeBody(b, t, disabled);
         if (!disabled && b.type === 1 && b.mode === 'windup' && b.chargeMarkLength > 0) {
+          const angle = Math.atan2(b.fx, b.fz);
           const step = b.chargeMarkLength;
           for (let j = 0; j < b.chargeMarkCount; j++) {
             const along = (j + .5) * step;
             const y = (b.chargeHeights[j] + b.chargeHeights[j+1]) / 2 + .065;
             const dy = b.chargeHeights[j+1] - b.chargeHeights[j];
-            setInstance(this.chargeMarks, chargeMarks++, b.x + b.fx * along, y, b.z + b.fz * along,
+            const x = b.x + b.fx * along, z = b.z + b.fz * along;
+            if (!view.visible(x, y, z, Math.abs(b.fx)*step*.5+.1, Math.abs(dy)*.5+.04, Math.abs(b.fz)*step*.5+.1)) continue;
+            setInstance(this.chargeMarks, chargeMarks++, x, y, z,
               .16, .035, Math.hypot(step,dy)*.88, null, angle, -Math.atan2(dy,step));
           }
         }
-        const delta = Math.atan2(Math.sin(angle - b.yaw), Math.cos(angle - b.yaw));
-        b.yaw += delta * Math.min(1, dt * 16);
-        const walk = t * appearance.walkHz[type] + b.blink;
-        const action = disabled ? 0 : b.mode === 'windup' ? appearance.windupTilt[type] : b.mode === 'charge' ? 0.23 : 0;
-        const bob = (disabled ? 0 : Math.sin(walk * 2)) * 0.075 * clamp(b.stride / 3, 0.15, 1);
-        body.geometry.attributes.beastFlash.setX(i, Math.min(1, b.flash * 12));
-        const roll = b.surfaceRoll + (disabled ? 0 : Math.cos(walk) * 0.062);
-        const visualY = b.y + bob + (b.surfaceRoll ? b.height * 0.5 * (1 - Math.cos(b.surfaceRoll)) : 0);
-        const breath=disabled?1:1+.018*Math.sin(t*3+b.blink);
-        setInstance(body, i, b.x, visualY, b.z, b.scale, breath*b.scale, b.scale, null, b.yaw, action, roll);
-        workColor.setScalar(disabled ? 0.31 : b.rage ? 3.2 : b.mode === 'windup' ? 2.85 : appearance.eyeLight);
-        setInstance(luminous, i, b.x, visualY, b.z, b.scale, breath*b.scale, b.scale, workColor, b.yaw, action, roll);
         const mark=b.role || (b.affixes && 'elite');
         if (mark && range2<40**2) {
           const size=b.charging?1+.3*Math.sin(t*16):1;
           workColor.setHex(({shield:b.shield>0?0x65daff:0x51869b,brood:0xb8ff84,volatile:0xff633a,elite:0xd68aff})[mark]);
-          setInstance(this.badges[mark],badges[mark]++,b.x,b.y+b.height*.83,b.z,size*b.radius*2.3,
-            size*b.height*.62,size*b.radius*1.6,workColor,b.yaw);
+          if (view.visible(b.x,b.y+b.height*.83,b.z,size*b.radius*1.5,size*b.height*.4,size*b.radius*1.5))
+            setInstance(this.badges[mark],badges[mark]++,b.x,b.y+b.height*.83,b.z,size*b.radius*2.3,
+              size*b.height*.62,size*b.radius*1.6,workColor,b.yaw);
           if (range2<labelRange && b.playerVisible) {
             labelRange=range2;
             this.traitLabel=[b.affixes?'精英':'',roleRules[b.role]?.title,
@@ -798,12 +876,14 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         }
         if (range2 < appearance.shadowRange ** 2) {
           const floor = this.level.surface(b.x,b.z,b.y+.05);
-          setInstance(this.shadows,shadows++,b.x,floor+.025,b.z,b.radius*2.6,b.radius*3.1,1,null,b.yaw,-Math.PI/2);
+          if (view.visible(b.x,floor+.025,b.z,b.radius*2.05,.03,b.radius*2.05))
+            setInstance(this.shadows,shadows++,b.x,floor+.025,b.z,b.radius*2.6,b.radius*3.1,1,null,b.yaw,-Math.PI/2);
         }
         if (range2 > 68 ** 2) continue;
         const w = type === 3 ? 1.83 : 0.93, h = type === 3 ? 0.099 : 0.059;
         const ratio = clamp(b.hp / b.maxHP, 0, 1);
         const y = Math.abs(b.surfaceRoll) > 2.10 ? b.y - 0.18 : b.y + b.height + 0.20;
+        if (!view.visible(b.x,y,b.z,w*.6,w*.6,w*.6)) continue;
         stamp.position.set(b.x, y, b.z);
         stamp.quaternion.copy(camera.quaternion); stamp.scale.set(w + 0.055, h + 0.035, 1);
         stamp.updateMatrix(); this.healthBG.setMatrixAt(bars, stamp.matrix);
@@ -816,28 +896,28 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       for(const c of this.corpses){
         if(c.until<=t) continue;
         const fall=1-(c.until-t)/CONFIG.beasts.appearance.fallTime;
-        const batch=c.farLOD ? this.farStart+c.type : c.rage && c.type===3 ? this.rageBatch : c.type;
-        const [body,eye]=this.modelBatches[batch], i=this.counts[batch]++;
         const x=c.x+c.slideX*fall, z=c.z+c.slideZ*fall;
         const y=c.y-.18*fall+c.lift*Math.sin(Math.PI*fall), roll=c.roll+fall*1.48;
-        setInstance(body,i,x,y,z,1,1,1,null,c.yaw,0,roll);
-        workColor.setScalar(1-fall);setInstance(eye,i,x,y,z,1,1,1,workColor,c.yaw,0,roll);
-        body.geometry.attributes.beastFlash.setX(i,Math.max(0,1-5*fall));
+        const f = this.footprints[c.rage && c.type===3 ? this.rageBatch : c.type];
+        const span = (Math.hypot(f.x, f.z, CONFIG.beasts.types[c.type].height) + .7) * c.scale;
+        if (view.visible(x,y,z,span,span,span)) this.writeCorpse(c,t,x,y,z,roll,fall);
       }
       for (let i = 0; i < this.counts.length; i++) {
         const [body, luminous] = this.modelBatches[i];
         body.visible=luminous.visible=this.counts[i]>0;
-        body.geometry.attributes.beastFlash.needsUpdate = true;
+        if (this.counts[i]) markInstancePrefix(body.geometry.attributes.beastFlash, this.counts[i]);
         updateMesh(body, this.counts[i]); updateMesh(luminous, this.counts[i]);
       }
+      this.detailParts.flush();
       this.chargeMarks.visible = chargeMarks > 0;
       let marks=0;
       const boss=this.boss, fight=boss?.fight;
       if (fight?.winding) {
         workColor.setHex(0xff9144);
         const radius=2.2+fight.stage*.5;
-        setInstance(this.bossMarks,marks++,fight.aimX,fight.aimY+.09,fight.aimZ,radius,radius,1,workColor,0,-Math.PI/2);
-        if(fight.pattern===2 && fight.stage>=1)
+        if (view.visible(fight.aimX,fight.aimY+.09,fight.aimZ,radius,.04,radius))
+          setInstance(this.bossMarks,marks++,fight.aimX,fight.aimY+.09,fight.aimZ,radius,radius,1,workColor,0,-Math.PI/2);
+        if(fight.pattern===2 && fight.stage>=1 && view.visible(fight.nextX,fight.aimY+.09,fight.nextZ,2.5,.04,2.5))
           setInstance(this.bossMarks,marks++,fight.nextX,fight.aimY+.09,fight.nextZ,2.5,2.5,1,workColor,0,-Math.PI/2);
       }
       if (fight && (fight.weakUntil>t || fight.brokenUntil>t)) {
@@ -852,6 +932,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         updateMesh(this.badges[name],count);
       }
       updateMesh(this.chargeMarks, chargeMarks);
+      this.healthBG.visible = this.healthFG.visible = bars > 0;
       updateMesh(this.healthBG, bars); updateMesh(this.healthFG, bars);
       this.shadows.visible = shadows > 0;
       updateMesh(this.shadows, shadows);

@@ -68,13 +68,13 @@ def check_features(page):
       const expect=(ok,why)=>{if(!ok) throw Error(why)};
       const farCount=b.counts.slice(b.farStart).reduce((a,v)=>a+v,0);
       expect(farCount>0 && farCount<b.live,'远近分批');
-      const beast=b.pool.find(a=>a.active && a.type===0), hp=beast.hp;
+      const beast=b.pool.find(a=>a.active && a.submitBody && a.type===0), hp=beast.hp;
       const live=b.live, kills=g.kills;
       g.phase='play'; b.damage(beast,hp+100,g);
       expect(!beast.active && b.live===live-1 && g.kills===kills+1,'击杀判定');
       expect(!b.damage(beast,9999,g) && b.corpses.some(c=>c.until>g.time),'尸体与战斗对象分离');
-      b.render(0,g.time); expect(b.counts.reduce((a,v)=>a+v,0)===live,'倒地绘制');
-      b.render(0,g.time+1);expect(b.counts.reduce((a,v)=>a+v,0)===live-1,'倒地回收');
+      b.render(0,g.time); expect(b.counts.reduce((a,v)=>a+v,0)===b.visibility.stats.bodies+1,'可见凶兽的倒地绘制');
+      b.render(0,g.time+1);expect(b.counts.reduce((a,v)=>a+v,0)===b.visibility.stats.bodies,'倒地回收');
       g.phase='pause';
       for(const obj of p.objects)obj.active=false;
       q.x=0;q.y=30;q.z=0;
@@ -161,17 +161,25 @@ def audit(browser, url):
           camera.position.set(0,1.65,10);camera.lookAt(0,1.05,0);
           const counts=[];
           for(let i=0;i<4;i++){
-            const group=new T.Group(), pair=b.modelBatches[i];
+            const group=new T.Group(), pair=b.modelBatches[(b.nearStart ?? 0)+i];
             for(const mesh of pair)group.add(new T.Mesh(mesh.geometry,material));
+            const joint=b.detailParts?.joints[i];
+            if(joint) for(const key of ['head','tail']) {
+              const mesh=new T.Mesh(joint[key].geometry,material);
+              mesh.position.copy(joint[key+'Pivot']);group.add(mesh);
+            }
             group.rotation.y=-.65;
             const box=new T.Box3().setFromObject(group), size=box.getSize(new T.Vector3());
             const scale=Math.min(1.9/size.y,1.55/size.x);
             group.scale.setScalar(scale);
             group.position.set(-3.12+i*2.08,.10-box.min.y*scale,0);s.add(group);
-            const triangles=pair[0].geometry.attributes.position.count/3;
-            const far=i<3 && b.farStart ? b.modelBatches[b.farStart+i][0].geometry.attributes.position.count/3 : 0;
+            const tris=mesh=>(mesh.geometry.index?.count ?? mesh.geometry.attributes.position.count)/3;
+            const triangles=group.children.reduce((n,mesh)=>n+tris(mesh),0);
+            const mid=b.midStart ? b.modelBatches[b.midStart+i].reduce((n,m)=>n+tris(m),0) : 0;
+            const far=i<3 && b.farStart ? b.modelBatches[b.farStart+i].reduce((n,m)=>n+tris(m),0) : 0;
             if(b.farStart && i<3 && !(far>0 && far<triangles)) throw Error('LOD '+i);
-            counts.push([triangles,far]);
+            if(b.midStart && !(triangles>mid && mid>far)) throw Error('三档面数 '+[i,triangles,mid,far]);
+            counts.push([triangles,mid,far]);
           }
           const w=420,h=130, target=new T.WebGLRenderTarget(w,h);
           r.setRenderTarget(target);r.render(s,camera);

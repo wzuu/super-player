@@ -99,6 +99,16 @@ EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `e
 
 生成入口后，`python level-kit/tests/story_browser.py` 验证各关目标连通、守卫和任务重开，`python level-kit/tests/stair_routes_browser.py` 验证四种体型的双向楼梯。使用 `python level-kit/tests/story_performance.py <基线构建根目录>` 比较同机位持续射击下的帧率和帧时间。
 
+## 凶兽可见性、模型与模拟的对照
+
+在关卡配置的 `beasts` 下，`visibility.enabled` 控制逐实例剔除，`visibility.occlusion` 控制登记为不透明墙面的室内遮挡，默认范围 40 米。镜面开口、墙顶、玻璃和独立攻击预警有专门的保守判定。
+
+`appearance.detailEnabled` 切换三档模型与旧两档模型。`nearBudgets` 位于 `appearance` 下，低、中、高画质给普通凶兽各 3、8、12 个近模名额，首领单独分配。`appearance.detailSpecular` 控制近模共用的程序高光图。
+
+`simulation.farCadence` 控制远处未交战凶兽的感知分频。`simulation.profile` 仅在测量期间启用；`game.beasts.simulationStats` 记录实际模拟数量、感知与寻路、状态结算、哈希和出生扫描耗时。用 `beasts.capacity` 调整实验对象池，房间的每场投放量和并发上限分别由行动配置控制。
+
+先运行 `npm run build`。再运行 `python level-kit/tests/herd_performance.py --samples open indoor --sizes 96 120 160` 可复现无头同屏压测。每组输出包括实际模拟、提交与画面中心点数、整帧 P95、主通道与反射的绘制成本。固定种子和原 96 只霰弹样板的对照见 `PROGRESS.md`。
+
 ## 武器外观调节
 
 雨夜废城和黄铜机坊通关后分别解锁「雨巷破阵」「铜炉雷鸣」。霰弹参数在 `src/weapon-classes.mjs`，弹丸独立检测遮挡、近远距离和穿透，每次开火仅计一次射击。单发装填可被开火打断，黄铜款击杀后短时加快装填。运行 `python level-kit/tests/weapon_system_browser.py` 可验证配装、射击、换弹和视角切换。

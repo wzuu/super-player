@@ -52,6 +52,7 @@ jobs:
           - 'story_browser stair_routes_browser stage_audio_browser'
           - 'combat_expansion field_operations_browser'
           - 'controls_browser grenade_browser lab_live_browser'
+          - 'visibility_browser'
     env:
       GAME_TEST_BROWSER: chromium
     steps:
@@ -75,6 +76,9 @@ jobs:
             python -u "level-kit/tests/$suite.py"
             echo '::endgroup::'
           done
+      - name: Verify 160 visible enemies in Chromium
+        if: matrix.suites == 'visibility_browser'
+        run: python -u level-kit/tests/herd_performance.py --samples open dense --sizes 160 --frames 36
 
   deploy:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'

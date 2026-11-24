@@ -100,8 +100,17 @@ export function createRendering({ CONFIG, definition, canvas }) {
 
   function updateMesh(mesh, count) {
     mesh.count = count;
-    mesh.instanceMatrix.needsUpdate = true;
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    if (count) {
+      markInstancePrefix(mesh.instanceMatrix, count);
+      if (mesh.instanceColor) markInstancePrefix(mesh.instanceColor, count);
+    }
+  }
+
+  function markInstancePrefix(attribute, count) {
+    // 缓冲区只分配一次；每帧压紧后的前缀才需要上传。跳过绘制时也不会累积陈旧的更新范围。
+    attribute.clearUpdateRanges();
+    if (CONFIG.graphics.partialInstanceUploads) attribute.addUpdateRange(0, count * attribute.itemSize);
+    attribute.needsUpdate = true;
   }
 
   function setInstance(mesh, i, x, y, z, w, h, d, color, yaw = 0, pitch = 0, roll = 0) {
@@ -111,5 +120,5 @@ export function createRendering({ CONFIG, definition, canvas }) {
   }
 
   return { THREE, scene, camera, renderer, composer, bloom, weaponScene, weaponCamera, weaponPass,
-    canvasTexture, shapes, StaticBatches, stamp, dynamicMesh, updateMesh, setInstance, mergeGeometries };
+    canvasTexture, shapes, StaticBatches, stamp, dynamicMesh, updateMesh, markInstancePrefix, setInstance, mergeGeometries };
 }

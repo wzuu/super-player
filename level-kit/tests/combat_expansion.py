@@ -7,9 +7,12 @@ from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT
 
 
-def level_page(browser, stage, variation=None):
+def level_page(browser, stage, variation=None, quality=None):
     page = browser.new_page(viewport={"width": 960, "height": 620})
     page.add_init_script("window.requestAnimationFrame=()=>1")
+    if quality:
+        value=json.dumps(json.dumps({"quality":quality}))
+        page.add_init_script(f"localStorage.setItem('super-player:preferences:v1',{value})")
     if variation:
         levels = json.loads((ROOT/"campaign"/"levels.json").read_text(encoding="utf-8"))
         number = next(index for index, level in enumerate(levels, 1) if level["id"] == stage)
@@ -81,6 +84,74 @@ def boss_measure(page, burst):
       if(b.active || seen.size!==3 || !b.fight.breaks || !windows.size || !armorHits.includes(0))throw Error('首领未完整经过阶段、转场保护与易伤');
       return {seconds:g.time,weakSeconds:+weakTime.toFixed(1),breaks:b.fight.breaks,hp,rounds};
     }""", burst)
+
+
+def verify_simulation_cadence(page):
+    def measure(enabled):
+        return page.evaluate("""enabled=>{
+          const {game:g,config}=run, m=g.beasts, p=g.player, combat=g.weapon.combat;
+          let seed=8347;
+          const random=Math.random;
+          Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+          try {
+            document.querySelector('#mission-mode').value='endless';
+            g.reset();g.phase='play';g.variation=null;
+            for(const b of m.pool)b.active=false;
+            m.live=0;m.boss=null;m.spawnTime=Infinity;
+            Object.assign(p,{x:-22,y:40,z:0});
+            const rules=config.beasts.simulation;rules.farCadence=enabled;rules.profile=true;
+            m.resetSimulationStats();
+            const spawn=(type,x,z)=>m.spawn(type,x,z,40,0);
+            const idle=spawn(0,22,0), afflicted=spawn(0,22,5), hazard=spawn(0,22,9);
+            const hp=afflicted.hp;
+            afflicted.statusEffects.set('burn',{until:1,tickAt:.5});
+            afflicted.statusEffects.set('poison',{until:1,tickAt:.5,stacks:2});
+            afflicted.statusEffects.set('scald',{until:1,tickAt:.5});
+            for(let frame=1;frame<=72;frame++){
+              g.time=frame/60;
+              // 同一帧先由武器入口结清三个到期效果，再推进凶兽步。
+              if(frame===30)combat.hit(afflicted,{damage:1},g);
+              if(frame===40)m.damage(hazard,hazard.hp+1,g,'environment');
+              m.update(1/60,p,g);
+            }
+            const actual=hp-afflicted.hp, expected=combat.baseDamage*(.08+.16+.12);
+            if(Math.abs(actual-expected)>1e-6 || ['burn','poison','scald'].some(k=>afflicted.statusEffects.has(k)))
+              throw Error('跨步持续伤害累计错误 '+actual);
+            const counts={...m.simulationStats};
+            if(enabled!==Boolean(counts.deferred))throw Error('远距分频样本未覆盖实际跳频');
+            const state=[g.kills,g.performance.environmentKills,g.performance.weaponKills,m.live,
+              idle.x,idle.y,idle.z,afflicted.hp,afflicted.x,afflicted.z];
+            const report=g.performance.result(g,false), ready=g.ready();
+            // 在同一个实际对象池填满、击退并复用，取装包中原有的容量。
+            while(m.live<m.pool.length){
+              if(!spawn(0,20,5))throw Error('未满时无法生成');
+            }
+            if(spawn(0,20,5)!==null)throw Error('池满后数量溢出');
+            const generation=idle.spawnGeneration;
+            if(!m.eject(idle,g))throw Error('环境移除失败');
+            const next=spawn(0,20,5);
+            if(next!==idle || next.spawnGeneration===generation || next.idlePerception ||
+               next.wakeUntil!==-Infinity || next.statusEffects.size)throw Error('池复用遗留模拟状态');
+            g.reset();g.phase='play';const opening=m.live;
+            // 玩家已走出气闸，增援从主走廊连通的出生点补入。
+            Object.assign(p,{x:0,y:0,z:28,escaped:true});m.nav.rebuild(p.x,p.z);p.positionCamera(0);
+            const victim=m.pool.find(b=>b.active && b.type!==3);
+            if(!victim || !m.eject(victim,g))throw Error('重开后无尽开场失败');
+            const after=m.live;
+            for(let i=0;i<120 && m.live===after;i++){g.time+=.04;m.update(.04,p,g);}
+            if(m.live<=after)throw Error('无尽缺员后未补入');
+            return {state,report,ready,opening,refilled:m.live,perceptions:counts.perceptions,deferred:counts.deferred};
+          } finally {
+            Math.random=random;config.beasts.simulation.farCadence=true;config.beasts.simulation.profile=false;
+          }
+        }""",enabled)
+    original, reduced = measure(False), measure(True)
+    assert original["state"] == reduced["state"] and original["state"][:4] == [1,1,0,2], (original,reduced)
+    assert original["report"] == reduced["report"] and original["ready"] == reduced["ready"], (original,reduced)
+    assert original["opening"] == reduced["opening"] and original["refilled"] == reduced["refilled"], (original,reduced)
+    assert reduced["perceptions"] < original["perceptions"], (original,reduced)
+    print("PASS far simulation A/B, damage ticks, environment kill, exhausted pool and endless refill",reduced,flush=True)
+    return reduced
 
 
 def verify_boss_feedback(page):
@@ -209,8 +280,14 @@ def main():
         browser=pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER","chrome"))
         try:
             for stage in ["underground-lab","rain-city"]:
-                page=level_page(browser,stage)
-                if stage=="underground-lab": verify_boss_feedback(page)
+                page=level_page(browser,stage,quality="high" if stage=="underground-lab" else None)
+                if stage=="underground-lab":
+                    high=verify_simulation_cadence(page)
+                    low=level_page(browser,stage,quality="low")
+                    assert low.evaluate("run.config.graphics.particleScale") < page.evaluate("run.config.graphics.particleScale")
+                    assert verify_simulation_cadence(low)==high, "画质改变了真实战斗或远距感知调度"
+                    low.close()
+                    verify_boss_feedback(page)
                 pickup_views(page,stage,os.environ.get('PICKUP_CAPTURE'))
                 for burst in [False,True]:
                     result=boss_measure(page,burst)

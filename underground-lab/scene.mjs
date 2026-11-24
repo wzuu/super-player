@@ -236,7 +236,8 @@ function buildMap(ctx) {
     const isOuter = kind === 'outer';
     const highHall = !isOuter && ((vertical && Math.abs(at) === 13) || (!vertical && Math.abs(at) === 14));
     const height = kind === 'baffle' ? 4.02 : isOuter || highHall ? 8.05 : 5.5;
-    level.box(x, z, w, d, 0, height);
+    const wall = level.box(x, z, w, d, 0, height);
+    if (kind !== 'glass') level.viewOccluders.push(wall);
     const yaw = vertical ? Math.PI / 2 : 0;
     const thick = vertical ? w : d;
     const piece = (material, mid, y, width, h, depth, tint) =>
@@ -508,14 +509,22 @@ function buildDoor({ THREE, scene, level, brighter }, spec, materials, hidden) {
         detail(0.058, 0.84, 0.085, -s * (pane / 2 - 0.20), 1.80, surface * 1.14, lit);
       }
     }
-    return { leaf, sign: s };
+    // 只有完全闭合的两片实心门叶可用于遮挡。动画期间保留门缝和两侧视线。
+    const cx = hidden ? x : x + s * width / 4, cz = hidden ? z - s * width / 4 : z;
+    const dx = (hidden ? depth : pane) / 2, dz = (hidden ? pane : depth) / 2;
+    const occluder = {x0:cx-dx, x1:cx+dx, y0:0, y1:height, z0:cz-dz, z1:cz+dz};
+    level.viewOccluders.push(occluder);
+    return { leaf, sign: s, occluder };
   });
   const collider = level.box(x, z, hidden ? depth : width, hidden ? width : depth, 0, height);
   collider.active = false;
   const door = {
     collider, progress: 0,
     pose() {
-      for (const { leaf, sign } of parts) leaf.position.x = sign * (width / 4 + this.progress * (pane + 0.16));
+      for (const { leaf, sign, occluder } of parts) {
+        leaf.position.x = sign * (width / 4 + this.progress * (pane + 0.16));
+        occluder.active = this.progress === 0;
+      }
     },
     set(open, dt = Infinity) {
       this.progress = open ? Math.min(1, this.progress + dt * 1.85) : Math.max(0, this.progress - dt * 1.45);

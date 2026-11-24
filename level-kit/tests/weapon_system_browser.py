@@ -204,37 +204,8 @@ def run(browser,url):
     page.mouse.down()
     page.wait_for_function("!practiceEnemy.active")
     page.mouse.up()
-    stress=page.evaluate("""async () => {
-      const g=run.game,w=g.weapon,p=g.player,b=g.beasts;
-      const step=g.step; g.step=()=>{};p.look.rotation.set(0,0,0,'YXZ');
-      p.thirdPerson=false;p.positionCamera(0);w.render(0,p,g);
-      b.pool.forEach(x=>x.active=false);b.live=0;b.boss=null;
-      for(let i=0;i<96;i++){
-        const enemy=b.spawn(0,(i%12-5.5)*.66,-6-Math.floor(i/12)*.62,40);
-        enemy.hp=100000;enemy.statusEffects.set('wet',{type:'wet',until:Infinity,stacks:1});
-      }
-      b.refreshHash();
-      const sample=async(active)=>{
-        const frames=[];let last=await new Promise(requestAnimationFrame);
-        for(let i=0;i<52;i++){
-          g.time+=.033;
-          if(i%15===0){
-            w.shoot(g);
-            if(active){
-              w.combat.element(b.pool[48],'electric',g,'weapon');
-              g.sound.stageEvent('warning',g,b.pool[48]);
-            }
-          }
-          g.effects.update(.033);p.positionCamera(.033);w.render(.033,p,g);
-          const now=await new Promise(requestAnimationFrame);
-          if(i>=8)frames.push(now-last);last=now;
-        }
-        frames.sort((a,b)=>a-b);return [Math.round(frames[22]),Math.round(frames[41])];
-      };
-      const baseline=await sample(false), reactions=await sample(true);
-      g.step=step;
-      return {actors:b.live,baseline,reactions,firstDiscovery:localStorage.getItem('super-player:reaction-discoveries:v1')};
-    }""")
+    page.add_script_tag(content=Path(__file__).with_name("shotgun_stress.js").read_text(encoding="utf-8"))
+    stress=page.evaluate("shotgunStress")
     assert stress["actors"]==96 and "conduct" in stress["firstDiscovery"],stress
     print("PASS 96 actors with shotgun baseline and positional warning / conductive chain frame median and p95",stress,flush=True)
     pellet=sample_volley(page)
