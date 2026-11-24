@@ -11,7 +11,6 @@ const CONFIG = {
     duration: 20,
     lanterns: 8,
     extra: 16,
-    bonusAmmo: 30,
     healing: 12,
   },
 };
@@ -311,9 +310,8 @@ function createEncounter({ CONFIG: settings, sound }) {
     warned: false,
     status: null,
     script,
-    isLantern(beast) {
-      return script.has(beast);
-    },
+    isLantern(beast) { return script.has(beast); },
+    killHealing(beast) { return this.isLantern(beast) ? rules.healing : 0; },
     reset() {
       this.next = rules.first;
       this.active = false;
@@ -360,7 +358,7 @@ function createEncounter({ CONFIG: settings, sound }) {
         this.next = game.time;
         this.beat = -1;
         ghosts.slice(0, rules.lanterns).forEach((ghost, i) => script.set(ghost, i));
-        game.ui.notify('百鬼行列穿过灯笼长街，击破灯笼妖可领取补给', 2.5);
+        game.ui.notify('百鬼行列穿过灯笼长街，少数灯笼妖会掉落圣露', 2.5);
       }
       const remaining = this.next + rules.duration - game.time;
       if (this.active && remaining <= 0) {
@@ -373,7 +371,7 @@ function createEncounter({ CONFIG: settings, sound }) {
         return;
       }
       if (this.active) {
-        this.status = { title: '百鬼行列', detail: '东街队列掉落弹药与甘露', remaining };
+        this.status = { title: '百鬼行列', detail: '东街队列偶有圣露掉落', remaining };
         const beat = Math.floor((game.time - this.next) / 0.7);
         if (beat !== this.beat) {
           this.beat = beat;
@@ -392,9 +390,7 @@ function createEncounter({ CONFIG: settings, sound }) {
 }
 
 function onBeastDefeated(beast, game) {
-  if (!game.encounter.script.delete(beast)) return;
-  game.pickups.add('ammo', beast.x + 0.35, beast.z, beast.y, '百鬼弹匣', CONFIG.parade.bonusAmmo);
-  game.pickups.add('health', beast.x - 0.35, beast.z, beast.y, '神社甘露', CONFIG.parade.healing);
+  game.encounter.script.delete(beast);
 }
 
 function yokaiModel(type, helpers, rage = false) {
@@ -617,7 +613,7 @@ export default {
     safe: '山脚鸟居安全区',
     rage: '九尾现形，群妖正向神社聚集',
     brief:
-      '沿枯山水庭院进入古町。百鬼在东街结队游行，击破灯笼妖可补给。夺取九尾狐守护的御神镜，到神社正殿解除结界。',
+      '沿枯山水庭院进入古町。百鬼在东街结队游行，少数灯笼妖会掉落圣露。夺取九尾狐守护的御神镜，到神社正殿解除结界。',
     winBrief: '御神镜映亮符纸，花瓣与光屑冲散东街的夜雾。你带着古町宝物撤离。',
   },
 };

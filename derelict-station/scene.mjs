@@ -453,7 +453,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
   const eggs=Array.from({length:14},()=>({active:false,x:0,y:0,z:0,hatch:0}));
   const broods=[];
   function intact() {
-    for(const {collider} of level.bulkheads)collider.active=true;
+    for(const {collider} of level.bulkheads)level.setBarrier(collider,null,true);
   }
   function evacuate(body,panel){
     const s=panel.data;
@@ -508,7 +508,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
       }
       if(this.phase==='warning'&&t>=this.opens){
         this.phase='open';this.seals=this.opens+rules.duration;this.nextDamage=t;
-        this.panel.collider.active=false;
+        level.setBarrier(this.panel.collider,null,false);
         sound.hiss(2.2,2400,220,.47);
         sound.tone(88,25,.87,.42,'triangle');
         game.ui.notify(this.panel.data.name+'舷窗破裂，舱段已失压',2.8);
@@ -516,7 +516,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
       if(this.phase==='open'&&t>=this.seals){
         evacuate(p,this.panel);
         for(const b of game.beasts.pool)if(b.active)evacuate(b,this.panel);
-        this.panel.collider.active=true;
+        level.setBarrier(this.panel.collider,null,true);
         game.ui.notify(this.panel.data.name+'自动封闭，压力恢复',2.6);
         sound.tone(155,79,.66,.24,'triangle');
         this.phase='calm';this.panel=null;this.opens=t+randomRange(...rules.calm);

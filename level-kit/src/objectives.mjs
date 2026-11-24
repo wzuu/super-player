@@ -78,11 +78,12 @@ export function createObjective(stage, { THREE, scene }) {
         escorted = !g.story?.blocksExit && Math.hypot(pos.x - g.level.gate.x, pos.y - 1 - g.level.gate.y, pos.z - g.level.gate.z) < 4;
       }
     },
-    advanceWave(g) {
+    advanceWave(g, waveCount) {
       if (mode !== 'endless') return;
       wave++;
       goal.reinforcements = (wave - 1) * 2;
-      g.ui.notify('第 ' + wave + ' 波敌群已集结', 2);
+      g.pickups.refillAmmoStations(waveCount);
+      g.ui.notify('第 ' + wave + ' 波敌群已集结 · 地图弹箱已补充', 2);
     },
     ready(g) {
       if (g.field?.deep) return false;
@@ -144,7 +145,7 @@ export function createObjective(stage, { THREE, scene }) {
       if (route && !(mode === 'escort' && waiting && !g.story.droneDocked))
         return mode === 'escort' ? { ...route, detail: [route.detail, underAttackUntil>g.time?'无人机受袭':'', '无人机耐久 ' + goal.escortHealth + '%'].filter(Boolean).join(' · ') } : route;
       if (mode === 'endless') return step('wave-' + wave, '击退第 ' + wave + ' 波凶兽', null,
-        '清空本波普通凶兽后进入下一波');
+        '清空本波普通凶兽后进入下一波，地图弹箱将补充弹药');
       if (goal.ready(g)) {
         const near = g.nearGate();
         return step(near ? 'interact' : 'exit', near ? '按 F 引爆' + text.portal : text.exitObjective,

@@ -8,6 +8,7 @@ export function createPickupClass(context) {
       this.level = level;
       this.effects = effects;
       this.objects = Array.from({ length: CONFIG.pickups.pool }, () => ({ active: false, kind: '', born: 0 }));
+      this.ammoStations = new Set();
       this.draw = createPickupVisuals(context);
       this.direction = new V3();
       this.aim = new V3();
@@ -15,9 +16,11 @@ export function createPickupClass(context) {
       this.where = new V3();
       this.age = 0;
     }
-    reset() {
+    reset(game) {
       this.age = 0;
       this.deepSupplies = false;
+      this.ammoScale = game?.variation?.ammo ?? 1;
+      this.ammoStations.clear();
       this.keyItem = null;
       for (const p of this.objects) p.active = false;
       for (const [x,z,amount] of definition.health ?? [])
@@ -33,14 +36,38 @@ export function createPickupClass(context) {
           true,
         );
       }
-      for (const [x, z] of definition.ammo ?? [])
-        this.add('ammo', x, z, this.level.base(x, z), '补给弹药', this.cacheAmount(), true);
+      for (const [x, z] of definition.ammo ?? []) {
+        const box = this.add('ammo', x, z, this.level.base(x, z), '补给弹药', this.cacheAmount(), true);
+        if (game?.objective.mode === 'endless' && box) this.ammoStations.add(box);
+      }
     }
-    cacheAmount() {
-      return CONFIG.weapon.pellets ? Math.ceil(cfg.ammoCache / 6) : cfg.ammoCache;
+    cacheAmount(rifleRounds = cfg.ammoCache) {
+      return Math.ceil(rifleRounds * this.ammoScale / (CONFIG.weapon.pellets ? 6 : 1));
+    }
+    refillAmmoStations(waveCount) {
+      if (!this.ammoStations.size || this.deepSupplies) return;
+      const perBox = Math.max(cfg.ammoCache, waveCount * cfg.roundsPerGuard / this.ammoStations.size);
+      for (const box of this.ammoStations) {
+        box.value = this.cacheAmount(perBox);
+        box.active = true;
+      }
+    }
+    dropFromKill(b, y, stage, healing) {
+      const elite = Boolean(b.affixes?.length);
+      if (!elite && !healing) return;
+      const odds = cfg.killDrops;
+      // 一次抽取的不重叠区间，精英在血月或游行中也只会掉一件。
+      let roll = Math.random();
+      if (elite) {
+        if (roll < odds.eliteMaterial) return this.add('rare', b.x, b.z, y, '精英改装材料·穿透弹芯', 520);
+        roll -= odds.eliteMaterial;
+        if (roll < odds.eliteBadge) return this.add('rare', b.x, b.z, y, '精英徽记', 240 + stage * 8);
+        roll -= odds.eliteBadge;
+      }
+      if (healing && roll < odds.eventHealing) return this.add('health', b.x, b.z, y, '圣露', healing);
     }
     add(kind, x, z, y, name, value, permanent = false) {
-      if (this.deepSupplies && !permanent && ['ammo','health','grenade','sample'].includes(kind)) return;
+      if (this.deepSupplies && !permanent && ['ammo','health','grenade'].includes(kind)) return;
       if (!permanent && ['ammo', 'health', 'grenade'].includes(kind)) {
         for (const p of this.objects) {
           if (!p.active || p.permanent || p.kind !== kind || p.name !== name || Math.abs(y - p.y) > 0.25) continue;
@@ -59,13 +86,15 @@ export function createPickupClass(context) {
       // 在长局中稀有掉落可以占满普通槽。给两件宝库奖励、秘藏、传奇和任务核心留位。
       if (kind === 'core' && this.keyItem?.active) return this.keyItem;
       const end = this.objects.length - (permanent && kind === 'rare' ? 1 : 5);
-      let object = kind === 'core' ? this.objects.at(-1) : this.objects.find((p, i) => i < end && !p.active);
+      // 无尽弹箱领取完仍保留其原位，下波可在掉落池已满时补货。
+      let object = kind === 'core' ? this.objects.at(-1) :
+        this.objects.find((p, i) => i < end && !p.active && !this.ammoStations.has(p));
       if (!object) {
         for (let i = 0; i < end; i++) {
           const p = this.objects[i];
           if (
             p.active && !p.permanent &&
-            ['ammo', 'health', 'sample', 'grenade'].includes(p.kind) &&
+            ['ammo', 'health', 'grenade'].includes(p.kind) &&
             (!object || p.born < object.born)
           )
             object = p;
@@ -132,18 +161,15 @@ export function createPickupClass(context) {
       return candidates.some(({item}) => this.collect(item, player, game));
     }
     collect(item, player, game) {
+      if (!item.active) return false;
       let amount = 1,
         detail = '';
       if (item.kind === 'rare') {
         const value = Math.round(item.value * (game.variation?.value ?? 1));
         game.loot.push({ name: item.name, value, origin:item.origin ?? 'main' });
         game.value += value;
-        const supply = !this.deepSupplies && game.kit?.supply();
+        const supply = item.origin !== 'drop' && !this.deepSupplies && game.kit?.supply();
         detail = ' · 价值 ' + value + (supply ? ' · 补给 ' + supply : '');
-        item.active = false;
-      } else if (item.kind === 'sample') {
-        game.weapon.combat.samplePending = true;
-        detail = ' · 下次换弹伤害提升 30%';
         item.active = false;
       } else {
         if (item.kind === 'health') {

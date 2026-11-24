@@ -39,7 +39,6 @@ export function createPickupVisuals({
     cross: [box(0, 0, 0, 0.21, 0.62, 0.21),
       ...[-0.20, 0.20].flatMap(d => [box(d, 0, 0, 0.19, 0.21, 0.21), box(0, 0, d, 0.21, 0.21, 0.19)])],
     ball: [part(sphere, 0, 0, 0, 0.35, 0.35, 0.35), box(0.04, 0.19, 0, 0.14, 0.09, 0.12)],
-    vial: [part(shapes.cylinder, 0, 0, 0, 0.17, 0.4, 0.17), box(0, 0.23, 0, 0.2, 0.07, 0.2)],
     gem: [part(oct, 0, 0, 0, 0.42, 0.54, 0.39)],
     key: [
       part(oct, 0, 0.18, 0, 0.5, 0.42, 0.24),

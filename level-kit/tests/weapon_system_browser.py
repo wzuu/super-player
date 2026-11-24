@@ -133,6 +133,9 @@ def run(browser,url):
     page.click("#start")
     page.wait_for_function("run?.game.phase==='play'")
     check_weapon_model(page)
+    assert page.evaluate("""() => run.config.weapon.pellets>0 && run.game.pickups.objects.some(i =>
+      i.active && i.kind==='ammo' && i.permanent && i.value===Math.ceil(run.config.pickups.ammoCache*
+      (run.game.variation?.ammo??1)/6))"""), "霰弹枪未得到折算后的地图弹箱"
     page.keyboard.down("v")
     page.wait_for_function("run.game.player.thirdPerson && !run.game.weapon.group.visible")
     page.keyboard.down("v")

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
-from campaign_browser import ROOT, LEVELS, sync_playwright
+from campaign_browser import ROOT, LEVELS, expose_game, sync_playwright
 
 
 def verify_restart_doors(page):
@@ -51,6 +51,10 @@ def verify(browser):
     for level in LEVELS:
         page.goto((ROOT/level['id']/'index.html').as_uri())
         page.wait_for_function("!!window.run", polling=100)
+        if level['id']=='underground-lab':
+            doors=page.evaluate((ROOT/'level-kit/tests/player_doors.js').read_text(encoding='utf-8')+
+                                '\nverifyPlayerDoors()')
+            print('PASS closed pursuit, player opening, traversable enemy routes and projectile rays',doors,flush=True)
         result=page.evaluate("""() => {
           const {game:g,nav}=run,f=g.field;
           document.querySelector('#mission-mode').value='endless';g.reset();g.phase='play';
@@ -136,6 +140,18 @@ def verify(browser):
                 const group=spawned[0];
                 m.damage(group[0],1e6,g,'weapon');at(g.time+.5);
                 assert(spawned.length===1,'replenished after a kill');
+                if(stage==='derelict-station'){
+                  const nav=run.nav;
+                  at(e.opens-1);nav.rebuild(p.x,p.z);
+                  const closed=nav.walkable.slice(), box=e.panel.collider;
+                  const ray={x:(box.x0+box.x1)/2-.75,y:(box.y0+box.y1)/2,z:(box.z0+box.z1)/2};
+                  const visible=()=>g.level.visible(ray,{x:1,y:0,z:0},1.5);
+                  assert(!visible(),'预警中的舷窗未挡住射线');
+                  at(e.opens);nav.rebuild(p.x,p.z);
+                  assert(visible() && nav.walkable.some((v,i)=>v&&!closed[i]),'舷窗破裂后弹道或寻路仍封闭');
+                  at(e.seals);nav.rebuild(p.x,p.z);
+                  assert(!visible() && nav.walkable.every((v,i)=>v===closed[i]),'舷窗密封后弹道或寻路仍开放');
+                }
                 return group.length;
               }finally{m.spawnGroup=spawn;}
             }""",level['id'])
@@ -155,7 +171,7 @@ def verify(browser):
                 for(const [i,b] of members.entries()){
                   const gap=Math.hypot(b.x-g.player.x,b.z-g.player.z)-b.radius-g.player.radius;
                   check(gap>=config.beasts.safeSpawnGap && !g.level.blocked(b.x,b.z,b.y,b.radius,b.height),'unsafe guard '+i);
-                  check(members.slice(0,i).every(a=>Math.abs(a.y-b.y)>Math.max(a.height,b.height) ||
+                  check(members.slice(0,i).every(a=>a.y+a.height<=b.y || b.y+b.height<=a.y ||
                     Math.hypot(a.x-b.x,a.z-b.z)>=a.radius+b.radius),'overlapping guards');
                 }
               };
@@ -184,6 +200,10 @@ def verify(browser):
               check(f.interact(g),'start vault');tick(2);wave('vault',f.cfg.guards);
               tick(3);wave('vault',f.cfg.reinforcements);
               check(f.vaultStage==='clear','vault unfinished');
+              const vaultAmmo=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='宝库入口弹药');
+              check(vaultAmmo.length===2 && vaultAmmo.reduce((n,i)=>n+i.value,0)===
+                g.pickups.cacheAmount(f.cfg.guards*run.config.pickups.roundsPerGuard)+
+                g.pickups.cacheAmount(f.cfg.reinforcements*run.config.pickups.roundsPerGuard),'vault entry supplies');
               const reward=g.pickups.objects.find(x=>x.active&&x.origin==='vault');
               check(reward?.value===f.cfg.value,'missing vault reward');move(reward);g.pickups.collect(reward,g.player,g);
               move(f.lever);check(f.vault.shortcut.box.active!==false && f.interact(g),'switch blocked');
@@ -226,6 +246,9 @@ def verify(browser):
                 unlock();
                 check(g.ready()&&f.deepRoom.door.box.active,'base gate or deep lock');f.deepen(g);check(!f.deep,'missing confirmation');f.deepen(g);
                 check(f.deep==='guards'&&!g.ready()&&f.interact(g),'base gate still open');
+                const deepBoxes=g.pickups.objects.filter(i=>i.active && i.kind==='ammo');
+                check(deepBoxes.length===1 && deepBoxes[0].name==='深入配给' && deepBoxes[0].permanent &&
+                  deepBoxes[0].value===g.pickups.cacheAmount(f.cfg.deepGuards*run.config.pickups.roundsPerGuard),'deep entry supplies');
                 nav.rebuild(g.player.x,g.player.z);
                 const gateRoute=nav.dist[nav.index(f.deepRoom.center.x,f.deepRoom.center.z)];
                 if(gateRoute<0)nav.rebuild(g.level.spawn.x,g.level.spawn.z);
@@ -291,6 +314,50 @@ def verify(browser):
     assert not errors,errors
     page.close()
 
+def verify_kill_loot(page,url):
+    page.route("**/underground-lab/",expose_game)
+    page.add_init_script("""window.requestAnimationFrame=()=>1;
+        Element.prototype.requestPointerLock=()=>{throw Error('掉落存档测试无需锁定鼠标')};""")
+    page.goto(url+"/underground-lab/")
+    page.wait_for_function("!!window.run",polling=100)
+    page.evaluate("async()=>{window.store=await (await import('../campaign/store.mjs')).campaignStore()}")
+    for battle_number,(won,picked) in enumerate([(True,'精英徽记'),(False,'精英改装材料·穿透弹芯'),
+                                                 (True,'精英改装材料·穿透弹芯')],1):
+        page.evaluate("""([won,picked])=>{
+          const {game:g}=run, m=g.beasts, pickups=g.pickups, p=g.player;
+          g.reset();g.phase='play';g.variation=null;
+          // 两只精英分别产出徽记与材料，只走近其中之一。重复伤害、重复拿取都不应重复入账。
+          const afterKill=(x,roll)=>{
+            const b=m.spawn(0,x,0,30);b.affixes=['swift'];
+            const random=Math.random;
+            try {
+              Math.random=()=>roll;
+              if(!m.damage(b,1e8,g,'environment') || m.damage(b,1e8,g,'environment'))
+                throw Error('同次死亡重复结算');
+            } finally {Math.random=random;}
+          };
+          afterKill(-8,.005);afterKill(8,.04);
+          const drops=pickups.objects.filter(i=>i.active && i.origin==='drop');
+          const take=drops.find(i=>i.name===picked);
+          if(drops.length!==2 || !take || g.loot.length)throw Error('未拾取的击杀掉落已入账');
+          Object.assign(p,{x:take.x,y:take.y,z:take.z});
+          let grants=0;
+          const supply=g.kit.supply;
+          g.kit.supply=function(...args){grants++;return supply.apply(this,args)};
+          try {pickups.update(.05,p,g);} finally {g.kit.supply=supply;}
+          if(grants || take.active || pickups.collect(take,p,g) || g.loot.length!==1 ||
+             g.loot[0].name!==picked || !drops.some(i=>i.active))throw Error('拾取重复或附送补给');
+          g.finish(won,'掉落验收');
+        }""",[won,picked])
+        page.wait_for_function("async n=>(await store.progress()).battleCount===n",arg=battle_number,polling=100)
+        progress=page.evaluate("()=>store.progress()")
+        gear=page.evaluate("()=>store.gear()")
+        expected={'精英徽记':1}
+        if battle_number==3: expected['精英改装材料·穿透弹芯']=1
+        assert {i['name']:i['count'] for i in progress['loot']}==expected,progress
+        assert bool(gear['state'].get('mods',{}).get('pierce'))==(battle_number==3),gear
+
+
 def verify_claims(browser,url,static):
     context=browser.new_context()
     if static:
@@ -335,8 +402,10 @@ def verify_claims(browser,url,static):
     first.reload()
     new=first.evaluate("async()=> (await (await import('./campaign/store.mjs')).campaignStore()).progress()")
     assert new['discoveries']==[] and new['battleCount']==0
+    verify_kill_loot(first,url)
     context.close()
-    print("PASS discovery, loss, two tabs, retry and isolated reward","IndexedDB" if static else "SQLite",flush=True)
+    print("PASS discovery, duplicate death/pickup, collected-only extraction, loss, two tabs and retry",
+          "IndexedDB" if static else "SQLite",flush=True)
 
 
 if __name__=="__main__":

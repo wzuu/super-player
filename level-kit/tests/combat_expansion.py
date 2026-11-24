@@ -235,6 +235,46 @@ def verify_roles(page):
     }""")
 
 
+def verify_event_loot(page,stage):
+    result=page.evaluate("""stage=>{
+      const {game:g,config}=run, m=g.beasts, e=g.encounter;
+      document.querySelector('#mission-mode').value='endless';g.reset();g.phase='play';
+      const kills=[];
+      function kill(b,elite,roll,expected){
+        b.affixes=elite?['swift']:null;
+        const random=Math.random;
+        try {
+          Math.random=()=>roll;
+          if(!m.damage(b,1e7,g,'environment') || m.damage(b,1e7,g,'environment'))
+            throw Error('同次死亡多次结算');
+          const drops=g.pickups.objects.filter(i=>i.active && !i.permanent);
+          if(drops.length!==(expected?1:0) || expected && drops[0].name!==expected)
+            throw Error('击杀掉落 '+[roll,expected,drops.map(i=>i.name)]);
+          if(drops[0])drops[0].active=false;
+          kills.push(expected || '无');
+        } finally {Math.random=random;}
+      }
+      const spawn=()=>m.spawn(0,0,0,30);
+      kill(spawn(),false,0,null);  // 平时普通怪及子体无随机物资。
+      const lantern=stage==='sakura-night-town';
+      g.time=lantern?e.next:120;e.update(g,0);
+      const eventMember=()=>lantern?e.script.keys().next().value:spawn();
+      if(lantern)kill(spawn(),false,0,null);  // 游行期间也只有灯笼妖进入活动池。
+      const {eliteBadge,eliteMaterial,eventHealing}=config.pickups.killDrops;
+      const rare=eliteMaterial+eliteBadge;
+      kill(eventMember(),true,eliteMaterial*.5,'精英改装材料·穿透弹芯');
+      kill(eventMember(),true,eliteMaterial+eliteBadge*.5,'精英徽记');
+      kill(eventMember(),true,rare+eventHealing*.5,'圣露');
+      kill(eventMember(),true,rare+eventHealing+.01,null);
+      kill(eventMember(),false,eventHealing*.5,'圣露');
+      kill(eventMember(),false,eventHealing+.01,null);
+      g.time+=30;e.update(g,0);
+      kill(spawn(),false,0,null);
+      return kills;
+    }""",stage)
+    print("PASS optional event drops, single death and mutually exclusive elite rewards",stage,result,flush=True)
+
+
 def verify_lift(page):
     page.evaluate("""()=>{
       const g=run.game,p=g.player,l=g.lifts.lifts[0];
@@ -275,13 +315,30 @@ def verify_endless_deployment(page):
       if(!g.bossDead || m.boss || m.live!==base-1 || g.objective.wave!==1)
         throw Error('提前击倒首领后出现补位或提前换波');
 
+      const boxes=[...g.pickups.ammoStations],box=boxes[0],full=box.value;
+      const visit=()=>{Object.assign(g.player,{x:box.x,y:box.y,z:box.z});g.pickups.update(.04,g.player,g);};
+      g.weapon.reserve=config.weapon.maxReserve-3;
+      visit();
+      if(!box.active||box.value!==full-3||g.weapon.reserve!==config.weapon.maxReserve)throw Error('弹箱未保留剩余弹药');
+      g.weapon.reserve=0; visit();
+      if(box.active||g.weapon.reserve!==full-3)throw Error('未实际领取固定弹箱');
+      Object.assign(g.player,{x:g.level.spawn.x,y:g.level.spawn.y,z:g.level.spawn.z});
+      for(let i=0;i<g.pickups.objects.length;i++)g.pickups.add('rare',2,2,0,'未领取的战利品',50);
+      for(const b of wave())m.eject(b,g);
+      m.deployPopulation(g);
+      if(g.objective.wave!==2||!box.active||box.value!==full||g.weapon.reserve!==full-3||
+        boxes.some(i=>i.value!==full)||g.pickups.ammoStations.size!==boxes.length)
+        throw Error('换波应在原位补满有限配给，不向背包直接发放');
+      g.weapon.reserve=0;visit();
+      if(box.active||g.weapon.reserve!==full)throw Error('新一波的原位弹箱无法领取');
+
       g.reset();g.phase='play';
       const {x,y,z}=g.field.vault.front;Object.assign(g.player,{x,y,z});
       if(!g.field.interact(g))throw Error('未触发巴黎宝库');
       g.time+=3;g.field.step(3,g);
       const guards=g.field.guards.slice();
       if(guards.length!==40)throw Error('宝库守卫未到齐');
-      for(let i=1;i<69;i++)g.objective.advanceWave(g);
+      for(let i=1;i<69;i++)g.objective.advanceWave(g,Math.min(base+2*i,config.beasts.endlessWaveCap));
       for(const b of wave())m.eject(b,g);
       m.deployPopulation(g);
       if(g.objective.wave!==70 || wave().length!==116 || !m.boss?.active ||
@@ -307,6 +364,9 @@ def verify_variation(browser, name):
         const b=g.beasts.spawnRegular(0,1,0,30);if(!b.affixes?.length||g.patrolRemaining!==1)throw Error('精英巡逻');
       }
       if(name==='plenty'||name==='fury'){
+        const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='补给弹药');
+        if(!boxes.length||!boxes.every(i=>i.value===Math.ceil(config.pickups.ammoCache*(v.ammo??1))))
+          throw Error('变奏未影响实际固定箱');
         const item=g.pickups.add('rare',2,0,30,'测试宝物',100,true);
         g.pickups.collect(item,g.player,g);
         if(g.value!==Math.round(v.value*100))throw Error('变奏战利品倍率');
@@ -346,6 +406,10 @@ def main():
             page.close()
             for variant in ['fog','blackout','fury','patrol','plenty','quiet']:
                 verify_variation(browser,variant)
+            for stage in ['shanhai-secret-realm','bloodmoon-castle','sakura-night-town']:
+                page=level_page(browser,stage)
+                verify_event_loot(page,stage)
+                page.close()
             for stage in ['shanhai-secret-realm','buried-tomb','drowned-city','jungle-temple','brass-factory']:
                 page = level_page(browser,stage,'fog')
                 page.evaluate("""()=>{

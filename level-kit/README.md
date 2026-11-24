@@ -74,7 +74,7 @@ esbuild level-kit/vendor/three-entry.mjs --bundle --format=iife --minify --legal
 
 EMP 等机制可设置 `encounter.beastsDisabled` 暂停凶兽行动，设置 `encounter.hudOffline` 中断常规战斗读数和地图。共享状态位保持显示，恢复可通过这两项分别控制。
 
-血月等机制可设置 `encounter.beastSpeedScale` 调整凶兽移动倍率，设置 `encounter.beastDamageScale` 调整近战和弹丸命中伤害。正数 `encounter.bonusAmmo` 使每次击杀强制掉落弹药，并增加对应发数。正数 `encounter.bonusHealth` 使每次击杀额外掉落相应生命值的补给。
+血月等机制可设置 `encounter.beastSpeedScale` 调整凶兽移动倍率，设置 `encounter.beastDamageScale` 调整近战和弹丸命中伤害。随机击杀掉落只允许治疗与可带离稀有物品，血月和灯笼凶兽可按事件概率掉落治疗。固定弹箱、可选奖励与必需的任务核心通过各自入口发放。
 
 `buildMap` 的常用参数为 `THREE`、`scene`、`level`、`CONFIG`、`GRID`、`StaticBatches`、`canvasTexture`。用 `GRID.x(column)` 和 `GRID.z(row)` 获取网格中心坐标，用 `new StaticBatches(材质表)` 建立批次，最后调用 `flush()`。
 

@@ -15,7 +15,7 @@ const CONFIG = {
       { hp: 690, height: 3.45, summonCount: 7 },
     ],
   },
-  pickups: { ammoDrop: 24, ammoCache: 360 },
+  pickups: { ammoCache: 420 },
   alarm: {
     streakKills: 5, streakWindow: 8, sustainedFire: 4, shotGap: 0.36,
     duration: 32, cooldown: 10, extraPopulation: 18,
@@ -83,7 +83,7 @@ const LANDMARKS = {
     [20.4, 10.6, '失联班组日志', 270], [18.1, 10.5, '封存逆变器样本', 310],
   ],
   ammo: [[-2.7, 35.9], [4.5, 21.7], [-10, 15.5], ...labStory.bossSupplies,
-    [-25, -13.7], [29.4, -16.6], [2.6, 26], [28,-9]],
+    [-24, -7.4], [28.7, -1], [2.6, 26], [28,-9]],
 };
 
 // 墙段是地图坐标，横墙固定 z，纵墙固定 x。段之间的空隙就是门洞。
@@ -545,8 +545,9 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
   const nearHatch = player => Math.abs(player.x - HATCH.x) < 1.85 && Math.abs(player.z - HATCH.z) < 1.37;
   const nearAirlock = body => Math.abs(body.x) < 4.65 && Math.abs(body.z - AIRLOCK.z) < 4.3;
   const crossingAirlock = body =>
+    body.y < AIRLOCK.height && body.y + body.height > 0 &&
     Math.abs(body.x) < AIRLOCK.width / 2 + body.radius &&
-    Math.abs(body.z - AIRLOCK.z) < AIRLOCK.depth / 2 + body.radius + 0.30;
+    Math.abs(body.z - AIRLOCK.z) < AIRLOCK.depth / 2 + body.radius;
   const killTimes = [];
 
   const alarm = {
@@ -579,8 +580,9 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
     },
     update(game, dt) {
       const now = game.time;
-      const open = nearAirlock(game.player) ||
-        game.beasts.pool.some(beast => beast.active && crossingAirlock(beast));
+      // 玩家感应才可开门；防夹只保护已进入开放门洞的实体。
+      const open = nearAirlock(game.player) || (!airlock.collider.active &&
+        game.beasts.pool.some(beast => beast.active && crossingAirlock(beast)));
       const wasOpen = airlock.progress > 0;
       airlock.set(open, dt);
       hatch.set(this.hatchOpen, dt);

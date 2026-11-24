@@ -7,6 +7,18 @@ function playLaboratoryCampaign() {
   const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
   const ammo = () => [w.ammo, w.reserve];
   const report = { groups: [], gunBreaks: 0, pulseBreaks: 0, missed: false, sideRooms: false };
+  const startingAmmo = ammo(), boxes = new Map();
+  const collect = g.pickups.collect.bind(g.pickups);
+  g.pickups.collect = (item, player, game) => {
+    const before = w.reserve;
+    const ok = collect(item, player, game);
+    if (ok && item.kind === 'ammo') {
+      const key = [item.name, item.x, item.z].join(' ');
+      if (!boxes.has(key)) boxes.set(key, {name:item.name, at:[item.x,item.z], fixed:item.permanent, taken:0});
+      boxes.get(key).taken += w.reserve - before;
+    }
+    return ok;
+  };
   const ray = camera.position.clone(),
     eye = ray.clone();
   let firstWindow = 0,
@@ -83,8 +95,8 @@ function playLaboratoryCampaign() {
       // 留出转身空间，绕开可见酸池。仅靠眼前距离容易把玩家逼进墙角。
       const outward=Math.max(0,Math.abs(q.x)-32)+Math.max(0,Math.abs(q.z)-33);
       const acid=g.projectiles.puddles.some(pool=>pool.life>0 && distance(pool.pos,q)<2.4);
-      const score=gap + .48*span - .65*pressure - 1.3*outward - (acid?5:0) +
-        (old ? .25*(dx*(old.x-p.x)+dz*(old.z-p.z)) : 0);
+      const score=gap + .8*span - 1.1*pressure - 1.3*outward - (acid?5:0) +
+        (old ? .1*(dx*(old.x-p.x)+dz*(old.z-p.z)) : 0);
       if (score>best) {best=score;next=q;}
     }
     escape=next;
@@ -111,12 +123,13 @@ function playLaboratoryCampaign() {
     const group = s.encounters.at(-1);
     if (group !== lastGroup && group) {
       lastGroup = group;
-      report.groups.push({ name: group.name, enterShots: g.performance.shots, enterReloads: reloads });
+      report.groups.push({ name: group.name, enterAmmo:ammo(), enterShots: g.performance.shots, enterReloads: reloads });
     }
     if (group?.clearedAt && report.groups.at(-1).shots === undefined) {
       const record = report.groups.at(-1);
       record.shots = g.performance.shots - record.enterShots;
       record.reloads = reloads - record.enterReloads;
+      record.exitAmmo = ammo();
     }
     if (raw?.stage !== previous) {
       previous = raw?.stage;
@@ -184,6 +197,12 @@ function playLaboratoryCampaign() {
     const med = g.pickups.objects
       .filter((i) => i.active && i.permanent && i.kind === 'health' && distance(p, i) < 16)
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
+    // 备弹低于两个弹匣时，沿当前战区寻找地图上标出的固定弹箱。
+    if (state==='boss' && b && w.ammo+w.reserve<2*config.weapon.magazine) {
+      const supply=g.pickups.objects.filter(i=>i.active && i.permanent && i.kind==='ammo' &&
+        Math.abs(i.x)<11 && i.z<12).sort((a,b)=>distance(p,a)-distance(p,b))[0];
+      if (supply) dest=route(supply)??supply;
+    }
     if (p.hp < 60 && med && (!enemy || distance(p,enemy)>8)) dest = route(med);
     if (!enemy && !g.beasts.live && state !== 'fight' && w.ammo < config.weapon.magazine)
       input.reload = true;
@@ -202,8 +221,8 @@ function playLaboratoryCampaign() {
       p.look.rotation.set(0,rollAim,0,'YXZ');
       input.fire=false;
       input.down.add('ShiftLeft');
-    } else if (enemy && dest && state === 'fight' && distance(p,enemy)<4 &&
-        !p.tired && (!w.ammo || g.time-p.lastHurt<.6)) {
+    } else if (enemy && dest && state === 'fight' && distance(p,enemy)<6 &&
+        !p.tired && (!w.ammo || g.time-p.lastHurt<2 || p.hp<65)) {
       p.look.rotation.set(0,Math.atan2(p.x-dest.x,p.z-dest.z),0,'YXZ');
       input.fire=false;
       input.down.add('ShiftLeft');
@@ -223,6 +242,7 @@ function playLaboratoryCampaign() {
   }
   return {
     ...report,
+    startingAmmo, boxes:[...boxes.values()], shots:g.performance.shots, core:g.core,
     phase: g.phase,
     stage: g.story.stage,
     kills: g.kills,

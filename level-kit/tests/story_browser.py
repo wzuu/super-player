@@ -122,6 +122,11 @@ def verify(browser,ids):
           const report={},defaultMode=choose.value;
           start('endless');
           if (g.story.managed || !g.beasts.boss || g.beasts.live<35) throw Error('无尽增援未保留 '+[g.story.managed,Boolean(g.beasts.boss),g.beasts.live]);
+          const stations=[...g.pickups.ammoStations];
+          if(stations.length<2||stations.some(box=>!box.active||!box.permanent||box.value!==g.pickups.cacheAmount()))
+            throw Error('无尽地图缺少开局固定弹箱');
+          if(!stations.some(box=>nav.dist[nav.index(box.x,box.z)]>=0 && !g.level.blocked(box.x,box.z,box.y,c.player.radius,c.player.height)))
+            throw Error('出生区不能走到任何固定弹箱');
           const tick=(dt)=>{g.time+=dt;g.beasts.releaseSplits(g);g.objective.step(dt,g);g.story.step(dt,g);};
           const manager=g.beasts, spawn=manager.spawnGroup.bind(manager);
           manager.spawnGroup=(entries,options)=>{

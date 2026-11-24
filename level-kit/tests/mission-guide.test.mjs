@@ -94,7 +94,10 @@ test('坚守、护送、限时和无尽分别显示可执行的指引', () => {
   goal.step(0.1, g);
   assert.equal(guide().stage, 'wave-1');
   assert.match(guide().detail, /清空本波/);
-  goal.advanceWave(g);
+  let resupplied;
+  g.pickups.refillAmmoStations = count => { resupplied = count; };
+  goal.advanceWave(g, 58);
+  assert.equal(resupplied, 58);
   assert.equal(guide().stage, 'wave-2');
   assert.equal(goal.reinforcements, 2);
 });

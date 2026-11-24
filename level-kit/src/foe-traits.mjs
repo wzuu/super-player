@@ -176,13 +176,7 @@ export class FoeTraits {
       }
     }
   }
-  defeated(b, game) {
-    if (!b.affixes?.length) return;
-    const y = game.beasts.dropHeight(b);
-    game.pickups.add('ammo', b.x, b.z, y, '精英补给', 30);
-    const roll = Math.random();
-    if (roll < 0.08) game.pickups.add('rare', b.x + 0.33, b.z, y, '精英改装材料·穿透弹芯', 520);
-    else if (roll < 0.82) game.pickups.add('rare', b.x + 0.33, b.z, y, '精英徽记', 240 + this.stage * 8);
+  defeated(b) {
     if (has(b, 'split'))
       this.splits.push({ x: b.x, y: b.y, z: b.z, storyWave: b.storyWave, fieldGroup: b.fieldGroup });
   }

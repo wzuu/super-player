@@ -65,14 +65,15 @@ const DEFAULT_CONFIG = {
     ],
   },
   pickups: {
-    pool: 220, grab: 1.18, ammoDrop: 24, ammoCache: 180, grenadeEvery: 12,
+    pool: 220, grab: 1.18, ammoCache: 180,
+    killDrops: { eliteMaterial: .01, eliteBadge: .07, eventHealing: .06 },
     iconRange: 15, nameRange: 5, rareNameRange: 9, labelLimit: 5,
+    roundsPerGuard: 9,
     mergeRange: 0.85, lifetime: 75, blinkTime: 7, preciousValue: 300,
     styles: {
       ammo: { color: '#ffda53', shape: 'case', glyph: 'Ⅲ', beam: 1.05 },
       health: { color: '#6eff83', shape: 'cross', glyph: '+', beam: 1.15 },
       grenade: { color: '#ff823b', shape: 'ball', glyph: '●', beam: 1.35 },
-      sample: { color: '#64e5e9', shape: 'vial', glyph: '◊', beam: 1.35 },
       rare: { color: '#ffbc35', shape: 'gem', glyph: '◆', beam: 2.1 },
       precious: { color: '#d8a2ff', shape: 'gem', glyph: '✦', beam: 2.7 },
       core: { color: '#ff6968', shape: 'key', glyph: '✧', beam: 4.5 },
