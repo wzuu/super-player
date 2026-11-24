@@ -500,6 +500,13 @@ function createEncounter({ CONFIG: config, level, THREE, brighter, sound }) {
     note: 0,
     nextNote: 0,
     lastPlayerHit: 0,
+    recoveryUnsafe({x,y,z}) {
+      if (this.ride==='carousel' && y<2 && Math.hypot(x,z)<8.2) return true;
+      if (this.ride==='train' && Math.abs(x-TRACK.x)<2 && Math.abs(z)<=TRACK.reach+2 &&
+          Math.abs(y-trackHeight(z))<2) return true;
+      return drops.some(d=>d.active && Math.hypot(x-d.x,z-d.z)<3.8 && Math.abs(y-level.surface(d.x,d.z,d.y+.22))<3.8);
+    },
+    stopPlayerPush() { this.pushX=this.pushZ=0; },
     reset() {
       this.next = rules.first;
       this.ride = null;

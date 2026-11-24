@@ -22,9 +22,8 @@ export function createShoulderView(THREE, scene, rifle) {
   return {body, update(camera,player,game) {
     eye.copy(camera.position);
     camera.getWorldDirection(ray);
-    game.level.hash.ray(eye,ray,game.weapon.range ?? 96);
-    game.beasts.hash.ray(eye,ray,game.level.hash.depth);
-    target.copy(eye).addScaledVector(ray,Math.max(.12,game.beasts.hash.depth));
+    const {depth} = game.weapon.scanSight(game,eye,ray);
+    target.copy(eye).addScaledVector(ray,depth);
     ray.set(.66,.45,2.65).applyQuaternion(camera.quaternion);
     const distance = ray.length(); ray.divideScalar(distance);
     game.level.hash.ray(eye,ray,distance);
@@ -37,10 +36,12 @@ export function createShoulderView(THREE, scene, rifle) {
       }
     }
     camera.position.addScaledVector(ray,reach);
-    camera.lookAt(target); camera.updateMatrixWorld(true);
+    camera.updateMatrixWorld(true);
     body.visible=reach>.53;
     body.position.set(player.x,player.y,player.z); body.rotation.y=player.look.rotation.y;
     body.scale.y=player.crouched ? .68 : 1;
     legs.forEach((leg,i)=>{leg.rotation.x=Math.sin(player.bob+i*Math.PI)*player.speedMix*.32;});
+    // 肩后机位只平移。准星投影到眼部弹道上，近敌掠过时不重新旋转画面。
+    return reach === 0 ? target.set(0,0,0) : target.project(camera);
   }};
 }

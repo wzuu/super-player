@@ -301,6 +301,17 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     get target() {
       return item?.target;
     },
+    get recoveryStage() { return index; },
+    get recoveryEntry() {
+      // 上一步已经完成的站点才可作本阶段入口，当前和未来的交互目标都不能用作传送点。
+      for (let i=index-1; i>=0; i--) if (stages[i].target) return stages[i].target;
+      return level.spawn;
+    },
+    recoveryUnsafe(site) {
+      if (item?.kind === 'reach') return near(site,item.target,item.range ?? 2.7);
+      if (item?.kind === 'breakout') return near(site,item.target,2.8);
+      return item?.kind === 'countdown' && separation(site,asPoint(item.charge)) < 4.5;
+    },
     get remaining() { return 0; },
     get doorStates() {
       return Object.fromEntries(

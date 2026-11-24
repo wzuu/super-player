@@ -21,9 +21,10 @@ import { BattlePerformance } from '@level-kit/battle-performance.mjs';
 import { variationDeck } from '@level-kit/variations.mjs';
 import { createFieldOperations } from '@level-kit/field-operations.mjs';
 import { createLifts } from '@level-kit/lifts.mjs';
+import { createRecovery } from '@level-kit/recovery.mjs';
 import { BattleJournal } from '@level-kit/battle-journal.mjs';
 import { createTraining } from '@level-kit/training.mjs';
-import { rotateLook } from '@level-kit/look.mjs';
+import { rotateLook, StickLook } from '@level-kit/look.mjs';
 
 export function startLevel(definition, campaign = null, campaignStage = 0) {
   if (typeof definition?.buildMap !== 'function') throw new TypeError('关卡需要实现 buildMap()');
@@ -111,12 +112,16 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
           level.gate.y + (gate.height ?? 4.72),
         );
   const nav = new Navigation(level);
+  const recovery = createRecovery({level, nav, definition, CONFIG});
   const lifts=createLifts({...context,level},definition.lifts);
   const story = createStory({...context,level,nav}, missionRules);
   const field=training?null:createFieldOperations({...context,level,nav},campaign);
   const look = new THREE.PerspectiveCamera();
+  const stickLook = new StickLook();
+  const padDown = new Set(), previousButtons = new Set();
+  let padIndex = null, lockStartedAt = Infinity;
   document.addEventListener('mousemove', (event) => {
-    if (document.pointerLockElement === canvas && game.phase === 'play') {
+    if (document.pointerLockElement === canvas && game.phase === 'play' && event.timeStamp >= lockStartedAt) {
       rotateLook(look.rotation, event.movementX, event.movementY, CONFIG.player.mouseSpeed);
     }
   });
@@ -128,15 +133,24 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     jump: false,
     reload: false,
     interact: false,
+    clearPad() {
+      this.padFire = false;
+      padDown.clear();
+      previousButtons.clear();
+      stickLook.reset();
+      padIndex = null;
+    },
     clear() {
       this.down.clear();
-      this.padFire = this.fire = this.jump = this.reload = this.interact = false;
+      this.clearPad();
+      this.fire = this.jump = this.reload = this.interact = false;
       this.aimPressed = player.aimRequested = player.aiming = false;
       player.ads = 0;
       player.positionCamera(0);
       ui.aimDot.hidden=true;
       ui.nodes.hud.removeAttribute('data-aim');
       weapon.shoulder.body.visible=false;
+      weapon.aimScreen=null;
     },
   };
   const sound = new Sound(),
@@ -246,6 +260,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       field?.reset(this);
       weapon.reset();
       training?.reset(this);
+      recovery.reset(this);
       ui.reset();
       input.clear();
     },
@@ -358,6 +373,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (this.phase === 'play') sound.updateThreats(this);
       if (this.phase === 'play') this.journal?.update(this);
       if (this.phase === 'play') training?.step(this,input);
+      if (this.phase === 'play' && !this.blast) recovery.record(this);
       weapon.render(dt, player, this);
       ui.update(dt, this);
     },
@@ -395,11 +411,13 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     ui.text('menu-status', '鼠标锁定未成功。请聚焦此窗口，再点击进入游戏。');
   }
 
-  document.addEventListener('pointerlockchange', async () => {
+  document.addEventListener('pointerlockchange', async (event) => {
     if (document.pointerLockElement !== canvas) {
+      lockStartedAt = Infinity;
       pause();
       return;
     }
+    lockStartedAt = event.timeStamp;
     if (preparing) return;
     if (game.phase !== 'pause') {
       if (campaign && !packed) {
@@ -436,6 +454,12 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   document.addEventListener('pointerlockerror', lockError);
   menus.addEventListener('cancel', (event) => event.preventDefault());
   $('start').addEventListener('click', startGame);
+  $('unstuck').addEventListener('click', () => {
+    if (game.phase !== 'pause' || game.blast) return;
+    const recovered = recovery.recover(game);
+    ui.text('menu-status', recovered ? '已回到安全位置。点击继续游戏。' : '附近暂时没有可用的安全位置。');
+    if (recovered) $('start').focus({preventScroll:true});
+  });
   if (training) {
     $('campaign-home').hidden = false;
     $('campaign-home').href = '../index.html';
@@ -522,7 +546,10 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       if (prefs.aimMode === 'hold') player.aimRequested = false;
     }
   });
-  window.addEventListener('blur', input.clear.bind(input));
+  window.addEventListener('blur', () => {
+    pause();
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
+  });
   window.addEventListener('pagehide', event => {
     // BFCache 恢复属于同一局，保留暂停时的投掷物。
     pause();
@@ -532,30 +559,29 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   });
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
 
-  const padDown = new Set(),
-    previousButtons = new Set();
+  window.addEventListener('gamepaddisconnected', event => {
+    if (event.gamepad.index === padIndex) input.clearPad();
+  });
   function pollPad(dt) {
-    if (!prefs.gamepad) return;
     let pad;
-    try { pad = [...(navigator.getGamepads?.() ?? [])].find(p => p?.mapping === 'standard'); }
+    try {
+      if (prefs.gamepad) pad = [...(navigator.getGamepads?.() ?? [])].find(p => p?.mapping === 'standard' && p.connected !== false);
+    }
     catch { prefs.gamepad=false; }
     padDown.clear();
     input.padFire = false;
-    if (!pad) {
-      previousButtons.clear();
-      return;
+    const index = pad ? pad.index ?? 0 : null;
+    if (index !== padIndex) {
+      input.clearPad();
+      padIndex = index;
     }
+    if (!pad) return;
     const [x, y, rx, ry] = pad.axes;
     if (Math.abs(x) > 0.22) padDown.add(x > 0 ? 'KeyD' : 'KeyA');
     if (Math.abs(y) > 0.22) padDown.add(y > 0 ? 'KeyS' : 'KeyW');
     if (pad.buttons[10]?.pressed) padDown.add('ShiftLeft');
     if (pad.buttons[1]?.pressed) padDown.add('KeyC');
-    rotateLook(
-      look.rotation,
-      Math.abs(rx) > 0.15 ? rx * dt * 850 : 0,
-      Math.abs(ry) > 0.15 ? ry * dt * 850 : 0,
-      CONFIG.player.mouseSpeed,
-    );
+    stickLook.turn(look.rotation, rx, ry, dt, CONFIG.player.mouseSpeed);
     input.padFire = pad.buttons[7]?.pressed;
     for (const [index, action] of [
       [0, 'Space'],

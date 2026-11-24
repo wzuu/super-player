@@ -371,6 +371,9 @@ function createEncounter({ CONFIG: settings, level, sound }) {
       for (const i of this.active.keys()) if (contains(vents[i], x, z, y)) return true;
       return false;
     },
+    recoveryUnsafe({x,y,z}) {
+      return this.inPipe(x,z,y) || (this.selected >= 0 && contains(vents[this.selected],x,z,y));
+    },
     inSteam(x, z, y, game) {
       if (this.inPipe(x, z, y)) return true;
       return Boolean(

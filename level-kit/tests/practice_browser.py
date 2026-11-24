@@ -9,6 +9,32 @@ from tempfile import TemporaryDirectory
 from campaign_browser import ROOT, expose_game, sync_playwright
 
 
+def verify_recovery_menu(page):
+    # 先走过一段安全地面，再用实体障碍模拟夹住玩家的情形。
+    page.keyboard.down("a")
+    page.wait_for_timeout(800)
+    page.keyboard.up("a")
+    page.evaluate("document.exitPointerLock()")
+    page.wait_for_function("run.game.phase === 'pause'")
+    saved = page.evaluate("""() => {
+      const g=run.game, p=g.player;
+      window.stuckBox=g.level.box(p.x,p.z,.35,.35,p.y,p.y+1.95);
+      if(!g.level.blocked(p.x,p.z,p.y,p.radius,p.height))throw Error('未构造出碰撞');
+      window.practiceProgress=()=>[g.training.guide(g).stage,g.time,g.weapon.ammo,g.weapon.reserve,
+        g.kit.remaining(),g.kills,g.loot.map(i=>[i.name,i.value]),g.pickups.objects.filter(i=>i.active).length];
+      return practiceProgress();
+    }""")
+    page.get_by_role("button", name="卡住脱离").click()
+    assert "已回到安全位置" in page.locator("#menu-status").inner_text()
+    assert page.evaluate("practiceProgress()") == saved
+    assert page.evaluate("""() => {const g=run.game,p=g.player;
+      return g.phase==='pause' && !document.pointerLockElement && !g.level.blocked(p.x,p.z,p.y,p.radius,p.height);
+    }""")
+    page.evaluate("stuckBox.active=false")
+    page.get_by_role("button", name="继续游戏").click()
+    page.wait_for_function("run.game.phase==='play'")
+
+
 def check(browser, url, static=False):
     page=browser.new_page(viewport={"width":960,"height":640})
     errors=[]
@@ -29,8 +55,12 @@ def check(browser, url, static=False):
     page.get_by_role("button",name="开始新手教程").click()
     page.wait_for_function("!!window.run")
     assert page.evaluate("run.game.training.kind")=="tutorial"
+    assert page.locator("#unstuck").is_hidden()
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
+    platforms=page.evaluate((ROOT/'level-kit/tests/tutorial_platforms.js').read_text(encoding="utf-8")+
+                            "\ncheckTutorialPlatforms()")
+    print("PASS tutorial platform landings and walk/jump exits",platforms,flush=True)
     def step(name):
         page.wait_for_function("name=>run.game.training.guide(run.game).stage==='tutorial-'+name",arg=name,timeout=6000)
     step("look")
@@ -49,11 +79,16 @@ def check(browser, url, static=False):
     step("crouch"); hold("c")
     step("pause"); page.evaluate("document.exitPointerLock()")
     page.wait_for_function("run.game.phase==='pause'");page.click("#start")
-    step("shoot"); page.mouse.down();page.wait_for_timeout(200);page.mouse.up()
+    step("shoot"); verify_recovery_menu(page)
+    page.mouse.down();page.wait_for_timeout(200);page.mouse.up()
     step("reload"); hold("r")
-    step("empty"); page.mouse.down();step("pickup");page.mouse.up()
-    # 跳过路程，拾取、伤害、核心和撤离仍走与正式游玩相同的入口。
-    page.evaluate("""() => {const g=run.game,t=g.training.guide(g).target;Object.assign(g.player,{x:t.x,y:t.y,z:t.z});}""")
+    step("empty"); page.mouse.down()
+    page.wait_for_function("['tutorial-pickup','tutorial-slot0'].includes(run.game.training.guide(run.game).stage)")
+    page.mouse.up()
+    # 脱困后的路线可能已经经过弹箱；其余情况移至练习弹药旁，仍由正式拾取逻辑推进。
+    page.evaluate("""() => {const g=run.game,task=g.training.guide(g);
+      if(task.stage==='tutorial-pickup'){const t=task.target;Object.assign(g.player,{x:t.x,y:t.y,z:t.z});}
+    }""")
     for i,key in enumerate(["q","e","1","2"]):
         step("slot"+str(i))
         if i==3:
@@ -81,6 +116,7 @@ def check(browser, url, static=False):
     hold("f");step("gate")
     page.evaluate("""() => { const g=run.game,t=g.level.gate; Object.assign(g.player,{x:t.x,y:t.y,z:t.z});}""")
     hold("f"); page.wait_for_function("run.game.phase==='win'")
+    assert page.locator("#unstuck").is_hidden()
     assert page.get_by_role("link",name="开始战役").is_visible()
     page.click("#campaign-home")
     page.locator("#continue").wait_for()

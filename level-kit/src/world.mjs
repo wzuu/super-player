@@ -151,10 +151,13 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       return definition.inSafeZone?.(x, z, this.spawn, margin) ??
         Math.hypot(x - this.spawn.x, z - this.spawn.z) < CONFIG.player.safeRadius + margin;
     }
-    surface(x, z, ceiling = Infinity) {
-      let floor = this.base(x, z);
+    terrainFloor(x, z, ceiling) {
+      const floor = this.base(x, z);
       const ramp = this.ramp(x, z);
-      if (ramp && ramp <= ceiling) floor = Math.max(floor, ramp);
+      return ramp && ramp <= ceiling ? Math.max(floor, ramp) : floor;
+    }
+    surface(x, z, ceiling = Infinity) {
+      let floor = this.terrainFloor(x, z, ceiling);
       const list = this.hash.query(x, z, x, z, this.near);
       for (const b of list) {
         if (b.active !== false && b.climb && b.y1 <= ceiling && b.y1 > floor && x >= b.x0 && x <= b.x1 && z >= b.z0 && z <= b.z1) floor = b.y1;
@@ -197,6 +200,18 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       const edge = radius + 0.021;
       floor = Math.max(floor, this.surface(x - edge, z, ceiling), this.surface(x + edge, z, ceiling));
       return Math.max(floor, this.surface(x, z - edge, ceiling), this.surface(x, z + edge, ceiling));
+    }
+    playerFloor(x, z, ceiling, radius, solidCeiling) {
+      const edge = radius + 0.021;
+      let floor = Math.max(this.terrainFloor(x,z,ceiling), this.terrainFloor(x-edge,z,ceiling),
+        this.terrainFloor(x+edge,z,ceiling), this.terrainFloor(x,z-edge,ceiling), this.terrainFloor(x,z+edge,ceiling));
+      // 与水平碰撞共用矩形足迹。只取十字上的点会让斜角悬空，落进实体后四个方向都不能动。
+      const list = this.hash.query(x-edge,z-edge,x+edge,z+edge,this.near);
+      for (const b of list) {
+        if (b.active === false || b.y1 <= floor || b.y1 > (b.climb ? ceiling : solidCeiling)) continue;
+        if (x+edge > b.x0 && x-edge < b.x1 && z+edge > b.z0 && z-edge < b.z1) floor = b.y1;
+      }
+      return floor;
     }
     canEnter(body, x, z, y) {
       return definition.terrain?.canEnter?.(body, x, z, y, this) ?? true;

@@ -12,6 +12,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.nodes.combo = $('combo');
       this.nodes['trait-label'] = $('trait-label');
       this.ring = $('reload-ring'); this.aimDot = $('aim-dot');
+      this.aimPosition = $('aim-position');
       for (const id of ['task-panel','task-update','objective-detail']) this.nodes[id] = $(id);
       const markers = (length, className) => Array.from({ length }, () => {
         const node = document.createElement('i');
@@ -221,6 +222,11 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       this.noticeTime -= dt;
       if (this.noticeTime <= 0) this.text('hud-announcement', '');
       const { player: p, weapon: w } = game;
+      const point = w.aimScreen;
+      if (point || this.aimPosition.style.left) {
+        this.aimPosition.style.left = point ? (50 + 50 * point.x).toFixed(3) + '%' : '';
+        this.aimPosition.style.top = point ? (50 - 50 * point.y).toFixed(3) + '%' : '';
+      }
       this.nodes.hud.toggleAttribute('data-steam',game.time<w.combat.mistUntil);
       const aimed = p.aiming && p.ads > .70;
       this.nodes.hud.toggleAttribute('data-aim',aimed);
@@ -300,6 +306,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
     }
     menu(mode, game) {
       const overlay = this.nodes.menu;
+      document.getElementById('unstuck').hidden = mode !== 'pause' || Boolean(game.blast);
       if (game.training) {
         document.getElementById('loadout-pane').hidden = true;
         document.getElementById('practice-restart').hidden = mode !== 'pause';

@@ -403,6 +403,9 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound}){
   return {
     phase:'calm',next:emp.first,ends:0,started:0,beastsDisabled:false,hudOffline:false,status:null,wrecks,
     crashCount:0,rules:{drone,emp},
+    recoveryUnsafe(site) {
+      return wrecks.some(w=>w.active && Math.hypot(site.x-w.x,site.y-w.impact,site.z-w.z)<drone.crashRadius+.4);
+    },
     reset(){
       this.phase='calm';this.next=emp.first;this.ends=0;this.started=0;this.status=null;
       this.beastsDisabled=false;this.hudOffline=false;this.crashCount=0;level.empActive=false;
