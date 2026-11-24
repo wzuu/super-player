@@ -40,7 +40,7 @@ BEFORE = """stage=>{
   const move=q=>{Object.assign(p,{x:q.x,y:q.y,z:q.z});nav.rebuild(p.x,p.z);};
   const course=window.fixtureCourse,street=stage==='rain-city';
   const room=stage==='long-door'?course.find(a=>a.kind==='fight'):
-    course.find(a=>a.kind==='fight' && (street?a.name==='钟楼南街':a.name.startsWith('服务器')));
+    course.find(a=>a.kind==='fight' && (street?a.name==='钟楼南街':(a.passage || a.name.startsWith('服务器'))));
   if(!room)throw Error('场景没有目标战区 '+stage);
   const door=course[course.indexOf(room)-1], [rx,rz]=[room.at[0],room.at.at(-1)];
   const ry=room.at.length===3?room.at[1]:g.level.surface(rx,rz,g.level.base(rx,rz)+.5);

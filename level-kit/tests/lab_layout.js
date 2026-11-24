@@ -204,7 +204,7 @@ async function verifyLabLayout({ offsets, extract }) {
       }
       if(j<2) {
         const goal=s.target;
-        Object.assign(p,{x:Math.sign(goal.x)*11.9,y:goal.y,z:goal.z});
+        Object.assign(p,{x:Math.sign(goal.x)*13.65,y:goal.y,z:goal.z});
         if(s.interact(g) || s.target!==goal) throw Error('隔着实体隔板取得了任务物 '+j);
       }
       walk(s.target);

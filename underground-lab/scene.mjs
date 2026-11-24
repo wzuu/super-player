@@ -86,7 +86,8 @@ for(const [n,c,title,lname,rname,mix] of [
   course.push({kind:'fight',name:title,parts,at:[0,passage ? z0+1.25 : z1+1],range:4,
     entries:parts.map(s=>s.anchor),mix,bounds:parts.map(s=>s.bounds),passage,
     requiredRoom:passage ? null : requiredRoom,label:passage ? '穿过检修运输廊，到达折返梯入口' : '清除'+requiredRoom+'守卫'});
-  if (!passage) course.push({kind:'use',at:[n===0 ? -14.35 : 14.35,c+.5],terminalKind:n===0 ? 'card' : 'breaker',
+  if (!passage) vertical(firstSide*14.8,c+5.8,c+8.2,.42);
+  if (!passage) course.push({kind:'use',at:[n===0 ? -16 : 16,c+7],terminalKind:n===0 ? 'card' : 'breaker',
     label:n===0 ? '从安保室领取实体门卡' : '合上配电房电闸'});
   ammo.push([.5,z1+1.5],[1.1,c+3],[-.7,z0+2.4]);
   health.push([-.8,z1+2,45],[0,c,60]);

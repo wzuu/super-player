@@ -14,7 +14,7 @@ from campaign_browser import ROOT
 
 def watch_page(page, errors, static):
     page.on("pageerror", lambda exc: errors.append(str(exc)))
-    page.on("console", lambda msg: errors.append(msg.text) if msg.type == "error"
+    page.on("console", lambda msg: errors.append(f"{msg.location.get('url', '')} {msg.text}") if msg.type == "error"
             and urlsplit(msg.location.get("url", "")).path != "/favicon.ico" else None)
     if static:
         page.on("request", lambda req: errors.append("静态页面请求了 API " + req.url)

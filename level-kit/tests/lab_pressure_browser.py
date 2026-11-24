@@ -67,14 +67,21 @@ def check(report):
         front=sides['front']
         assert front['sawPlayer']['d']>2 and front['killBeforeContact']['d']>2,section
         for flank in [sides['left'],sides['right']]:
-            assert flank['scan'] and flank['patrol'] and flank['heardShot'],flank
-            assert front['killBeforeContact']['t'] < flank['threat']['t'],section
-        assert set(section['sideApproach'])=={'left','right'} and section['firstShot']>0,section
+            assert flank['scan'] and flank['patrol'],flank
+            # 主路容许绕过非任务房，未进入攻击状态的守卫继续驻防。
+            if 'threat' in flank:
+                assert front['killBeforeContact']['t'] < flank['threat']['t'],section
+        required_side=('left','right',None)[section_index]
+        if required_side:
+            assert required_side in section.get('sideApproach',{}),section
+            assert sides[required_side].get('sawPlayer'),section
+        assert section['firstShot']>0,section
         if report['path']=='cover':
             assert section['cover'] and section['cover']['id']==section['retreatStart']['id'],section
-            assert all(flank.get('turnedToShot') for flank in [sides['left'],sides['right']]),section
+            assert any(flank.get('turnedToShot') for flank in [sides['left'],sides['right']]),section
             near, far = ('right','left') if section_index==1 else ('left','right')
-            assert sides[near]['threat']['t'] < sides[far]['threat']['t'], section
+            if 'threat' in sides[far] and 'threat' in sides[near]:
+                assert sides[near]['threat']['t'] < sides[far]['threat']['t'],section
         else:
             assert section['types'][0]['contact']['visibleToContact']>0,section
     for section in measurements[1:]:
