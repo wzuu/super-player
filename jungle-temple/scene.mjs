@@ -190,6 +190,14 @@ function buildMap({ THREE, scene, level, GRID, StaticBatches, shapes, canvasText
     add('box', 'gold', x, base + h * .73, z, width * 1.025, .09, width * 1.025, 0x968e4e);
   }
 
+  // 瀑布上游的护桥祭室面向南侧引道，台侧开口保留穿行通路。
+  for (const x of [-31.8, -16.6]) {
+    block('stone', x, -16, .42, 11.3, 0, 3.5);
+    block('trim', x + (x < -24 ? 1.3 : -1.3), -10.6, 2.6, .42, 0, 3.5);
+  }
+  block('stone', -24.2, -21.4, 15.2, .42, 0, 3.5);
+  block('stone', -24.2, -16, 15.7, 11.9, 3.5, 3.84);
+
   function plant(x, y, z, size, blades = 5) {
     const angle = between(0, Math.PI * 2);
     for (let i = 0; i < blades; i++) {
@@ -1160,8 +1168,13 @@ function jungleBeast(type, { THREE, shapes, mergeGeometries }, rage = false) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'河岸石阶',at:[-9,29],entries:[[-17,25],[0,22]]},
-    {name:'西侧瀑布池',at:[-25,6],entries:[[-32,11],[-22,-3]]},
+    {name:'河岸石阶',at:[-9,29],entries:[[-10,26]],parts:[
+      {name:'河岸石阶',count:100,bounds:[-32,13,15,35.5],anchor:[-10,26]}
+    ]},
+    {name:'瀑布北引道',at:[-25,6],entries:[[-24,0]],parts:[
+      {name:'瀑布北引道',count:94,bounds:[-39,-23,-10,13],anchor:[-24,0]},
+      {name:'瀑布护桥祭室',count:6,bounds:[-31.1,-20.6,-17.3,-11.4],anchor:[-24,-16],types:[0],reward:{name:'地脉石刻',value:120,at:[-25,-17]}}
+    ]},
   ]},
   weaponSkin: 'jungle-temple',
   pageTitle: '雨蚀天阶 | 第十关',

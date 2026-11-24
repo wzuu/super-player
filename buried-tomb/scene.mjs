@@ -154,6 +154,16 @@ function buildMap({ THREE, scene, GRID, StaticBatches, shapes, canvasTexture, se
     return level.box(x, z, width, depth, bottom, top, climb);
   };
 
+  // 方尖碑柱廊旁的陪葬室由三面石墙围合，南墙门洞朝向玩家来路。
+  for (const x of [-30.8, -20.2]) {
+    solid('brick', x, -8, .38, 8.8, 0, 3.4, 0xd8ac78);
+    solid('stone', x + (x < -25 ? 1.4 : -1.4), -3.8, 2.8, .4, 0, 3.4, 0xe0ba83);
+  }
+  solid('brick', -25.5, -12.2, 10.6, .38, 0, 3.4, 0xcb9d69);
+  solid('stone', -25.5, -8, 11.1, 9.2, 3.4, 3.65, 0xe7c394);
+  for (const z of [13, 22, 30]) column(-20, z, 2.45);
+  for (const z of [22, 30]) column(7.5, z, 2.45);
+
   function pyramid(x, z) {
     level.gate.set(x, TOWER.height, z);
     level.bossAnchor.set(x, 0, z + 9.5);
@@ -708,8 +718,13 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'陵前沙地',at:[-10,24],entries:[[-17,21],[-2,18]]},
-    {name:'西侧柱廊',at:[-23,3],entries:[[-32,7],[-25,-5]]},
+    {name:'陵前祭道',at:[-10,24],entries:[[-11,21]],parts:[
+      {name:'陵前祭道',count:100,bounds:[-33,10,9,34],anchor:[-11,21]}
+    ]},
+    {name:'西侧方尖碑柱廊',at:[-23,3],entries:[[-24,0]],parts:[
+      {name:'西侧方尖碑柱廊',count:94,bounds:[-38,-20,-4,9],anchor:[-24,0]},
+      {name:'西廊陪葬室',count:6,bounds:[-30,-11.6,-21,-4.5],anchor:[-26,-7],types:[0],reward:{name:'陵卫铜印',value:120,at:[-27,-9]}}
+    ]},
   ]},
   weaponSkin: 'buried-tomb',
   pageTitle: '流沙王陵 | 第四关',

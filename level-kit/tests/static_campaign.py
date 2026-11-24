@@ -59,7 +59,11 @@ def verify(browser, root, site):
         assert page.url == root + level["id"] + "/"
         page.locator("#start").click()
         page.wait_for_function("run.game.phase === 'play'")
-        assert page.evaluate("run.game.pickups.objects.filter(i => i.active && i.kind === 'rare').length") == 10
+        treasures = page.evaluate("run.game.pickups.objects.filter(i => i.active && i.kind === 'rare').map(i => i.name)")
+        if level["id"] == "underground-lab":
+            assert sorted(treasures) == sorted(["安检走廊记录", "培养走廊记录", "服务器走廊记录"]), treasures
+        else:
+            assert len(treasures) == 10, (level["id"], treasures)
         if i == 0:
             page.evaluate("run.game.finish(false)")
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")

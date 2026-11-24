@@ -258,6 +258,12 @@ function buildMap({ THREE, scene, GRID, level, StaticBatches, shapes, canvasText
     pointedArch(0, z + 0.52, doorway, 4.0, 2.5, 0, 0, 0.50);
   }
   // 山墙装饰与不连续的屋面保留读图所需的雷光和月光。
+  // 西侧礼拜室倚外墙，朝教堂中殿和原西侧门均有出入口。
+  for (const z of [-17.5, 3.4]) solid('carved', -9.5, z, 5.9, .3, 0, 2.4);
+  for (const [z,depth] of [[-15.1,4.5],[-5.5,6.4],[2.45,1.65]]) {
+    solid('carved', -6.47, z, .28, depth, 0, 2.4);
+    box('edge', -6.47, 2.44, z, .36, .12, depth);
+  }
   const roofSlope = 0.45;
   for (const sign of [-1, 1]) {
     for (const [z, depth] of [[5.72, 7.9], [-16.95, 6.6], [-4.9, 2.8]]) {
@@ -926,8 +932,13 @@ function createPortal({ THREE, scene, level, brighter, TAU }) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'吊桥南庭院',at:[-8,25],entries:[[-16,23],[0,18]]},
-    {name:'大教堂侧廊',at:[7,1],entries:[[13,3],[3,-6]]},
+    {name:'吊桥南庭院',at:[-8,25],entries:[[-6,23]],parts:[
+      {name:'吊桥南庭院',count:100,bounds:[-19,13,12,32],anchor:[-6,23]}
+    ]},
+    {name:'教堂东回廊',at:[7,1],entries:[[0,12]],parts:[
+      {name:'教堂东回廊',count:92,bounds:[-5,-25,30,12],anchor:[5,-1]},
+      {name:'西侧祈祷廊',count:8,bounds:[-11.8,-16.5,-6.5,2],anchor:[-9,-8],types:[0],reward:{name:'彩窗祷文',value:120,at:[-9,-9]}}
+    ]},
   ]},
   weaponSkin: 'bloodmoon-castle',
   pageTitle: '血月古堡 | 第十一关',

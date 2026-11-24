@@ -109,7 +109,7 @@ export function createPickupClass(context) {
       if (!object) return;
       if (kind === 'core') this.keyItem = object;
       const style = kind === 'rare' && value >= cfg.preciousValue ? 'precious' : kind;
-      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent,
+      Object.assign(object, { style, active: true, kind, x, z, y, name, value, permanent, manual:false,
         origin: kind === 'rare' && !permanent ? 'drop' : null, born: this.age });
       return object;
     }
@@ -122,6 +122,19 @@ export function createPickupClass(context) {
     }
     nearKey(player) {
       return this.keyItem?.active && this.withinReach(this.keyItem, player);
+    }
+    nearbyReward(player) {
+      let nearest=null, best=Infinity;
+      for (const item of this.objects) {
+        if (!item.active || !item.manual || !this.withinReach(item,player)) continue;
+        const distance=(item.x-player.x)**2+(item.y-player.y)**2+(item.z-player.z)**2;
+        if (distance<best) {nearest=item;best=distance;}
+      }
+      return nearest;
+    }
+    takeNearbyReward(player,game) {
+      const item=this.nearbyReward(player);
+      return Boolean(item && this.collect(item,player,game));
     }
     takeKey(player, game) {
       if (!this.nearKey(player)) return false;
@@ -146,7 +159,7 @@ export function createPickupClass(context) {
           item.active = false;
           continue;
         }
-        if (item.kind !== 'core' && this.withinReach(item, player)) this.collect(item, player, game);
+        if (item.kind !== 'core' && !item.manual && this.withinReach(item, player)) this.collect(item, player, game);
       }
     }
     takeAimed(player, game) {
@@ -154,6 +167,7 @@ export function createPickupClass(context) {
       const candidates = [];
       for (const item of this.objects) {
         if (!item.active || item.kind === 'core' || Math.abs(player.y - item.y) > 1.25) continue;
+        if (item.manual && !this.withinReach(item,player)) continue;
         this.direction.set(item.x, item.y + 0.4, item.z).sub(camera.position);
         const length = this.direction.length();
         if (length <= 0 || length > cfg.nameRange) continue;

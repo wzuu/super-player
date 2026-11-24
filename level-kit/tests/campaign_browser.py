@@ -38,6 +38,8 @@ def expose_game(route, *, render=True):
 def check_reload(page):
     page.evaluate("""() => {
         const g = run.game, w = g.weapon;
+        // 开阔地图的两批守卫已在场，让静止换弹、停表与恢复只受按键影响。
+        g.player.hurtDelay = Infinity;
         w.ammo = 1; w.reserve = 4; w.cooldown = 0;
         // 在实际输入前订阅 HUD，低帧率机器上两次 Playwright 调用之间可能已经完成换弹。
         const node=document.querySelector('#weapon-state');
@@ -68,6 +70,7 @@ def check_reload(page):
     assert page.evaluate("run.game.weapon.reloadLeft") == remaining
     page.locator("#start").click()
     page.wait_for_function("run.game.weapon.ammo === 5 && run.game.weapon.reserve === 0")
+    page.evaluate("run.game.player.hurtDelay = 0")
 
 
 def finish_at_gate(page):

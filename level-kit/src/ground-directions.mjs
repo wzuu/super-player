@@ -1,3 +1,4 @@
+import {bossDangerAt} from '@level-kit/boss-ground.mjs';
 // 两层同向折箭用深色轮廓区分明暗地面，与攻击警戒圈使用不同的形状。
 export function createGroundDirections(THREE,scene,level) {
   const positions=[], colors=[], indices=[];
@@ -36,9 +37,7 @@ export function createGroundDirections(THREE,scene,level) {
       const part=Math.floor(along/b.chargeMarkLength);
       if (Math.abs(y-(b.chargeHeights[part]+b.chargeHeights[part+1])*.5)<1) return true;
     }
-    const f=g.beasts.boss?.fight;
-    return f?.winding && Math.abs(f.aimY-y)<1.7 && (Math.hypot(f.aimX-x,f.aimZ-z)<2.9+f.stage*.5 ||
-      (f.pattern===2 && f.stage>=1 && Math.hypot(f.nextX-x,f.nextZ-z)<3));
+    return bossDangerAt(g.beasts.boss?.fight,g.time,level,x,y,z,.6);
   }
   return (path,g)=>{
     mesh.count=0;

@@ -28,6 +28,14 @@ async function verifyLabLayout({ offsets, extract }) {
     if (steps >= 2400) throw Error('绕行失败 ' + JSON.stringify(q));
     return steps * 0.11;
   }
+  function claim(item) {
+    g.pickups.update(0,p,g);
+    if (!item.manual || !item.active) throw Error('清房奖励未按手动取回规则进入场地 '+item.name);
+    const dx=item.x-p.x,dz=item.z-p.z;
+    p.look.rotation.set(Math.atan2(item.y+.4-p.y-p.eye,Math.hypot(dx,dz)),Math.atan2(-dx,-dz),0,'YXZ');
+    p.positionCamera(0);
+    if(!g.pickups.takeAimed(p,g)) throw Error('手动瞄准领取奖励失败 '+item.name);
+  }
   function clearGroup(find) {
     for (let i = 0; i < 4; i++) {
       for (const b of m.pool.filter((b) => b.active && find(b))) m.damage(b, 1e7, g, 'weapon');
@@ -102,7 +110,7 @@ async function verifyLabLayout({ offsets, extract }) {
         if (!roomLoot || liveElsewhere !== 74)
           throw Error('local clear wrongly mixed with other rooms ' + liveElsewhere);
         const meters = walk(roomLoot);
-        g.pickups.update(0, p, g);
+        claim(roomLoot);
         if (!g.loot.some((i) => i.name === roomLoot.name)) throw Error('room loot not carried');
         rooms.push({ j, left, meters, liveElsewhere });
         if (j === 2) {
@@ -137,7 +145,7 @@ async function verifyLabLayout({ offsets, extract }) {
           if (!bonus || m.pool.filter((b) => b.active && b.storyWave).length !== 74)
             throw Error('missing optional loot or main membership conflict');
           optional.walk = walk(bonus);
-          g.pickups.update(0, p, g);
+          claim(bonus);
           if (!g.loot.some((i) => i.name === '冷藏疫株研究档案' && i.origin === 'vault'))
             throw Error('did not actually obtain archive loot');
           optional.reward = bonus.value;
@@ -160,7 +168,7 @@ async function verifyLabLayout({ offsets, extract }) {
           rest = m.pool.filter((b) => b.active && b.storyWave).length;
         if (!lootR || rest !== 48) throw Error('right room rewards blocked ' + [right, rest]);
         const d = walk(lootR);
-        g.pickups.update(0, p, g);
+        claim(lootR);
         if (!g.loot.some((i) => i.name === lootR.name)) throw Error('right room loot not carried');
         rooms.push({ j, right, meters: d, liveElsewhere: rest });
       }

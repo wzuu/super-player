@@ -348,7 +348,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
           if (this.nearGate()) {
             if (!this.ready()) ui.notify(objective.guide(this,TEXT).title, 1.55);
             this.trigger();
-          } else if (encounter?.interactionHint?.(this) || !pickups.takeAimed(player,this)) {
+          } else if (encounter?.interactionHint?.(this) || (!pickups.takeNearbyReward(player,this) && !pickups.takeAimed(player,this))) {
             encounter?.interact?.(this);
           }
         }

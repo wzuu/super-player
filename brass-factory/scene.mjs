@@ -241,6 +241,14 @@ function buildMap(context) {
       } else if (tile === 'G') level.gate.set(x, ground(x, z), z);
     }
   // 门架、主机房闸门与侧置齿轮。中轴两端均可登上屋顶，外围仍保留绕行空间。
+  // 炉侧工具间留出朝向卸压通道的检修门。
+  for (const z of [-3.8, 4.8]) {
+    block('brick', 38, z, 9.8, 0.35, 0, 3.8, true);
+    block('copper', 33.3, z + (z < 0 ? 1.1 : -1.1), 0.3, 2.2, 0, 3.8, true);
+  }
+  block('brick', 42.7, 0.5, 0.4, 8.6, 0, 3.8, true);
+  block('iron', 38, 0.5, 10.1, 8.9, 3.8, 4.0, true);
+  block('light', 33.2, 0.5, 0.18, 3.5, 3.2, 3.45);
   for (const sign of [-1, 1]) {
     block('iron', sign * 5.4, 37, 1.0, 1.4, 0, 5.5, true);
     block('iron', sign * 5.7, -3, 1.0, 1.2, 0, 7.1, true);
@@ -574,8 +582,13 @@ function createEnvironment(context) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'货运月台',at:[-8,23],entries:[[-15,25],[-2,16]]},
-    {name:'锅炉机坊',at:[23,5],entries:[[31,7],[18,-1]]},
+    {name:'货运装配线',at:[-8,23],entries:[[-11,21]],parts:[
+      {name:'货运装配线',count:100,bounds:[-25,12,8,33],anchor:[-11,21]}
+    ]},
+    {name:'锅炉卸压通道',at:[23,5],entries:[[21,2]],parts:[
+      {name:'锅炉卸压通道',count:92,bounds:[8,-16,40,18],anchor:[21,2]},
+      {name:'东炉阀门工具间',count:8,bounds:[34,-3,42,4],anchor:[38,0],types:[0],reward:{name:'黄铜校准规',value:120,at:[39,1]}}
+    ]},
   ]},
   config: CONFIG,
   grid: MAP_GRID,

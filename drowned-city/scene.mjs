@@ -892,15 +892,22 @@ function seaModel(type,{THREE,shapes,mergeGeometries}){
   return g;
 }
 
+const seaApproach = {name:'海藻林廊',at:[-8,23],entries:[[-11,19]],parts:[
+      {name:'海藻林廊',count:100,bounds:[-33,12,10,35],anchor:[-11,19]}
+    ]};
+const seaRamp = {name:'议事厅东坡道',at:[12,10],entries:[[12,7]],parts:[
+      {name:'议事厅东坡道',count:90,bounds:[-15,-21,19.8,14],anchor:[12,7]},
+      {name:'潮汐祭殿',count:10,bounds:[20.9,-7.8,29.3,7.9],anchor:[25,2],types:[0],reward:{name:'沉海祭器',value:120,at:[24,3.5]}}
+    ]};
+
 export default {
   story:{
     type:'escort',
-    sectors:[{name:'海藻林廊',at:[-8,23],entries:[[-15,20],[0,18]]},
-      {name:'议事厅前庭',at:[0,11],entries:[[-10,9],[10,10]]}],
-    route:[{kind:'fight',name:'海藻林补给点',label:'掩护停靠无人机，拦截伏击者',escort:true,at:[-8,23],
-        entries:[[-15,20],[-6,15]],mix:[0,2,0,1],range:8},
-      {kind:'fight',name:'议事厅坡道',label:'保护无人机，打通议事厅坡道',escort:true,at:[12,10],
-        entries:[[19,10],[9,3]],mix:[0,1,0,2],range:8}],
+    sectors:[seaApproach,seaRamp],
+    route:[
+      {...seaApproach,kind:'fight',name:'海藻林补给点',label:'掩护停靠无人机，拦截伏击者',escort:true,mix:[0,2,0,1],range:8},
+      {...seaRamp,kind:'fight',label:'保护无人机，打通议事厅坡道',escort:true,mix:[0,1,0,2],range:8},
+    ],
   },
   weaponSkin: 'drowned-city',
   pageTitle: '沉穹古都 | 第六关',

@@ -218,6 +218,14 @@ function buildMap({
   addBox(0, 5.7, 43, 16.8, 0.54, 0.8, 0xc6a983);
   sign('午夜游园', 0, 5.65, 43.45, 9.3, 1.45, '#ffb7c7');
   sign('售票处', -32, 2.98, 33.58, 3.8, 0.75, '#8ef1dc');
+  // 木马维修间的卷帘门朝向木马广场，避开镜屋和行车轨道。
+  for (const z of [-21.9, -12.1]) {
+    solid(10.5, z, 10.9, 0.35, 3.5, 0x65414f);
+    solid(15.8, z + (z < -17 ? 1.2 : -1.2), 0.35, 2.4, 3.5, 0x915071);
+  }
+  solid(5.2, -17, 0.35, 9.8, 3.5, 0x65414f);
+  solid(10.5, -17, 11.2, 10.1, 0.3, 0x804b62, 3.5);
+  sign('后台维修', 10.5, 3.1, -11.89, 5.2, 0.7, '#fbd199');
   sign('MIRROR  HOUSE', 30, 4.55, 15.4, 11, 1.24, '#a5f8ee');
   sign('LAST  EXPRESS', -27, 5.7, 12, 7.7, 1.05, '#fbd199');
   for (const [x, z, w, d] of WALLS) {
@@ -852,8 +860,13 @@ function carnivalModel(type, { THREE, shapes, mergeGeometries }, rage = false) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'游园售票亭',at:[-8,27],entries:[[-16,24],[0,19]]},
-    {name:'旋转木马广场',at:[16,5],entries:[[24,6],[12,-1]]},
+    {name:'售票长街',at:[-8,27],entries:[[-12,24]],parts:[
+      {name:'售票长街',count:100,bounds:[-26,16,7,34],anchor:[-12,24]}
+    ]},
+    {name:'旋转木马广场',at:[16,5],entries:[[8,2]],parts:[
+      {name:'旋转木马广场',count:92,bounds:[-16,-18,16,9],anchor:[8,2]},
+      {name:'木马后台维修间',count:8,bounds:[6,-21,15,-13],anchor:[11,-17],types:[0],reward:{name:'失物登记簿',value:120,at:[11,-18]}}
+    ]},
   ]},
   weaponSkin: 'haunted-midway',
   pageTitle: '永夜游园 | 第十四关',

@@ -1,4 +1,8 @@
-"""测量完整敌群部署所在的实际呈现帧，使用正式故事场景和浏览器 RAF。"""
+"""测量真实 F 开门或街区接敌的 RAF。运行前在目标工作目录执行 npm run build。
+默认测试当前机房和钟楼街；--stages long-door 用于有分区隔离门的新实验室首门。
+--root 可指向另一次独立构建；原地图基线为 b1b8605（PR #92）。
+每格先运行 --repeat 次无探针采样，再运行一次分项探针。--warm 1 检查几乎没有准备时间的冷开门。
+"""
 import argparse
 import json
 import os
@@ -34,12 +38,18 @@ OPEN = """async ([stage,warm,profile])=>{
 BEFORE = """stage=>{
   const {game:g,nav}=run,s=g.story,m=g.beasts,p=g.player;
   const move=q=>{Object.assign(p,{x:q.x,y:q.y,z:q.z});nav.rebuild(p.x,p.z);};
+  const course=window.fixtureCourse,street=stage==='rain-city';
+  const room=stage==='long-door'?course.find(a=>a.kind==='fight'):
+    course.find(a=>a.kind==='fight' && (street?a.name==='钟楼南街':a.name.startsWith('服务器')));
+  if(!room)throw Error('场景没有目标战区 '+stage);
+  const door=course[course.indexOf(room)-1], [rx,rz]=[room.at[0],room.at.at(-1)];
+  const ry=room.at.length===3?room.at[1]:g.level.surface(rx,rz,g.level.base(rx,rz)+.5);
+  const isGate=()=>!street && s.stage==='use' && s.target && door?.door &&
+    s.target.x===door.at[0] && s.target.z===door.at.at(-1);
+  window.room=room.name;window.roomTarget={x:rx,y:ry,z:rz};
   for(let i=0;i<2000;i++){
     if(s.target)move(s.target);
-    if(stage==='long-door' && s.stage==='use'){window.room='首扇隔离门';return;}
-    if(stage==='underground-lab' && s.stage==='use' && s.target.x===29 && s.target.z===-2.5){
-      window.room='服务器机房';return;
-    }
+    if(isGate())return;
     if(stage==='rain-city' && s.encounters.length===1){
       s.step(.016,g);
       const first=s.guide(g,{}).target?.storyWave;
@@ -51,12 +61,12 @@ BEFORE = """stage=>{
         // 已击倒的分裂精英也应归属前场。它们生成以后清掉，然后留下可实测的最后一击。
         for(let n=0;n<8;n++){g.time+=.25;m.releaseSplits(g);
           for(const b of m.pool)if(b.active && b.storyWave===first && b!==last)m.damage(b,1e8,g);}
-        window.lastGuard=last;window.room='钟楼南街';return;
+        window.lastGuard=last;return;
       }
     }
     for(const b of m.pool)if(b.active&&b.storyWave)m.damage(b,1e8,g);
     g.time+=.3;m.releaseSplits(g);g.objective.step(.3,g);s.step(.3,g);
-    if(s.stage==='use' && stage!=='long-door' && !(s.target.x===29&&s.target.z===-2.5)){
+    if(s.stage==='use' && !isGate()){
       move(s.target);s.interact(g);
     }
   }
@@ -83,7 +93,7 @@ RECORD = """async ([sample,residual,profile,warm]) => {
   const {game:g,input}=run, m=g.beasts, s=g.story,p=g.player,l=g.level;
   const door=sample!=='rain-city';
   const raf=()=>new Promise(resolve=>requestAnimationFrame(stamp=>resolve({time:performance.now(),stamp})));
-  const t=door?s.target:{x:1,y:0,z:8};
+  const t=door?s.target:roomTarget;
   const render=deployFrame;
   input.fire=false;input.down.clear();p.hurtDelay=Infinity;
   let angle=0;
@@ -188,7 +198,7 @@ def measure(browser, root, stage, residual, profile, warm):
     old_frame = 'requested = requestAnimationFrame(animate);'
     assert html.count(old_return)==html.count(old_entry)==1 and old_frame in html
     html = html.replace(old_return, 'return {game,scene,camera,renderer,config:CONFIG,grid:GRID,nav,frame:animate,input};')
-    html = html.replace(old_entry,'window.run=startLevel(definition,campaign,campaignStage);').replace(old_frame,'requested=0;')
+    html = html.replace(old_entry,'window.fixtureCourse=definition.story.route;window.run=startLevel(definition,campaign,campaignStage);').replace(old_frame,'requested=0;')
     if profile:
         hooks={
           'function trySite(x,z,i,ceiling) {':'function trySite(x,z,i,ceiling) {if(window.deploymentProbe)deployProfile.candidates=(deployProfile.candidates||0)+1;',

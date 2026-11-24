@@ -291,11 +291,13 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         this.nodes['boss-health'].value = Math.max(boss.hp, 0);
       }
       let note = !blast && this.noticeTime > 0 ? this.notice : '';
+      const reward=game.pickups.nearbyReward(p);
       if (game.pickups.nearKey(p)) note = '按 F 拾取' + TEXT.keyItem;
       else if (game.nearGate()) {
         if (game.ready() && !game.blast) note = '按 F 引爆' + TEXT.portal;
         else if (!note && !game.blast) note = task.title;
-      } else if (!note && !blast) {
+      } else if (reward && !blast) note='按 F 拾取'+reward.name;
+      else if (!note && !blast) {
         note = game.encounter?.interactionHint?.(game) ??
           (p.protected(game) ? TEXT.safe + ' / ' + Math.max(0, Math.ceil(CONFIG.player.safeTime - game.time)) + ' 秒' : '');
       }

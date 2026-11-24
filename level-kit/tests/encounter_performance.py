@@ -13,6 +13,12 @@ from campaign_browser import ROOT
 
 ROOMS = {"underground-lab": ("服务器走廊", 0, -11), "rain-city": ("钟楼南街", 1, 8)}
 SEED = """
+  let lockOwner=null;
+  Object.defineProperty(document,'pointerLockElement',{get:()=>lockOwner,configurable:true});
+  Element.prototype.requestPointerLock=function(){
+    lockOwner=this;document.dispatchEvent(new Event('pointerlockchange'));return Promise.resolve();
+  };
+  document.exitPointerLock=()=>{lockOwner=null;document.dispatchEvent(new Event('pointerlockchange'));};
   let seed=680067;
   Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
   localStorage.setItem('super-player:preferences:v1',JSON.stringify({quality:'medium'}));
@@ -38,7 +44,10 @@ BIRTHS = """()=>{
     };
   }
 }"""
-PREPARE = """([name,x,z])=>{
+PREPARE = """([fallbackName,fallbackX,fallbackZ])=>{
+  const room=window.fixtureCourse?.find(a=>a.kind==='fight' &&
+    (fallbackName.startsWith('服务器')?a.name.startsWith('服务器'):a.name===fallbackName));
+  const name=room?.name ?? fallbackName,x=room?.at[0] ?? fallbackX,z=room?.at.at(-1) ?? fallbackZ;
   const g=run.game,s=g.story,p=g.player,nav=run.nav;
   const move=t=>{Object.assign(p,{x:t.x,y:t.y,z:t.z});nav.rebuild(p.x,p.z);};
   for(let i=0;i<1800;i++) {
@@ -136,7 +145,7 @@ FRAMES = """async ()=>{
 def measure(browser, root, stage, expected):
     file = root / stage / "index.html"
     html = file.read_text(encoding="utf-8").replace("    startLevel(definition, campaign, campaignStage);",
-        "    window.run=startLevel(definition,campaign,campaignStage);")
+        "    window.fixtureCourse=definition.story?.route;window.run=startLevel(definition,campaign,campaignStage);")
     result = {}
     for frames in (False, True):
         page=browser.new_page(viewport={"width":960,"height":540},device_scale_factor=1)

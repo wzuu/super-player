@@ -518,7 +518,7 @@ function createEncounter({ CONFIG: setup, mapData, sound }) {
         !game.beasts.pool.some(b=>b.active && b.archiveTag===this.archiveTag) &&
         !game.beasts.traits.splits.some(child=>child.archiveTag===this.archiveTag)){
         const treasure=game.pickups.add('rare',38,-27,0,'冷藏疫株研究档案',460,true);
-        if(treasure){treasure.origin='vault';this.archiveLoot=true;}
+        if(treasure){treasure.origin='vault';treasure.manual=true;this.archiveLoot=true;}
       }
       if (game.blast) return;
       if (this.active && now >= this.alarmUntil) {

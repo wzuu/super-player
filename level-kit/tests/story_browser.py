@@ -75,6 +75,11 @@ def check_trigger_edges(page, stage):
       for(const [cx,cz] of coordinates){
         g.reset();g.phase='play';
         const t=s.target;
+        const initial=m.pool.filter(b=>b.active && s.isCurrentGuard(b));
+        if(initial.length!==100)throw Error('冲刺或绕入之前应已部署全部守卫');
+        const originGap=Math.min(...initial.map(b=>Math.hypot(b.x-p.x,b.z-p.z)-b.radius-p.radius));
+        const generations=initial.map(b=>b.spawnGeneration);
+        if(originGap<6)throw Error('开局出生安全间距不足 '+originGap);
         let position;
         for(const [dx,dz] of [[0,0],[0,.4],[-.4,0],[.4,0],[0,-.4],[0,.9],[-.9,0],[.9,0],[0,-.9]]){
           const x=cx+dx,z=cz+dz,y=g.level.foot(x,z,t.y+1,p.radius);
@@ -85,8 +90,7 @@ def check_trigger_edges(page, stage):
         const {x,z}=position;
         // 模拟玩家在一个模拟步内逼近入口；上一次寻路终点仍是出生点。
         s.step(.016,g);
-        const tag=s.guide(g,{keyItem:'核心'}).target?.storyWave;
-        const team=m.pool.filter(b=>b.active && tag && b.storyWave===tag);
+        const team=m.pool.filter(b=>b.active && s.isCurrentGuard(b)), tag=team[0]?.storyWave;
         if(team.length!==100||s.encounters[0]?.spawned!==100)throw Error('入口未一次集结 '+[x,z,team.length]);
         const victims=team.filter(b=>!b.affixes?.includes('split')).slice(0,4);
         if(victims.length!==4)throw Error('缺少可验证的普通守卫');
@@ -94,7 +98,9 @@ def check_trigger_edges(page, stage):
         for(let i=0;i<48;i++){g.time+=.25;m.releaseSplits(g);s.step(.25,g);}
         if(m.pool.filter(b=>b.active && b.storyWave===tag).length!==96 || s.remaining)
           throw Error('击杀普通守卫后本场又生出敌人');
-        reports.push([x,z,Math.min(...team.map(b=>Math.hypot(b.x-x,b.z-z))).toFixed(2)]);
+        if(team.some((b,i)=>b!==initial[i] || b.spawnGeneration!==generations[i]))
+          throw Error('靠近已有队列后发生重刷');
+        reports.push({x,z,gapBeforeApproach:+originGap.toFixed(2),unchanged:team.length});
       }
       return reports;
     }""",stage=='underground-lab')
@@ -134,7 +140,7 @@ def verify(browser,ids):
           manager.spawnGroup=(entries,options)=>{
             const group=spawn(entries,options);
             if(entries.length!==100)return group;
-            if(group.length!==100)throw Error('当前交战区未能一次部署百只 '+[g.story.stage,g.player.x,g.player.z]);
+            if(group.length!==100)throw Error('当前交战区未能一次部署百只 '+JSON.stringify({stage:g.story.stage,mode:g.objective.mode,player:[g.player.x,g.player.z],live:manager.live,anchors:options?.anchors,types:entries.reduce((n,e)=>(n[e.type]=(n[e.type]??0)+1,n),{})}));
             deployed++;
             for(const [i,b] of group.entries()){
               if(g.level.blocked(b.x,b.z,b.y,b.radius,b.height)||g.level.inSafeZone(b.x,b.z)||
@@ -216,7 +222,7 @@ def verify(browser,ids):
               waveAlive=g.beasts.live>0;at(s.target);
             }
             if (s.stage==='fight' && s.droneDocked && !escortDamaged) {
-              const raider=g.beasts.pool.find(b=>b.active&&b.droneRaider);
+              const raider=g.beasts.pool.find(b=>b.active&&b.droneRaider&&s.isCurrentGuard(b));
               if(raider){
                 const d=g.objective.drone.position;
                 Object.assign(raider,{x:d.x-1.7,z:d.z,y:d.y-1,stun:0});
@@ -228,7 +234,7 @@ def verify(browser,ids):
               }
             }
             if((state==='fight' || state==='approach' && task.stage.endsWith('combat')) && (!s.droneDocked || escortDamaged)) {
-              for(const b of g.beasts.pool)if(b.active && b.type!==3)g.beasts.damage(b,1e7,g);
+              for(const b of g.beasts.pool)if(b.active && s.isCurrentGuard(b))g.beasts.damage(b,1e7,g);
             }
             tick(.5);
           }
@@ -331,11 +337,12 @@ def verify(browser,ids):
               const guide=()=>s.navigation(g.objective.guide(g,{keyItem:'核心'}),g);
               // 在中途清场和任务切换时检查真实 HUD 所使用的下一个可通行节点。
               function follow(detour){
-                const t=detour??s.target;
+                let t=detour??guide().target;
                 let metres=0, corners=new Set();
                 for(let k=0;k<900;k++){
-                  if(Math.hypot(p.x-t.x,p.z-t.z)<.42)return {metres,corners:corners.size};
                   const task=detour?s.navigation({target:detour},g):guide(),w=task.waypoint;
+                  t=detour??task.target;
+                  if(Math.hypot(p.x-t.x,p.z-t.z)<(t.storyWave ? 2.0 : .42))return {metres,corners:corners.size};
                   if(!task.path?.length||!w||w!==task.path[0])throw Error('南街路线缺失 '+JSON.stringify({p:[p.x,p.y,p.z],t}));
                   corners.add([w.x,w.z].join());
                   const dx=w.x-p.x,dz=w.z-p.z,d=Math.hypot(dx,dz),speed=Math.min(.2,d)/Math.max(.001,d);
@@ -348,18 +355,16 @@ def verify(browser,ids):
               const first=follow();
               for(let i=0;i<420 && s.encounters[0]?.clearedAt===undefined;i++){
                 run.nav.rebuild(p.x,p.z);
-                s.step(.016,g);
-                const current=s.guide(g,{}).target?.storyWave;
-                for(const b of g.beasts.pool)if(b.active && current && b.storyWave===current)g.beasts.damage(b,1e7,g);
+                for(const b of g.beasts.pool)if(b.active && s.isCurrentGuard(b))g.beasts.damage(b,1e7,g);
                 g.time+=.5;g.beasts.releaseSplits(g);s.step(.5,g);
               }
-              if(s.encounters[0]?.spawned!==100||s.target.x!==1)throw Error('钟楼南街未开放');
+              if(s.encounters[0]?.spawned!==100||s.encounters[1]?.name!=='钟楼南街')throw Error('钟楼南街未开放');
               const kiosk=g.pickups.objects.find(o=>o.active&&o.name==='夜视模组');
-              const side=follow(kiosk),second=follow();
+              const side=follow(kiosk),second=follow(s.target);
               if(!second.metres||Math.max(side.corners,second.corners)<2)throw Error('南街缺少绕行转角 '+JSON.stringify([side,second]));
               g.time+=1;s.step(1,g);g.time+=1;s.step(1,g);
-              const guard=g.beasts.pool.find(b=>b.active&&b.storyWave);
-              if(!guard)throw Error('街区交战尚未开始');
+              const guard=guide().target;
+              if(!guard?.active || !s.isCurrentGuard(guard))throw Error('街区交战尚未开始');
               guard.alert=6;guard.playerVisible=true;
               if(!guide().engaged)throw Error('南街近敌未进入交战状态');
               guard.x=p.x+19;
@@ -400,6 +405,14 @@ def verify(browser,ids):
                 throw Error('从防疫站折返主路时未重算路线');
               const threat=g.beasts.spawn(0,p.x-2,p.z,p.y);
               if(!threat)throw Error('侧房门口没有可用测试点');
+              const sentry={...threat,storyWave:{},roomAlert:false,roomBounds:[p.x-8,p.z-3,p.x-1,p.z-1]};
+              sentry.id=(6-g.beasts.frame%6)%6;
+              const shutter=l.box(p.x-1,p.z,.20,1.5,p.y,p.y+2);
+              s.stepBeast(sentry,g,1/60);
+              if(sentry.roomAlert)throw Error('未接敌的房内守卫透过实墙看到侧路玩家');
+              l.setBarrier(shutter,null,false);
+              s.stepBeast(sentry,g,1/60);
+              if(!sentry.roomAlert)throw Error('房内守卫看不到从开放侧路接近的玩家');
               threat.playerVisible=true;threat.alert=8;
               const arrows=run.scene.getObjectByName('ground-directions');
               function markers(){

@@ -9,7 +9,7 @@ from encounter_performance import BIRTHS, PREPARE, EXERCISE, ROOMS
 
 FIXTURE = Path(__file__).with_name("herd_sample.js").read_text(encoding="utf-8")
 STAGES = {"open": "rain-city", "dense": "rain-city", "legacy96": "rain-city", "indoor": "underground-lab", "wall": "underground-lab", "mirror": "haunted-midway",
-          "tower": "paris-tower", "machine-room": "underground-lab", "street": "rain-city"}
+          "tower": "paris-tower", "machine-room": "underground-lab", "street": "rain-city", "boss-wave": "rain-city"}
 SEED = """
 let seed=750077;
 Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
@@ -25,7 +25,7 @@ def measure(browser, root, mode, sample, size, frames):
     expose = "return { game, scene, camera, renderer, config: CONFIG, grid: GRID, nav };"
     assert html.count(entry) == html.count(expose) == 1
     story = sample in ("machine-room","street")
-    setup = "window.run=startLevel(definition,campaign,campaignStage);" if story else """window.run=startLevel({...definition,
+    setup = "window.fixtureCourse=definition.story?.route;window.run=startLevel(definition,campaign,campaignStage);" if story else """window.run=startLevel({...definition,
       config:{...definition.config,beasts:{...definition.config?.beasts,capacity:192,
         simulation:{...definition.config?.beasts?.simulation,poolCapacity:192}}}},campaign,campaignStage);"""
     html = html.replace(entry, setup).replace(expose,
@@ -66,9 +66,9 @@ def measure(browser, root, mode, sample, size, frames):
         assert result["shots"] > 0 and not errors, (result,errors)
         if not story:
             assert result["simulated"] == size, result
-            if sample in ("open","dense"):
+            if sample in ("open","dense","boss-wave"):
                 assert result["submittedMin"] == result["centreInViewMin"] == size, result
-            if mode in ("lod","final") and sample == "dense":
+            if mode in ("lod","final") and sample in ("dense","boss-wave"):
                 assert result["peakDraws"] <= 40 and result["peakTriangles"] <= 150000, result
                 counts=result["lod"]
                 assert counts["near"]-counts["bossNear"] <= counts["nearBudget"] and counts["bossNear"]==1, counts
@@ -92,7 +92,7 @@ if __name__=="__main__":
         with pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER","chrome"),headless=True,args=flags[args.gpu]) as browser:
             for mode in args.modes:
                 for sample in args.samples:
-                    sizes=args.sizes if sample in ("open","indoor","dense") else [160]
+                    sizes=args.sizes if sample in ("open","indoor","dense","boss-wave") else [160]
                     for size in sizes:
                         row=measure(browser,args.baseline if mode=="baseline" else ROOT,mode,sample,size,args.frames)
                         print(json.dumps(row,ensure_ascii=False),flush=True)
