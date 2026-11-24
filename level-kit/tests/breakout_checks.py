@@ -14,6 +14,12 @@ def check(browser,stage,seed):
           start();
           const live=g.beasts.live, t=s.target, e=g.encounter;
           if(s.stage!=='breakout' || g.beasts.boss || s.actionName!=='突围')throw Error('开局行动错误');
+          const items=g.pickups.objects.filter(i=>i.active && i.kind==='rare');
+          if(items.length!==10)throw Error('地图收藏品应有十件');
+          for(const item of items){
+            if(l.blocked(item.x,item.z,item.y,p.radius,p.height))throw Error('收藏品落点被挡 '+item.name);
+            if(item.name==='接应电签' && item.y!==6)throw Error('接应电签落在了桥下');
+          }
           if(stage==='neon-northline-escape'){
             move(t.x,l.base(t.x,t.z),t.z);
             if(l.blocked(p.x,p.z,p.y,p.radius,p.height))throw Error('接应车正下方无法落脚');

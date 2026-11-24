@@ -123,7 +123,9 @@ export default {pageTitle:'灯巷神社撤离',weaponSkin:'lantern-shrine-escape
   buildBeastModel:yokaiModel,buildRageModel:h=>yokaiModel(3,h,true),createEncounter,buildMap:ctx=>buildFacility(ctx,plan),
   terrain:{ground},background:0x43405b,fog:0x685767,portal:{shield:false,visible:false},manualLoot:true,
   ammo:[[-19,53],[-13,40],[4,29],[-14,16],[25,7],[9,-20],[-22,-41],[14,-55]],
-  loot:[[-27,51,'灯节木札',80],[-15,20,'织坊锦样',250],[27,15,'药行香囊',180],[7,7,'夜巡手绘图',110],[-22,-38,'石狐狸护符',135],[11,-52,'神社风铃',140]],
+  loot:[[-27,51,'灯节木札',80],[-15,20,'织坊锦样',250],[27,15,'药行香囊',180],[7,7,'夜巡手绘图',110],
+    [-22,-38,'石狐狸护符',135],[11,-52,'神社风铃',140],[-10,43,'木屐扣',85],[13,22,'纸行水印',90],
+    [18,6,'河灯木模',105],[-12,-24,'桥头奉纳签',100]],
   area:(x,z)=>areas.find(({bounds:[a,b,c,d]})=>x>=a&&x<c&&z>=b&&z<d)?.name??'神社山道',
   text:{title:'灯巷神社撤离',tag:'百鬼灯巷 / 突围',enter:'进入低街',brief:rule,objective:rule,safe:'木户街角',
     bossName:'百鬼头领',winBrief:'你已安全抵达山腰神社。'}};
