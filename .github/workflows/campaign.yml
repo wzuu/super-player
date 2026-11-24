@@ -47,7 +47,8 @@ jobs:
       fail-fast: false
       matrix:
         suites:
-          - 'reports_browser practice_browser weapon_system_browser'
+          - 'reports_browser'
+          - 'practice_browser weapon_system_browser'
           - 'story_browser stair_routes_browser stage_audio_browser'
           - 'combat_expansion field_operations_browser'
           - 'controls_browser grenade_browser lab_live_browser'
@@ -70,7 +71,9 @@ jobs:
           SUITES: ${{ matrix.suites }}
         run: |
           for suite in $SUITES; do
-            python "level-kit/tests/$suite.py"
+            echo "::group::$suite"
+            python -u "level-kit/tests/$suite.py"
+            echo '::endgroup::'
           done
 
   deploy:

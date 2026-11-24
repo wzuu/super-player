@@ -9,6 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from campaign_browser import ROOT, LEVELS, expose_game, sync_playwright
 
 
@@ -73,14 +74,22 @@ def blocked_legacy_upgrade(browser, url):
     context.close()
 
 
+def storage_menu(route):
+    # connectCampaign 已经创建真实军需菜单、点击处理器及存储连接。压力标签页只打开它。
+    response=route.fetch()
+    entry="    startLevel(definition, campaign, campaignStage);"
+    html=response.text()
+    assert html.count(entry)==1
+    route.fulfill(response=response,body=html.replace(entry,"""
+        window.departure=campaign;
+        document.getElementById('start').disabled=false;
+        document.getElementById('menu').showModal();
+    """))
+
+
 def departure_retry(context, url, static):
     stage = url + '/underground-lab/'
-    def expose(route):
-        response=route.fetch()
-        entry="    startLevel(definition, campaign, campaignStage);"
-        html=response.text()
-        assert html.count(entry)==1
-        route.fulfill(response=response,body=html.replace(entry,"    window.departure = campaign;\n"+entry))
+    backend = "IndexedDB" if static else "SQLite"
     pages=[]
     try:
         for _ in range(2):
@@ -88,9 +97,9 @@ def departure_retry(context, url, static):
             pages.append(tab)
             tab.add_init_script("localStorage.setItem('super-player:first-entry:v1','skip')")
             if static: tab.route("**/campaign/levels.json",lambda route:route.fulfill(json=LEVELS))
-            tab.route(stage,expose)
+            tab.route(stage,storage_menu)
             tab.goto(stage)
-            tab.wait_for_function("!!window.departure")
+            tab.wait_for_function("!!window.departure",polling=50,timeout=15000)
         first,peer=pages
         first.evaluate("""async () => {
           const store=await (await import('/campaign/store.mjs')).campaignStore();
@@ -106,9 +115,19 @@ def departure_retry(context, url, static):
           try {await departure.prepare();throw Error('未触发预期的回执中断');}
           catch(error){if(error.message!=='测试：出发回执中断')throw error;}
         }""")
-        peer.evaluate("""async () => {
-          for(let i=0;i<32;i++)await departure.prepare();
+        peer.evaluate("""() => {
+          window.completedDepartures=0;window.departureError='';
+          (async()=>{
+            for(let i=0;i<32;i++){await departure.prepare();completedDepartures++;}
+          })().catch(error=>{window.departureError='第 '+(completedDepartures+1)+'/32 次出发失败，'+error;});
         }""")
+        for number in range(1,33):
+            try:
+                peer.wait_for_function("n=>completedDepartures>=n || departureError",arg=number,polling=50,timeout=15000)
+            except PlaywrightTimeout as error:
+                raise AssertionError(f"{backend} 配给压力第 {number}/32 次出发超时") from error
+            failure=peer.evaluate("departureError")
+            assert not failure,f"{backend} 配给压力{failure}"
         result=first.evaluate("""async () => {
           const store=await (await import('/campaign/store.mjs')).campaignStore();
           const before=(await store.gear()).state.stock.medkit,write=store.writeGear;
@@ -123,12 +142,13 @@ def departure_retry(context, url, static):
           } finally {clearTimeout(timer);release();store.writeGear=write;}
         }""")
         assert result==[47,47,2],result
-        print("PASS lost departure reply and 32 peer departures", "IndexedDB" if static else "SQLite", result,flush=True)
+        print("PASS lost departure reply and 32 peer departures", backend, result,flush=True)
     finally:
         for tab in pages: tab.close()
 
 
 def run(browser, url, static, database):
+    backend="IndexedDB" if static else "SQLite"
     context = browser.new_context(viewport={"width": 920, "height": 680})
     page = context.new_page()
     errors = []
@@ -218,6 +238,7 @@ def run(browser, url, static, database):
     page.wait_for_function("run.game.phase==='play' && !run.game.sound.enabled && run.game.sound.main.gain.value===0")
     page.keyboard.press("y")
     page.wait_for_function("Math.abs(run.game.sound.main.gain.value-.47*.65)<.003")
+    print("PASS settings, audio, first battle and next stage",backend,flush=True)
     page.goto(url + "/#history")
     page.get_by_role("button", name="查看战报").first.click()
     page.get_by_role("button", name="观看回放").click()
@@ -236,7 +257,10 @@ def run(browser, url, static, database):
     page.click("#settings-open")
     page.get_by_label("录制战术回放").uncheck()
     page.keyboard.press("Escape")
-    page.goto(url + "/" + level + "/")
+    print("PASS recorded replay and chapter navigation",backend,flush=True)
+    shop_url=url + "/" + level + "/"
+    page.route(shop_url,storage_menu)
+    page.goto(shop_url)
     page.locator("#preparation summary").click()
     page.select_option("#shop-item","grenade")
     page.evaluate("""async () => {
@@ -260,23 +284,25 @@ def run(browser, url, static, database):
     peer = context.new_page()
     if static:
         peer.route("**/campaign/levels.json", manifest)
-    peer.goto(url + "/" + level + "/")
+    peer.route(shop_url,storage_menu)
+    peer.goto(shop_url)
     peer.locator("#preparation summary").click()
     peer.select_option("#shop-item","grenade")
     # 旧窗口还没收到回执时，另一窗口连续完成 34 次合法兑换。
-    peer.evaluate("""async () => {
-      const shop=document.getElementById('shop-item'), buy=document.getElementById('shop-buy');
-      for(let i=0;i<34;i++){
-        const ready=new Promise(resolve=>{
-          const observer=new MutationObserver(()=>{
-            if(!shop.disabled){observer.disconnect();resolve();}
-          });
-          observer.observe(shop,{attributes:true,attributeFilter:['disabled']});
-        });
-        buy.click();await ready;
-        if(!document.getElementById('shop-status').textContent.includes('兑换成功'))throw Error('兑换失败');
-      }
-    }""")
+    buy=peer.locator("#shop-buy")
+    credits=peer.locator("#credits")
+    starting_balance=int(credits.inner_text().split()[-1])
+    for number in range(1,35):
+        try:
+            buy.click(timeout=10000)
+            peer.wait_for_function("!document.querySelector('#shop-item').disabled",polling=50,timeout=15000)
+            status=peer.locator("#shop-status").inner_text(timeout=3000)
+            balance=credits.inner_text(timeout=3000)
+        except PlaywrightTimeout as error:
+            raise AssertionError(f"{backend} 库存压力第 {number}/34 次兑换超时") from error
+        assert status=="手雷兑换成功",f"{backend} 库存压力第 {number}/34 次兑换失败，{status}"
+        assert balance==f"军需点 {starting_balance-number*60}",f"{backend} 第 {number}/34 次兑换后余额异常，{balance}"
+    print("PASS 34 peer purchases with first receipt pending",backend,flush=True)
     def receipts():
         if not static:
             with closing(sqlite3.connect(database)) as db:
@@ -301,6 +327,7 @@ def run(browser, url, static, database):
       const {state}=await store.gear();return [state.spent-beforeBuy.spent,state.stock.grenade-beforeBuy.stock];
     }""")
     assert delta == [35*60,35] and receipts() == 0, delta
+    page.unroute(shop_url,storage_menu)
     page.reload()
     page.locator("#preparation summary").click()
     page.select_option("#shop-item","grenade")
@@ -312,6 +339,7 @@ def run(browser, url, static, database):
       const {state}=await store.gear();return state.spent;
     }""")
     assert reloaded == 36*60 and receipts() == 0, reloaded
+    print("PASS receipt recovery and fresh purchase after reload",backend,flush=True)
     page.click("#start")
     page.wait_for_function("run.game.phase==='play'")
     assert page.evaluate("run.game.weapon.savedKills") == 2
@@ -379,6 +407,7 @@ def run(browser, url, static, database):
         }""")
         assert migrated["kills"] == 5 and migrated["shots"] == 12 and migrated["eliteKills"] == 3, migrated
     assert not detail["old"].get("report") and detail["old"]["loot"][0]["name"] == "旧宝物"
+    print("PASS settlement, replay quota failure and legacy report",backend,flush=True)
     departure_retry(context,url,static)
     assert detail["failed"]["report"] and not detail["failed"]["hasReplay"]
     page.evaluate("async () => (await import('./campaign/profiles.mjs')).createProfile()")
