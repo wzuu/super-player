@@ -32,8 +32,8 @@ def stage_page(browser, stage, query="", custom=False):
 def start(page):
     page.click("#start")
     page.wait_for_function("run.game.phase==='play' && !!document.pointerLockElement")
-    # 试验场开局就有敌人。输入用例在同一处反复暂停和读数，隔离敌人的致死伤害。
-    page.evaluate("if (run.game.training?.kind==='range') run.game.player.hurtDelay=Infinity")
+    # 战役开放战区与试验场均有开局驻敌。让站桩读数跨过完整输入过渡，EMP 受击用例会自行恢复伤害。
+    page.evaluate("run.game.player.hurtDelay=Infinity")
 
 
 def check_weapon_model(page):
@@ -111,7 +111,9 @@ def right_button_checks(page, shoulder):
     page.mouse.down(button="right")
     # 跨过完整的镜头过渡，用游戏时钟保证慢速渲染时也走过实际帧。
     until = page.evaluate("run.game.time + .35")
-    page.wait_for_function("until => run.game.time >= until", arg=until)
+    page.wait_for_function("until => run.game.time >= until || run.game.phase !== 'play'", arg=until)
+    phase, elapsed = page.evaluate("[run.game.phase, run.game.time]")
+    assert phase == "play" and elapsed >= until, (phase, elapsed, until)
     verify()
     page.mouse.up(button="right")
     verify()
