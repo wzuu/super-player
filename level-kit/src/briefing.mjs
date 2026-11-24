@@ -1,11 +1,12 @@
 import { defaultGear, packKit, supplies, modifications } from '@level-kit/gear.mjs';
 import { campaignMission, missionNames, missionRules } from '@level-kit/objectives.mjs';
 
-export function initBriefing(stage, config, text, keys, campaign) {
+export function initBriefing(stage, config, text, keys, campaign, classicAction) {
   const mode = document.getElementById('mission-mode');
   const defaultMode = campaignMission(stage);
   for (const id of new Set([defaultMode, 'classic', 'endless'])) {
-    mode.add(new Option(missionNames[id] + (id === defaultMode ? ' · 本关默认' : ''), id));
+    const label = id==='classic' && classicAction ? classicAction : missionNames[id];
+    mode.add(new Option(label + (id === defaultMode ? ' · 本关默认' : ''), id));
   }
   if (config.supportsHunt) mode.add(new Option('追踪猎杀', 'hunt'));
   function describe() {

@@ -52,6 +52,7 @@ export class BattleJournal {
     return {
       report: {
         mode: g.objective.mode,
+        actionName: g.story?.actionName,
         difficulty: this.difficulty,
         weapon: g.weapon.skinId,
         loadout: this.loadout,

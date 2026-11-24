@@ -167,13 +167,13 @@ export function renderReport(body, battle, levels, store) {
     '结算',
     new Date(battle.endedAt).toLocaleString('zh-CN') +
       ' · ' +
-      (battle.won ? '撤离成功' : '撤离失败') +
+      ((r.actionName ?? '撤离') + (battle.won ? '成功' : '失败')) +
       ' · ' +
       seconds(battle.durationMs),
   );
   line('结束原因', r.reason);
   line('最后完成阶段', r.lastStage);
-  line('实际行动', modes[r.mode] ?? r.mode);
+  line('实际行动', r.actionName ?? modes[r.mode] ?? r.mode);
   line('难度', difficulties[r.difficulty] ?? r.difficulty);
   line('变奏', r.variation);
   line('武器', rifleSkins[r.weapon]?.name ?? r.weapon);

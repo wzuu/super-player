@@ -326,6 +326,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     },
     get cap() { return group?.tag.cap ?? CONFIG.beasts.capacity; },
     prepare(mode) {
+      this.actionName = mode==='classic' ? spec?.classicAction : undefined;
       this.managed = this.supports(mode);
       const closed =
         this.managed &&

@@ -167,7 +167,7 @@ function appendBattles(page) {
     const title = element('th', '', titles.get(battle.level) ?? battle.level);
     title.scope = 'row';
     const result = element('td');
-    result.append(element('span', battle.won ? 'outcome won' : 'outcome lost', battle.won ? '撤离成功' : '撤离失败'));
+    result.append(element('span', battle.won ? 'outcome won' : 'outcome lost', battle.won ? '行动成功' : '行动失败'));
     row.append(title, result, ...[
       number.format(battle.kills), playTime(battle.durationMs), number.format(battle.lootCount) + ' 件',
       number.format(battle.lootValue), date.format(battle.endedAt),

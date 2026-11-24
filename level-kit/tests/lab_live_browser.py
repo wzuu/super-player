@@ -98,6 +98,7 @@ def verify(browser, url, static=False, rooms=False):
         assert result["spawned"] == [100,100,100] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
         assert not result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
         assert sum(result["startingAmmo"]) + sum(b["taken"] for b in result["boxes"]) == result["shots"] + sum(result["ammo"]), result
+        assert page.locator("#menu-title").inner_text() == "歼灭成功"
         if static:
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')", polling=100)
             page.locator("#campaign-home").click(force=True)
@@ -108,11 +109,11 @@ def verify(browser, url, static=False, rooms=False):
                 const store = await (await import('./campaign/store.mjs')).campaignStore();
                 const progress = await store.progress(), history = await store.history();
                 return {prefix:store.pendingPrefix, count:progress.battleCount, first:progress.levels[0],
-                        second:progress.levels[1], battles:history.battles};
+                        second:progress.levels[1], battles:history.battles, report:(await store.report(history.battles[0].id)).report};
             }""")
             assert saved["prefix"].startswith("super-player-static:") and saved["count"] == 1, saved
             assert saved["first"]["cleared"] and saved["second"]["unlocked"], saved
-            assert len(saved["battles"]) == 1, saved
+            assert len(saved["battles"]) == 1 and saved["report"]["actionName"] == "歼灭", saved
             record = saved["battles"][0]
             assert record["level"] == "underground-lab" and record["won"] and record["kills"] == result["kills"], record
             print("PASS IndexedDB 刷新回读同一局胜利与击杀数，第二关已解锁", flush=True)
@@ -120,6 +121,7 @@ def verify(browser, url, static=False, rooms=False):
             page.wait_for_function("async()=> (await (await fetch('/api/progress')).json()).levels[1].unlocked", polling=100)
             saved = page.request.get(root + "api/progress").json()
             record = saved["battles"][0]
+            assert page.request.get(root+"api/report", params={"id":record["id"]}).json()["report"]["actionName"] == "歼灭"
             assert saved["battleCount"] == 1 and saved["levels"][0]["cleared"] and saved["levels"][1]["unlocked"], saved
             assert record["level"] == "underground-lab" and record["won"] and record["kills"] == result["kills"], record
         assert not errors, errors

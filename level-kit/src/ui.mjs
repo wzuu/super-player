@@ -314,7 +314,8 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
         document.getElementById('practice-restart').hidden = mode !== 'pause';
         document.getElementById('next-level').hidden = mode !== 'win' || game.training.kind !== 'tutorial';
       }
-      this.text('menu-title', mode === 'pause' ? '行动暂停' : mode === 'win' ? '撤离成功' : mode === 'fail' ? '撤离失败' : TEXT.title);
+      const action = game.story?.actionName ?? '撤离';
+      this.text('menu-title', mode === 'pause' ? '行动暂停' : mode === 'win' ? action+'成功' : mode === 'fail' ? action+'失败' : TEXT.title);
       this.text('menu-text', mode === 'pause' ? TEXT.pauseBrief : mode === 'win' ? game.endReason || TEXT.winBrief : mode === 'fail' ? game.endReason || TEXT.failBrief : TEXT.brief);
       this.text('start', mode === 'pause' ? '继续游戏' : mode === 'ready' ? TEXT.enter : '再来一局');
       this.text('menu-status', '');

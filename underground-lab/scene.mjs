@@ -142,7 +142,7 @@ function watchRooms(b, g, dt, canSee, config) {
   b.fx = Math.sin(facing); b.fz = Math.cos(facing); b.yaw = facing;
   return true;
 }
-const labStory={type:'lab',watchRooms,turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
+const labStory={type:'lab',classicAction:'歼灭',watchRooms,turnDirections:true,pulseAt:[8,-59],bossSupplies,walls:locks,
   terminals:course.filter(t=>t.kind==='use').map(t=>({at:t.at,kind:t.terminalKind})),locks:locks.map(([id,x,z])=>({id,at:[x,z],why:'需完成上一项任务'})),route:course};
 const MAP_GRID=Array.from({length:88},(_,i)=>{
  const z=i*2-87;

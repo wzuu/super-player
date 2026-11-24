@@ -172,8 +172,12 @@ function laboratoryPressure(path='cover') {
       if(b){yaw=Math.atan2(p.x-b.x,p.z-b.z);pitch=Math.atan2(b.y+b.height*.8-p.y-p.eye,gap(b))-p.recoil;stage.coverTarget=b.id;}
       input.fire=true;
     }else {mode='retreat';const enemy=g.beasts.pool.filter(e=>e.active && sideOf(e)?.side==='front' && line(e)).sort((a,b)=>gap(a)-gap(b))[0];
-      if(!stage.retreatStart && enemy){stage.coverTarget=enemy.id;stage.retreatStart={...event(enemy),hp:round(p.hp),at:[round(p.x),round(p.z)]};}
-      const target={x:-5.7,y:0,z:front+2.5};
+      if(!stage.retreatStart && enemy){
+        stage.coverTarget=enemy.id;
+        stage.coverSide=Math.sign(enemy.x || p.x) || -1;
+        stage.retreatStart={...event(enemy),hp:round(p.hp),at:[round(p.x),round(p.z)]};
+      }
+      const target={x:(stage.coverSide??-1)*6.4,y:0,z:front+2.5};
       const via=route(target)??target;
       move(via);
     }
