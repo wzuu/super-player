@@ -5,6 +5,7 @@ import { createGroundDirections } from '@level-kit/ground-directions.mjs';
 // 每次主线遭遇只集结一次。限时目标切换时，保留已经入场的敌群。
 export function createStory({ THREE, scene, level, nav, CONFIG, definition, colors }, rules) {
   const spec = definition.story;
+  const annihilation = spec?.type === 'annihilation';
   let route;
   const groundDirections=createGroundDirections(THREE,scene,level);
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
@@ -84,10 +85,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         opacity: glass ? 0.39 : 1,
       }),
     );
-    mesh.position.set(x, height / 2, z);
+    const floor = annihilation ? level.base(x,z) : 0;
+    mesh.position.set(x, floor + height / 2, z);
     scene.add(mesh);
-    const barrier = level.box(x, z, width, depth, 0, height);
-    if (definition.weaponSkin === 'underground-lab' && !glass) level.viewOccluders.push(barrier);
+    const barrier = level.box(x, z, width, depth, floor, floor+height);
+    if (annihilation && !glass) level.viewOccluders.push(barrier);
     level.setBarrier(barrier, mesh, false);
     if (!panels.has(id)) panels.set(id, []);
     panels.get(id).push({ barrier, mesh });
@@ -121,7 +123,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     countdownSecond = 0,
     retryAt = 0;
   const asPoint = (a) => (a?.isVector3 ? a : a.length === 3 ? xyz(a) : point(a));
-  const openFight = stage => stage.kind==='fight' && stage.parts && spec.type!=='lab';
+  const openFight = stage => stage.kind==='fight' && stage.parts && !annihilation;
   function enter(g, continuing = null) {
     item = stages[index] ?? null;
     group = continuing;
@@ -197,7 +199,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     };
     const options = {anchors: entrances, accept: withinSector, acceptGroup:i=>i%entrances.length};
     if (parts) {
-      const sideRooms = spec.type==='lab' ? [] : stage.parts.slice(1);
+      const sideRooms = annihilation ? [] : stage.parts.slice(1);
       options.acceptGroup = index => parts[index].name;
       options.accept = (site, index) => {
         const [left, back, right, front] = parts[index].bounds;
@@ -256,7 +258,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       group.record = {name:item.name, deployedAt:group.deployedAt, enteredAt:g.time, spawned:item.count};
       director.encounters.push(group.record);
     }
-    if (spec.type !== 'lab') {
+    if (!annihilation) {
       const t = item.target;
       const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
       if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药',
@@ -285,7 +287,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function build(g) {
     const mode = g.objective.mode,
       type = spec.type;
-    if (type === 'lab' && mode === 'classic') return spec.route;
+    if (annihilation && mode === 'classic') return spec.route;
     if (type === 'rain' && mode === 'hold') return spec.route;
     if (type === 'tower' && mode === 'rescue') {
       const p = spec.platform,
@@ -330,7 +332,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       this.managed = this.supports(mode);
       const closed =
         this.managed &&
-        ((spec.type === 'lab' && mode === 'classic') || (spec.type === 'rain' && mode === 'hold'));
+        ((annihilation && mode === 'classic') || (spec.type === 'rain' && mode === 'hold'));
       for (const id of panels.keys()) close(id, closed);
       for (const { group, activate } of consoles) {
         group.visible = closed;
