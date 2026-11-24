@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="760" viewBox="0 0 940 760" role="img" aria-labelledby="title desc">
+<title id="title">沙海信号台平面与高程</title><desc id="desc">两条登台坡，沙暴时按声源换防</desc>
+<rect width="940" height="760" fill="#202d36"/>
+<g fill="#f5ede1" font-family="system-ui,sans-serif">
+<text x="25.0" y="40.0" font-size="25" fill="#f5ede1">沙海信号台　｜　坚守</text>
+<text x="429.0" y="66.0" font-size="15" fill="#f5ede1">北 ↑</text>
+<rect x="193.9" y="443.48" width="106.6" height="103.0" fill="#52616a"/>
+<rect x="95.5" y="380.92" width="287.0" height="95.7" fill="#52616a"/>
+<rect x="58.60000000000002" y="377.24" width="77.9" height="66.2" fill="#52616a"/>
+<rect x="140.60000000000002" y="285.24" width="49.2" height="106.7" fill="#52616a"/>
+<rect x="280.0" y="285.24" width="57.4" height="106.7" fill="#52616a"/>
+<rect x="107.80000000000001" y="171.16" width="237.8" height="117.8" fill="#52616a"/>
+<rect x="128.3" y="130.67999999999998" width="77.9" height="62.6" fill="#52616a"/>
+<polyline points="247.2,513.4 189.8,458.2 165.2,403.0 165.2,274.2 214.4,226.4" stroke="#a4ddc0" stroke-width="4" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<polyline points="165.2,414.0 91.4,406.7 165.2,414.0" stroke="#e8bf83" stroke-width="2.5" stroke-dasharray="5 3" fill="none" stroke-linejoin="round"/>
+<polyline points="140.6,295.5 189.8,297.1" stroke="#f9ce89" stroke-width="4" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<polyline points="165.2,369.9 165.2,302.0 165.2,277.9" stroke="#e9a897" stroke-width="2" stroke-dasharray="4 3" fill="none" stroke-linejoin="round"/>
+<polyline points="162.2,284.9 165.2,277.9 168.2,284.9" stroke="#e9a897" stroke-width="2" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<polyline points="280.0,295.5 337.4,297.1" stroke="#f9ce89" stroke-width="4" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<polyline points="308.7,369.9 308.7,302.0 308.7,277.9" stroke="#e9a897" stroke-width="2" stroke-dasharray="4 3" fill="none" stroke-linejoin="round"/>
+<polyline points="305.7,284.9 308.7,277.9 311.7,284.9" stroke="#e9a897" stroke-width="2" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<circle cx="259.5" cy="487.6" r="3" fill="#a2c6ff"/>
+<circle cx="169.3" cy="355.2" r="3" fill="#a2c6ff"/>
+<circle cx="316.9" cy="362.5" r="3" fill="#a2c6ff"/>
+<circle cx="140.6" cy="237.4" r="3" fill="#a2c6ff"/>
+<circle cx="267.7" cy="222.7" r="3" fill="#a2c6ff"/>
+<circle cx="177.5" cy="163.8" r="3" fill="#a2c6ff"/>
+<circle cx="304.6" cy="266.8" r="3" fill="#a2c6ff"/>
+<circle cx="206.2" cy="432.4" r="3.5" fill="#82da91"/>
+<circle cx="148.8" cy="178.5" r="3.5" fill="#82da91"/>
+<circle cx="247.2" cy="513.4" r="4" fill="#e7e4c4"/>
+<text x="253.2" y="506.4" font-size="14" fill="#f5ede1">入口</text>
+<circle cx="214.4" cy="226.4" r="4" fill="#e7e4c4"/>
+<text x="220.4" y="219.4" font-size="14" fill="#f5ede1">信标</text>
+<circle cx="91.4" cy="406.7" r="4" fill="#e7e4c4"/>
+<text x="97.4" y="399.7" font-size="14" fill="#f5ede1">可选收藏</text>
+<text x="490.0" y="82.0" font-size="18" fill="#f5ede1">两条登台坡，沙暴时按声源换防</text>
+<text x="490.0" y="125.0" font-size="18" fill="#f5ede1">驻防位置与实际部署</text>
+<circle cx="247.2" cy="425.1" r="8.2" fill="#924e46"/>
+<text x="243.2" y="429.1" font-size="12" fill="#f5ede1">1</text>
+<text x="490.0" y="160.0" font-size="15" fill="#f5ede1">1　沙丘哨兵　4 只</text>
+<circle cx="91.4" cy="399.3" r="8.2" fill="#924e46"/>
+<text x="87.4" y="403.3" font-size="12" fill="#f5ede1">2</text>
+<text x="490.0" y="185.0" font-size="15" fill="#f5ede1">2　供水室　4 只</text>
+<circle cx="202.1" cy="237.4" r="8.2" fill="#924e46"/>
+<text x="198.1" y="241.4" font-size="12" fill="#f5ede1">3</text>
+<text x="490.0" y="210.0" font-size="15" fill="#f5ede1">3　陵台守卫　5 只</text>
+<circle cx="157.0" cy="403.0" r="8.2" fill="#924e46"/>
+<text x="153.0" y="407.0" font-size="12" fill="#f5ede1">4</text>
+<text x="490.0" y="235.0" font-size="15" fill="#f5ede1">4　西柱廊　10 只</text>
+<circle cx="312.8" cy="403.0" r="8.2" fill="#924e46"/>
+<text x="308.8" y="407.0" font-size="12" fill="#f5ede1">5</text>
+<text x="490.0" y="260.0" font-size="15" fill="#f5ede1">5　东运输坡　9 只</text>
+<text x="490.0" y="352.0" font-size="14" fill="#f5ede1">绿线为进场与救援路线，金虚线通往 绿洲星盘</text>
+<text x="490.0" y="381.0" font-size="14" fill="#f5ede1">金色实条为独立挡栏，橙箭头为主要来向</text>
+<text x="490.0" y="410.0" font-size="14" fill="#f5ede1">蓝点为弹箱，浅绿点为医疗补给</text>
+<text x="490.0" y="450.0" font-size="17" fill="#f5ede1">启标后各入口开始预警的时间</text>
+<text x="490.0" y="480.0" font-size="15" fill="#f5ede1">西柱廊　2 秒</text>
+<text x="490.0" y="505.0" font-size="15" fill="#f5ede1">东运输坡　11 秒</text>
+<text x="25.0" y="593.0" font-size="18" fill="#f5ede1">沿主路行进的高程（米）</text>
+<polyline points="40.0,705.0 873.0,705.0" stroke="#78878c" stroke-width="1" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<polyline points="42.0,704.0 230.5,704.0 378.9,704.0 700.5,674.2 863.0,667.8" stroke="#a4ddc0" stroke-width="3" stroke-dasharray="" fill="none" stroke-linejoin="round"/>
+<circle cx="42.0" cy="704.0" r="3.6" fill="#f5ede1"/>
+<text x="42.0" y="692.0" font-size="14" fill="#f5ede1">0.0 m</text>
+<circle cx="378.9" cy="704.0" r="3.6" fill="#f5ede1"/>
+<text x="378.9" y="692.0" font-size="14" fill="#f5ede1">0.0 m</text>
+<circle cx="863.0" cy="667.8" r="3.6" fill="#f5ede1"/>
+<text x="813.0" y="655.8" font-size="14" fill="#f5ede1">5.6 m</text>
+<text x="38.0" y="735.0" font-size="13" fill="#f5ede1">出生点</text>
+<text x="815.0" y="735.0" font-size="13" fill="#f5ede1">结算区</text>
+</g></svg>

@@ -1,4 +1,4 @@
-"""从首页用页面键鼠实走突围和护送。每次出发使用独立存档。"""
+"""从首页用页面键鼠实走突围、护送与坚守。每次出发使用独立存档。"""
 import argparse
 import json
 import os
@@ -34,12 +34,19 @@ ESCORT={
     'steam-service-rail': ('黄铜校准规',[4,6,4,7,7,5],'brass-factory','classic'),
 }
 
+DEFENSE={
+    'dune-signal-terrace': ('绿洲星盘',[4,4,5,10,9],'buried-tomb','classic'),
+    'waterfall-temple-defense': ('翡翠雨神像',[5,4,4,8,7,7],'jungle-temple','classic'),
+    'tower-observation-defense': ('铜版首日票',[4,4,5,7,7,8,7],'paris-tower','rescue'),
+}
+
 
 def play(browser,url,stage,out,collect):
     page,errors,before=open_campaign(browser,url,stage)
     escort=ESCORT.get(stage)
-    if escort:
-        reward,counts,*original=escort
+    defense=DEFENSE.get(stage)
+    if escort or defense:
+        reward,counts,*original=escort or defense
         direct=side=[]
     else:
         direct,side,reward,counts=CASES[stage]
@@ -47,6 +54,14 @@ def play(browser,url,stage,out,collect):
     page.evaluate('opts=>window.walk=playArmedRoute(opts)',{'via':side if collect else direct,'reward':reward if collect else None,'stage':stage})
     perf={}
     def capture(name):
+        if defense and name=='combat':
+            page.keyboard.press('Escape')
+            state="() => [run.game.story.defense.elapsed,...run.game.story.defense.lanes.map(l=>l.hp)]"
+            frozen=page.evaluate(state)
+            page.wait_for_timeout(130)
+            assert page.evaluate('run.game.phase')=='pause' and page.evaluate(state)==frozen
+            page.locator('#start').click()
+            page.wait_for_function("run.game.phase==='play'",polling=100)
         page.evaluate("""name=>{
             const g=run.game;
             for(let i=0;i<(name==='entry'?1:5);i++)g.step(.025);
@@ -82,7 +97,7 @@ def play(browser,url,stage,out,collect):
     report['performance']={**perf,'browser':browser.version}
     print(stage,json.dumps(report,ensure_ascii=False),flush=True)
     (out/(stage+'-play.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
-    assert report['phase']=='win' and (escort or report['live']>0) and report['shots']>0,report
+    assert report['phase']=='win' and (escort or defense or report['live']>0) and report['shots']>0,report
     if escort:assert len(report['docks'])==2 and report['escort']['escorted'] and report['escort']['escortHealth']>0,report
     assert perf.get('frames')==30 and (out/(stage+'-transition.png')).exists(),report
     assert (reward in report['loot'])==collect and [v['deployed'] for v in report['peaks'].values()]==counts,report
@@ -94,8 +109,12 @@ def play(browser,url,stage,out,collect):
     if len(saved['levels'])>len(before)+1:assert saved['levels'][len(before)+1]['unlocked']
     record=page.request.get(url+'/api/battles').json()['battles'][0]
     detail=page.request.get(url+'/api/report',params={'id':record['id']}).json()
-    assert record['level']==stage and record['won'] and detail['report']['actionName']==('护送' if escort else '突围'),detail
-    if not escort:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
+    assert record['level']==stage and record['won'] and detail['report']['actionName']==('坚守' if defense else '护送' if escort else '突围'),detail
+    if defense:
+        scores=detail['report']['scores']
+        assert scores['holdSeconds']=={'dune-signal-terrace':50,'waterfall-temple-defense':55,'tower-observation-defense':90}[stage]
+        if stage=='tower-observation-defense':assert scores['boarded']
+    if not escort and not defense:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
               'neon-northline-escape':('neon-undercity','timed')}[stage]
     page.locator('a.mission-action[href$="/'+original[0]+'/"]').click(force=True)
     page.wait_for_function("mode=>document.querySelector('#mission-mode')?.value===mode",arg=original[1],polling=100)
@@ -105,7 +124,7 @@ def play(browser,url,stage,out,collect):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
-    parser.add_argument('stage',choices=[*CASES,*ESCORT])
+    parser.add_argument('stage',choices=[*CASES,*ESCORT,*DEFENSE])
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--collect',action='store_true')
     args=parser.parse_args()

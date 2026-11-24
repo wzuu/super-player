@@ -8,6 +8,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   const annihilation = spec?.type === 'annihilation';
   const escape = spec?.type === 'escape';
   const convoy = spec?.type === 'convoy';
+  const defense = spec?.defense?.create({THREE,level,scene},spec.defense);
   let route;
   const groundDirections=createGroundDirections(THREE,scene,level);
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
@@ -148,7 +149,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (item.kind === 'boss') startBoss(g);
     if (openFight(item) && !item.escort) startGroup(g);
     if (item.kind === 'countdown' || item.kind === 'defend') startGroup(g);
-    if ((escape && item.kind === 'breakout') || item.kind==='convoy') startGroup(g);
+    if ((escape && item.kind === 'breakout') || ['convoy','signal','fortify'].includes(item.kind)) startGroup(g);
     if (item.alarm && g.encounter) {
       g.encounter.setAlarm(true);
       g.encounter.alarmUntil = g.time + 14;
@@ -264,12 +265,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (!spec.watchRooms) {
       for (const b of members(g)) if (b.sectionRoom===item.parts?.[0].name) b.roomAlert = true;
     }
-    if (item.kind === 'fight' || item.kind==='convoy' || (escape && item.kind === 'breakout')) {
+    if (['fight','convoy','signal','fortify'].includes(item.kind) || (escape && item.kind === 'breakout')) {
       director.droneDocked = item.kind==='fight' && Boolean(item.escort);
       group.record = {name:item.name, deployedAt:group.deployedAt, enteredAt:g.time, spawned:item.count};
       director.encounters.push(group.record);
     }
-    if (!annihilation && !escape && !convoy) {
+    if (!annihilation && !escape && !convoy && !defense) {
       const t = item.target;
       const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
       if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药',
@@ -300,6 +301,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       type = spec.type;
     if ((annihilation || escape) && mode === 'classic') return spec.route;
     if (convoy && mode === 'escort') return spec.route;
+    if (defense && mode === 'hold') return spec.route;
     if (type === 'rain' && mode === 'hold') return spec.route;
     if (type === 'tower' && mode === 'rescue') {
       const p = spec.platform,
@@ -322,6 +324,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     return [...ordinarySectors(), { kind: 'boss', label: '击败' + definition.text.bossName }];
   }
   const director = {
+    defense,
     managed: false,
     blocksExit: false,
     droneDocked: false,
@@ -341,6 +344,8 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     get cap() { return group?.tag.cap ?? CONFIG.beasts.capacity; },
     prepare(mode) {
       this.actionName = convoy && mode==='escort' ? '护送' : mode==='classic' ? spec?.classicAction : undefined;
+      if(defense && mode==='hold')this.actionName='坚守';
+      defense?.reset(mode==='hold');
       this.managed = this.supports(mode);
       const closed =
         this.managed &&
@@ -359,7 +364,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       this.encounters = [];
       stages = this.managed ? build(g).map((s) => ({
         ...s,
-        count: ['fight', 'hold', 'countdown', 'breakout', 'defend', 'rescue','convoy'].includes(s.kind)
+        count: ['fight', 'hold', 'countdown', 'breakout', 'defend', 'rescue','convoy','signal','fortify'].includes(s.kind)
           ? (s.count ?? CONFIG.beasts.encounterSize) : 0,
         target: s.at ? asPoint(s.at) : undefined,
       })) : [];
@@ -368,7 +373,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight'
         ? (s.passage ? 0 : s.parts?.find(part => part.name === s.requiredRoom)?.count ?? s.count)
         : Number(s.kind === 'boss')), 0)
-        || ((escape || convoy) && stages[0]?.count) || CONFIG.beasts.encounterSize;
+        || (defense && stages.reduce((sum,s)=>sum+s.count,0)) || ((escape || convoy) && stages[0]?.count) || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
       this.roomTreasureCount = stages.reduce((count, stage) => count + (stage.parts?.filter(part => part.reward).length ?? 0), 0);
@@ -379,6 +384,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       beacons.forEach((b) => (b.visible = false));
     },
     get target() {
+      if(item?.kind==='fortify')return defense.target;
       return item?.target;
     },
     isCurrentGuard(b) { return Boolean(group && b.storyWave === group.tag); },
@@ -434,6 +440,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const p = g.player,
         t = item.target;
       switch (item.kind) {
+        case 'signal':
+          startGroup(g);
+          break;
+        case 'fortify':
+          if(startGroup(g))defense.step(dt,g);
+          break;
         case 'convoy':
           startGroup(g);
           if(g.objective.convoy.finished && g.objective.escortHealth>0){
@@ -524,6 +536,15 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     },
     interact(g) {
       if (!item) return false;
+      if(item.kind==='signal'){
+        if(!defense.canInteract(g))return false;
+        // 信标启动时整批部署，随后竖起挡栏。玩家不能在点亮信标之前消灭救援波。
+        if(!group || !deploy(g,stages[index+1])){waitForSpace(g);return true;}
+        if(group.record)group.record.clearedAt=g.time;
+        advance(g);
+        return defense.interact(g);
+      }
+      if(item.kind==='fortify')return Boolean(group) && defense.interact(g);
       if(item.kind==='convoy'){
         const transport=g.objective.convoy,door=transport.dock?.door;
         if(!transport.resume(g))return false;
@@ -569,6 +590,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     },
     guide(g, text) {
       if (!item) return null;
+      if(item.kind==='signal' || item.kind==='fortify')return defense.guide(g,CONFIG.interactLabel);
       const t = item.target;
       let target = t,
         title = item.label,
@@ -663,6 +685,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       }
     },
     stepBeast(b, g, dt) {
+      if(item?.kind==='fortify' && this.isCurrentGuard(b) && defense.stepBeast(b,g,dt))return true;
       if(convoy && b.droneRaider && !b.roomAlert){
         const {x,y,z}=g.objective.drone.position;
         if(Math.hypot(b.x-x,b.z-z)<16 && clearLine(b,{x,y:y-1,z})){

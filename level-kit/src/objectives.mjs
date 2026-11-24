@@ -121,6 +121,7 @@ export function createObjective(stage, { THREE, scene }, config, plan) {
       if (mode==='hunt') return {...deep,huntWon:g.field?.huntWon??false, huntSeconds:g.field?.huntTime ?? Math.floor(g.time)};
       if (mode === 'endless') return { wave };
       if (mode === 'hold') {
+        if(g.story?.defense)return {...deep,...g.story.defense.result()};
         const demolition=typeof g.story?.detonated==='boolean' ? {detonated:g.story.detonated} : {};
         return { ...deep,...demolition,holdSeconds: Math.floor(hold) };
       }
@@ -130,6 +131,7 @@ export function createObjective(stage, { THREE, scene }, config, plan) {
       return { ...deep,core: g.core, bossDead: g.bossDead };
     },
     label(g) {
+      if(mode==='hold' && g.story?.defense)return g.story.defense.guide(g,config.interactLabel).title;
       if (mode === 'hold') return '坚守 ' + Math.floor(hold) + ' / ' + missionRules.holdSeconds + ' 秒';
       if (mode === 'timed')
         return deadline === null

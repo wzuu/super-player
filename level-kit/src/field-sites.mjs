@@ -130,6 +130,15 @@ const sites = {
   'steam-service-rail': [
     [-9,22],[7,-45],'工艺备料间','拉下轨道检验柄','黄铜车号牌','牌面仍留着交车时的手工冲印。',
   ],
+  'dune-signal-terrace': [
+    [26,33],[-17,-41],'绿洲储水窖','接通水泵','陶印水契','陶印留下了当年取水队的记号。',
+  ],
+  'waterfall-temple-defense': [
+    [33,-37],[-20,-52],'祭司藏书庭','转动引水木轮','羽纹水符','翡翠边缘记录着枯水年的刻度。',
+  ],
+  'tower-observation-defense': [
+    [-37,-8],[38,-15],'观景寄存室','启动升降绞盘','观景纪念券','穿孔边缘仍留着蓝色的检票印。',
+  ],
 };
 export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
@@ -159,6 +168,9 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     ['潜水气瓶','回收水管','装具吊篮'],
     ['钻探油桶','采暖主管','备件吊箱'],
     ['机油筒','分流蒸汽管','校准吊架'],
+    ['灯油坛','引水铜管','柱廊石楣'],
+    ['祭火油瓮','水磨压管','悬挂石梁'],
+    ['备用油箱','空压机管','塔架配重'],
   ];
   const value = 450 + stage * 25;
   const treasure = [{ name: '宝库·' + name, value }];

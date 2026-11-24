@@ -56,7 +56,8 @@ if __name__ == "__main__":
         # 开门部署的三关由 lab_live_browser 和 annihilation_browser 从首页走完整局。
         if item["id"] not in ("underground-lab","moonlit-stained-glass-keep","orbital-brood-ring",
                               "storm-city-overpass","lantern-shrine-escape","neon-northline-escape",
-                              "sunken-rooftop-recovery","frost-sample-escort","steam-service-rail")
+                              "sunken-rooftop-recovery","frost-sample-escort","steam-service-rail",
+                              "dune-signal-terrace","waterfall-temple-defense","tower-observation-defense")
     ]
     with sync_playwright() as pw, pw.chromium.launch(channel=os.getenv("GAME_TEST_BROWSER", "chrome")) as browser:
         for stage in stages:

@@ -35,6 +35,7 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
     };
     if (story?.classicRule) rules.classic = story.classicRule;
     if (story?.convoy) rules.escort = story.convoy.rule;
+    if (story?.defense) rules.hold = story.defense.rule;
     if (stage === 3)
       rules.hold =
         '在钟楼坚守 ' +
