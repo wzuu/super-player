@@ -91,7 +91,7 @@ SIGHTS = """stage => {
   // 俯视脚下，近敌横穿准星；地板仍是眼部射线的有效命中面。
   // 实验室旧取样点现在是培养室设备。改从安检走廊中央检查无遮挡地面。
   if(stage==='underground-lab'){p.x=0;p.z=44;}
-  p.thirdPerson=true; p.y=g.level.base(p.x,p.z)+5; p.look.rotation.x=-Math.PI/4;
+  p.thirdPerson=true; p.y=g.level.base(p.x,p.z)+(stage==='underground-lab'?1:5); p.look.rotation.x=-Math.PI/4;
   target.active=false; m.refreshHash(); p.positionCamera(0);
   const d=camera.getWorldDirection(camera.position.clone()), eye=camera.position.clone();
   const distance=(g.level.base(p.x,p.z)-eye.y)/d.y;
