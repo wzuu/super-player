@@ -101,6 +101,7 @@ jobs:
         if: matrix.suites == 'campaign_routes_browser'
         run: |
           python -u level-kit/tests/deployment_paths.py --stages underground-lab long-door rain-city
+          python -u level-kit/tests/deployment_material.py
           python -u level-kit/tests/campaign_routes_browser.py --leave-rewards shanhai-secret-realm rain-city drowned-city paris-tower
 
   deploy:

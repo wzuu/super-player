@@ -47,7 +47,7 @@ PAD = """async () => {
 }"""
 
 
-SIGHTS = """() => {
+SIGHTS = """stage => {
   const {game:g, camera, config} = run, p=g.player, w=g.weapon, m=g.beasts;
   Object.assign(p,{x:-20,y:45,z:0,thirdPerson:true,speedMix:0});
   p.look.rotation.set(0,0,0,'YXZ');
@@ -89,11 +89,14 @@ SIGHTS = """() => {
   p.thirdPerson=false; view(-target.z1);
   check(!w.aimScreen && g.ui.nodes.cross.getBoundingClientRect().x===innerWidth/2,'第一人称准星未归中');
   // 俯视脚下，近敌横穿准星；地板仍是眼部射线的有效命中面。
+  // 实验室旧取样点现在是培养室设备。改从安检走廊中央检查无遮挡地面。
+  if(stage==='underground-lab'){p.x=0;p.z=44;}
   p.thirdPerson=true; p.y=g.level.base(p.x,p.z)+5; p.look.rotation.x=-Math.PI/4;
   target.active=false; m.refreshHash(); p.positionCamera(0);
   const d=camera.getWorldDirection(camera.position.clone()), eye=camera.position.clone();
   const distance=(g.level.base(p.x,p.z)-eye.y)/d.y;
   const ground=(g.level.base(eye.x+d.x*distance,eye.z+d.z*distance)-eye.y)/d.y;
+  check(!g.level.hash.ray(eye,d,ground-.01),'俯视地板样本被关卡实体遮挡');
   view(ground);
   target.active=true; target.x=p.x; target.z=p.z-1.7; target.y=eye.y-2.5; m.refreshHash();
   const close=(target.z1-eye.z)/d.z;
@@ -150,7 +153,7 @@ def check_aiming(browser):
               return setLock(true);
             }""")
             page.evaluate(PAD)
-            result = page.evaluate(SIGHTS)
+            result = page.evaluate(SIGHTS, stage)
             assert (result["weapon"]=="shotgun-pump") == shotgun, result
             print("PASS 眼部弹道、肩后投影、手柄与重锁",stage,query,result,flush=True)
         finally:

@@ -1,6 +1,7 @@
 // 首领的环与扇都从锁定的脚下位置沿地面展开。窄门、落差和上下层不传递伤害。
 const slices = 32, step = .5, halfArc = Math.PI * .34;
 const direction = {x:0,y:0,z:0}, origin = {x:0,y:0,z:0};
+const footEdges = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
 
 function nextFloor(level, x, z, y, dx, dz, length) {
   const nx=x+dx*length, nz=z+dz*length;
@@ -30,12 +31,25 @@ export function startGroundAttack(b, p, level, kind) {
   return a;
 }
 
-function onAttackFloor(level,a,x,y,z,distance) {
+function onAttackFloor(level,a,x,y,z,distance,playerRadius) {
   const dx=(x-a.x)/Math.max(.001,distance), dz=(z-a.z)/Math.max(.001,distance);
   const floor=groundAt(level,a,dx,dz,distance);
   // 栈桥下方和断崖另一侧可能具有相同的平面距离，却不在这一条地面上。
-  const playerFloor=level.surface(x,z,y+.08);
-  return Number.isFinite(floor) && Math.abs(floor-playerFloor)<.43 ? floor : NaN;
+  // 玩家站在平台边沿时，脚边仍可承重；指引标记只代表一个地面点。
+  const support=playerRadius===undefined ? level.surface(x,z,y+.08) :
+    level.playerFloor(x,z,y+.052,playerRadius,y+.025);
+  if (Math.abs(floor-support)<.43) return floor;
+  if (playerRadius===undefined || Math.abs(level.surface(x,z,y+.08)-support)<.43) return NaN;
+  // 重心已经探出桥面时，同层招式仍可沿桥面触及承重的脚边。
+  const edge=playerRadius+.021;
+  for (const [ex,ez] of footEdges) {
+    const px=x+ex*edge, pz=z+ez*edge;
+    if (Math.abs(level.surface(px,pz,y+.08)-support)>=.43) continue;
+    const vx=px-a.x, vz=pz-a.z, length=Math.hypot(vx,vz);
+    const foot=groundAt(level,a,vx/Math.max(.001,length),vz/Math.max(.001,length),length);
+    if (Math.abs(foot-support)<.43) return foot;
+  }
+  return NaN;
 }
 
 function inSweep(a,dx,dz,distance,margin) {
@@ -69,7 +83,7 @@ export function strikeGround(b, g, p, level) {
   if (a.kind==='slam') {
     a.live=true; a.started=g.time; a.previousGap=distance;
   } else if (inSweep(a,dx,dz,distance,p.radius)) {
-    const floor=onAttackFloor(level,a,p.x,p.y,p.z,distance);
+    const floor=onAttackFloor(level,a,p.x,p.y,p.z,distance,p.radius);
     if (!Number.isFinite(floor) || p.y-floor>b.height+1) return;
     const from=g.beasts.air.set(a.x,a.y+b.height*.5,a.z);
     const ray=g.beasts.line.set(dx,p.y+.8-from.y,dz), length=ray.length();
@@ -84,7 +98,7 @@ export function stepGroundWave(b, g, p, level) {
   const distance=Math.hypot(p.x-a.x,p.z-a.z), gap=distance-radius;
   const band=waveHalfWidth+p.radius;
   if (!a.hit && Math.min(a.previousGap,gap)<=band && Math.max(a.previousGap,gap)>=-band && distance<=a.reach+p.radius) {
-    const floor=onAttackFloor(level,a,p.x,p.y,p.z,distance);
+    const floor=onAttackFloor(level,a,p.x,p.y,p.z,distance,p.radius);
     if (p.y-floor<.38) { p.hurt(14+4*f.stage,g,undefined,b); a.hit=true; }
   }
   a.previousGap=gap; a.radius=radius;

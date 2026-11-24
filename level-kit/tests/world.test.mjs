@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createGrid, createWorld, SpatialHash } from '../src/world.mjs';
+import { startGroundAttack, strikeGround, stepGroundWave } from '../src/boss-ground.mjs';
 import { createMissionNavigation } from '../src/mission-navigation.mjs';
 import { createRecovery } from '../src/recovery.mjs';
 import { makeConfig } from '../src/config.mjs';
@@ -91,6 +92,41 @@ const CONFIG = makeConfig({ map: { cell: 2, navCell: 2 } });
 const GRID = createGrid(Array(7).fill('.......'), 2);
 const { Level, Navigation } = createWorld({ CONFIG, GRID, V3: Vector, definition: {},
   clamp: (v, min, max) => Math.min(max, Math.max(min, v)) });
+
+test('下层首领挥砍不能打上层平台边沿，同层起跳仍中挥砍，落地时仍会遇到冲击波', () => {
+  const level = new Level();
+  level.box(1.5, 4.8, 2, 4, 2.8, 3, true);
+  const boss = {x:.3, y:0, z:0, height:CONFIG.beasts.types[3].height, fight:{stage:0}};
+  const hits = [];
+  const player = {x:.3, y:3, z:3.8, radius:CONFIG.player.radius, hurt:amount => hits.push(amount)};
+  const game = {time:0, beasts:{air:new Vector(), line:new Vector()}};
+  assert.equal(level.surface(player.x, player.z, 3.08), 0);
+  assert.equal(level.playerFloor(player.x, player.z, 3.052, player.radius, 3.025), 3);
+  startGroundAttack(boss, player, level, 'sweep');
+  strikeGround(boss, game, player, level);
+  assert.deepEqual(hits, []);
+
+  const upperBoss = {...boss, x:1.5, y:3, z:5.8, fight:{stage:0}};
+  startGroundAttack(upperBoss, player, level, 'sweep');
+  strikeGround(upperBoss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  hits.length = 0;
+
+  // 同一投影位置，在下层起跳，身高仍在扇区范围内。
+  player.y = .9;
+  strikeGround(boss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  startGroundAttack(boss, player, level, 'slam');
+  strikeGround(boss, game, player, level);
+  game.time = 3.4 / 11;
+  stepGroundWave(boss, game, player, level);
+  assert.deepEqual(hits, [15]);
+  player.y = 0;
+  game.time = 3.8 / 11;
+  stepGroundWave(boss, game, player, level);
+  stepGroundWave(boss, game, player, level);
+  assert.deepEqual(hits, [15, 14]);
+});
 
 test('跳台斜角按水平足迹支撑，未标记能攀爬的墙只承接真实从上方着地的角色', () => {
   const level=new Level(), r=CONFIG.player.radius;
