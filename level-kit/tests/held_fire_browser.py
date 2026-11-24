@@ -16,7 +16,7 @@ def check_held_fire(browser):
             page.route(re.compile(r'/index\.html'),expose)
             page.goto((ROOT/stage/'index.html').as_uri()+query)
             page.locator('#start').click()
-            page.wait_for_function("!!document.pointerLockElement && run.game.phase==='play'")
+            page.wait_for_function("!!document.pointerLockElement && run.game.phase==='play'",polling=100)
             page.evaluate("""() => {
               const g=run.game,w=g.weapon;
               g.player.hurtDelay=Infinity;
@@ -83,10 +83,14 @@ def check_held_fire(browser):
             page.mouse.down()
             assert page.evaluate('frames(30).shots')>s['shots']
             page.evaluate('document.exitPointerLock()')
-            page.wait_for_function("run.game.phase==='pause' && !document.pointerLockElement")
+            page.wait_for_function("run.game.phase==='pause' && !document.pointerLockElement",polling=100)
             page.mouse.up()
             page.get_by_role('button',name='继续游戏').click()
-            page.wait_for_function("run.game.phase==='play' && !!document.pointerLockElement")
+            try:
+                page.wait_for_function("run.game.phase==='play' && !!document.pointerLockElement",polling=100,timeout=6000)
+            except Exception:
+                print('恢复时浏览器状态',page.evaluate('''() => ({phase:run.game.phase,locked:!!document.pointerLockElement,focused:document.hasFocus(),status:document.querySelector('#menu-status').textContent,events:fireEvents.buttons})'''),flush=True)
+                raise
             stopped=page.evaluate('frames(0).shots')
             assert page.evaluate('frames(60).shots')==stopped
             page.mouse.down()
