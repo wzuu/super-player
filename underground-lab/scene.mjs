@@ -67,16 +67,17 @@ for(const [n,c,title,lname,rname,mix] of [
     decor.push([sign*17.3,c+sign*2,2.5,3,1.4,n]);
   }
   // 两道错开的实体隔板让中央通道折向相反两侧，并留下回退空间。
-  horizontal(firstSide<0 ? -7.7 : -1.2, firstSide<0 ? 1.2 : 7.7,c-1);
-  horizontal(firstSide<0 ? -1.2 : -7.7, firstSide<0 ? 7.7 : 1.2,c-10);
-  for(const [x,dz] of [[firstSide*5.2,-8],[-firstSide*5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
+  horizontal(firstSide<0 ? -7.7 : -1.2, firstSide<0 ? 1.2 : 7.7,c+5);
+  horizontal(firstSide<0 ? -1.2 : -7.7, firstSide<0 ? 7.7 : 1.2,c-1);
+  horizontal(firstSide<0 ? -7.7 : -1.2, firstSide<0 ? 1.2 : 7.7,c-10);
+  for(const [x,dz] of [[firstSide*5.2,-8],[firstSide*5.1,8]])decor.push([x,c+dz,1.8,3,1.1,n]);
   const requiredRoom=n===1 ? rname : lname;
   // 门口群驻守在远端，入口巡逻与两翼仍登记在同一场遭遇中。
   const parts=[
-    {name:title+'门卫',count:35,bounds:[-7.15,z0+.8,7.15,c+1.5],anchor:[0,c-9]},
-    {name:lname,count:31,bounds:[west+.5,z0+3.7,-13.1,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
-    {name:rname,count:32,bounds:[13.1,z0+3.7,east-.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]},
-    {name:title+'巡逻岗',count:2,bounds:[-6.8,c-4,6.8,c+5],anchor:[4,c+2],types:[0]}
+    {name:title+'门卫',count:23,bounds:[-7.15,z0+.8,7.15,c-1.8],anchor:[0,c-9]},
+    {name:lname,count:firstSide<0 ? 43 : 32,bounds:[west+.5,z0+3.7,-13.1,z1-3.7],anchor:[-19,c+(firstSide<0 ? 4 : -6)]},
+    {name:rname,count:firstSide>0 ? 43 : 32,bounds:[13.1,z0+3.7,east-.5,z1-3.7],anchor:[19,c+(firstSide>0 ? 4 : -6)]},
+    {name:title+'巡逻岗',count:2,bounds:[-6.8,c+5.8,6.8,c+9.5],anchor:[2,c+7],types:[0]}
   ];
   for (const part of parts.slice(1,3)) {
     part.reward = {name: part.name + '查获记录', value: 120, at: [Math.sign(part.anchor[0])*15.35,z0+5.7]};
@@ -159,7 +160,7 @@ const MAP_GRID=Array.from({length:88},(_,i)=>{
 });
 const CERAMIC=0x8faabf,METAL=0x334757;
 const REACTOR={x:0,z:-62.5};
-const LANDMARKS={spawn:[0,0,63],boss:[4,-reactorDepth,-60],gate:[0,.16-reactorDepth,-82.8]};
+const LANDMARKS={spawn:[0,0,63],boss:[8,-reactorDepth,-63],gate:[0,.16-reactorDepth,-82.8]};
 const CABINETS=[[-17.3,-30],[-20.2,-19.5],[17.3,-26],[20.2,-35.7],[38.5,-36.7]];
 const TANKS=[[-17.3,2,false],[-20.4,10,true],[17.3,6,false],[20,-2,false],[38.5,-17,true]];
 const CRATES=[[-17.3,34,3.4,2.2],[-20.3,41.5,2.8,1.9],[17.3,38,2.8,2.2],[19.8,29,3.1,1.8],[33.6,-36.5,2.7,2]];

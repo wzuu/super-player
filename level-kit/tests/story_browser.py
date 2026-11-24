@@ -244,7 +244,7 @@ def verify(browser,ids):
           if(defaultMode==='rescue' && (g.phase!=='win'||g.story.elapsed!==90||climbs.size<2||!hitClimber))throw Error('高塔救援或登台射线失败 '+[g.phase,g.story.elapsed,climbs.size,hitClimber]);
           if(defaultMode==='escort' && (!escortGuarded||!escortDamaged))throw Error('护送未能拦截或承伤');
           if(defaultMode==='classic' && !g.core && g.phase!=='win')throw Error('缺少核心');
-          const mandatory=location.pathname.includes('/underground-lab/') && defaultMode==='classic' ? 31+32 : g.story.encounters.reduce((n,e)=>n+e.spawned,0);
+          const mandatory=location.pathname.includes('/underground-lab/') && defaultMode==='classic' ? 43+43 : g.story.encounters.reduce((n,e)=>n+e.spawned,0);
           if(g.stageKillTarget!==mandatory+Number(Boolean(g.bossDead)))throw Error('限时或撤离增援被计入必清评分');
           if(!location.pathname.includes('/underground-lab/')){
             const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='战区入口弹药');
@@ -379,7 +379,7 @@ def verify(browser,ids):
             assert len(layout['approaches']) == 9, layout
             assert len(layout['reports']) == 9 and len(layout['rooms']) == 6, layout
             for sample in layout['reports']:
-                assert sorted(sample['homes'].values()) == [2,31,32,35] and sample['gap'] >= 6, sample
+                assert sorted(sample['homes'].values()) == [2,23,32,43] and sample['gap'] >= 6, sample
                 assert sample['closedBefore'] and not sample['blocked'] and not sample['overlap'], sample
             print('PASS laboratory formation, approach and room rewards',layout,flush=True)
             print('PASS laboratory watch, hearing, pursuit and closed gate', page.evaluate('() => verifyLabWatch()'), flush=True)
