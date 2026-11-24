@@ -57,7 +57,7 @@ function markers(symbol) {
 const [lake] = markers('L');
 const [lab] = markers('E');
 const [cave] = markers('N');
-const LAB = { width:19.2, depth:23.2, roof:3.18 };
+const LAB = { width:21.6, depth:23.2, roof:3.18 };
 const CAVE = { x:cave[0], halfWidth:16.9, back:cave[1]-7.2, front:cave[1]+7.0, approach:cave[1]+13.9, rampX:12.2, rampWidth:3.7, depth:2.85 };
 const campfires = markers('F');
 const LANDMARKS = {
@@ -816,7 +816,7 @@ export default {
     ]},
     {name:'研究楼冰湖外廊',at:[12,5],entries:[[12,0]],parts:[
       {name:'研究楼冰湖外廊',count:92,bounds:[-6,-21,17.8,12],anchor:[12,0]},
-      {name:'研究楼冷藏室',count:8,bounds:[30.5,-15,36.9,-6.1],anchor:[34,-10],types:[0],reward:{name:'封存冰芯',value:120,at:[31.2,-11.8]}}
+      {name:'研究楼冷藏室',count:8,bounds:[30.5,-15,38.1,-6.1],anchor:[34,-10],types:[0],reward:{name:'封存冰芯',value:120,at:[31.2,-11.8]}}
     ]},
   ]},
   weaponSkin: 'polar-station',

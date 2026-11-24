@@ -300,6 +300,28 @@ def verify(browser,ids):
         assert [g['spawned'] for g in groups] == (expected['encounters'] if expected else [100]*len(groups)), (stage, groups)
         assert not result['blocked'], (stage,result['blocked'])
         assert not result['unreachable'], (stage,result['unreachable'])
+        if stage=='polar-station':
+            page.evaluate("""()=>{
+              const g=run.game,m=g.beasts,plan=m.planGroup,roll=m.traits.roll;
+              // 最后一只变大曾使冷藏室无法部署。在不改动出生校验的情况下穷举八个守卫的体型。
+              let mask=0;
+              m.planGroup=function(entries,options){
+                let slot=0,coldSlot=0;
+                m.traits.roll=()=>{
+                  const entry=entries[slot++];
+                  const cold=entry.anchor?.x===34 && entry.anchor.z===-10;
+                  return {role:null,affixes:cold && (mask & (1<<coldSlot++)) ? ['thorn'] : null};
+                };
+                try{return plan.call(m,entries,options);}finally{m.traits.roll=roll;}
+              };
+              try{
+                for(mask=0;mask<256;mask++){
+                  g.reset();
+                  if(m.live!==200 || m.pool.filter(b=>b.active && b.sectionRoom==='研究楼冷藏室').length!==8)
+                    throw Error('冷藏室缺少完整驻敌，体型组合 '+mask);
+                }
+              }finally{m.planGroup=plan;}
+            }""")
         if stage in ('underground-lab','rain-city','paris-tower'):
             for width,height in [(1440,900),(640,360)]:
                 page.set_viewport_size({'width':width,'height':height})

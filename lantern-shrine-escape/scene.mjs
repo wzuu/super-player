@@ -121,7 +121,7 @@ const plan={spots:{spawn:[-24,55],gate:exit,bossAnchor:[15,-53],bossSpawn:[19,-5
 export default {pageTitle:'灯巷神社撤离',weaponSkin:'lantern-shrine-escape',grid:floorPlan(areas,42,72),story,
   config:{map:{cell:2,navCell:1,fog:.009},player:{safeTime:1.4},beasts:{sight:19,memory:5}},
   buildBeastModel:yokaiModel,buildRageModel:h=>yokaiModel(3,h,true),createEncounter,buildMap:ctx=>buildFacility(ctx,plan),
-  terrain:{ground},background:0x43405b,fog:0x685767,portal:{shield:false},manualLoot:true,
+  terrain:{ground},background:0x43405b,fog:0x685767,portal:{shield:false,visible:false},manualLoot:true,
   ammo:[[-19,53],[-13,40],[4,29],[-14,16],[25,7],[9,-20],[-22,-41],[14,-55]],
   loot:[[-27,51,'灯节木札',80],[-15,20,'织坊锦样',250],[27,15,'药行香囊',180],[7,7,'夜巡手绘图',110],[-22,-38,'石狐狸护符',135],[11,-52,'神社风铃',140]],
   area:(x,z)=>areas.find(({bounds:[a,b,c,d]})=>x>=a&&x<c&&z>=b&&z<d)?.name??'神社山道',

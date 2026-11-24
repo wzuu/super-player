@@ -1,6 +1,6 @@
 // 驱动浏览器的键盘、鼠标事件。瞄准和移动均经正式输入监听器，生命、弹药与门态只读。
 function playAnnihilation({rewardName,roomName,roomAt,takeReward}) {
-  const {game:g,config,camera}=run, p=g.player, story=g.story;
+  const {game:g,camera}=run, p=g.player, story=g.story;
   const {ray,distance,tap,buttons,aim,see}=playInputs(run),captured=new Set();
   const report={groups:[],shots:0,peaks:{},log:[]};
   let lastStage=-1,extrasDone=false,latest=null;

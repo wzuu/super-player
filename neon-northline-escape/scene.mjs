@@ -126,7 +126,7 @@ export default{pageTitle:'霓城北线撤离',weaponSkin:'neon-northline-escape'
     if(t.y===6 && t.z===-42 && t.x===25 && Math.abs(p.z+42)>1.1)return {x:p.x,y:p.y,z:-42};
     return t;
   },
-  terrain:{ground},background:0x293a50,fog:0x425164,portal:{shield:false},manualLoot:true,
+  terrain:{ground},background:0x293a50,fog:0x425164,portal:{shield:false,visible:false},manualLoot:true,
   ammo:[[-5,47],[8,35],[-25,20],[28,24],[11,3],[-22,-10],[-22,-30]],
   loot:[[-5,58,'市场识别片',75],[-24,15,'义肢校准盒',245],[27,12,'雨棚电池',135],[0,2,'北线行车图',110],[-24,-23,'检修号牌',120],[25,-42,'接应电签',170,6]],
   area:(x,z)=>areas.find(({bounds:[a,b,c,d]})=>x>=a&&x<c&&z>=b&&z<d)?.name??'北线立交',
