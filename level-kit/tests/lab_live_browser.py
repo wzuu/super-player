@@ -87,7 +87,7 @@ def verify(browser, url, static=False, rooms=False):
             saved=page.request.get(root+'api/progress').json()
             names={item['name'] for item in saved['loot']}
             assert saved['battles'][0]['won'] and saved['levels'][0]['cleared'], saved
-            assert '冷藏疫株研究档案' in names and '秘藏·培养罐原始编号' in names and sum('查获记录' in n for n in names)==6, (result,names)
+            assert '冷藏档案室样本箱' in names and '秘藏·培养罐原始编号' in names and sum('查获记录' in n for n in names)==6, (result,names)
             print('PASS SQLite 逐室战利品',sorted(names),result['optional'],flush=True)
             assert not errors, errors
             return
@@ -96,7 +96,7 @@ def verify(browser, url, static=False, rooms=False):
         assert result["phase"] == "win" and not result["optional"] and not result["sideRooms"], result
         assert result["missed"] and result["gunBreaks"] and result["pulseBreaks"], result
         assert result["spawned"] == [100,100,100] and result["enterAmmo"] and sum(result["afterBoss"])>0, result
-        assert result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
+        assert not result["core"] and result["boxes"] and all(b["fixed"] for b in result["boxes"]), result
         assert sum(result["startingAmmo"]) + sum(b["taken"] for b in result["boxes"]) == result["shots"] + sum(result["ammo"]), result
         if static:
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')", polling=100)

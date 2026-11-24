@@ -23,7 +23,7 @@ function laboratoryPressure(path='cover') {
       bearing:Math.round(bearing*180/Math.PI),view:Math.round(Math.atan2(Math.sin(view),Math.cos(view))*180/Math.PI)};
   }
   function first(o,k,b){if(!o[k])o[k]=event(b);}
-  function sideOf(b) {return stage?.sides[b.sectionRoom];}
+  function sideOf(b) {return stage?.sides[b.sectionRoom?.replace(/(门卫|巡逻岗)$/, '')];}
   function trial(b) {
     const room=sideOf(b);
     if(!room)return null;
@@ -70,7 +70,7 @@ function laboratoryPressure(path='cover') {
     }
     return result;
   };
-  const names=[['安检走廊','器材库','防疫站'],['培养走廊','培养室','样本室'],['服务器走廊','供电间','机柜室']];
+  const names=[['安检折廊','安保室','防疫站'],['弯折运输廊','培养室','配电房'],['检修运输廊','梯井值班室','机柜室']];
   const part=['front','left','right'];
   const closeDistances=[2,2,2];
   function observe(){

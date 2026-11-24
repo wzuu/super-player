@@ -58,7 +58,7 @@ class QuietHandler(SimpleHTTPRequestHandler):
 def check(report):
     result=report['run']
     assert result['phase']=='win' and result['spawned']==[100]*3 and report.get('persisted'),result
-    assert result['core'] and not result['optional'] and not result['sideRooms']
+    assert not result['core'] and not result['optional'] and not result['sideRooms']
     assert all(report['events'].get(e,0)>0 for e in ['mousemove','mousedown','keydown','keyup'])
     measurements=report['measurements']
     assert len(measurements)==3

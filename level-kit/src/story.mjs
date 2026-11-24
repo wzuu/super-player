@@ -48,24 +48,30 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     scene.add(demolition);
     demolition.visible = false;
   }
-  const consoles = (spec?.terminals ?? []).map((a) => {
+  const consoles = (spec?.terminals ?? []).map((station) => {
     const group = new THREE.Group(),
-      p = point(a);
+      p = point(Array.isArray(station) ? station : station.at);
     const base = new THREE.Mesh(
       new THREE.BoxGeometry(0.78, 0.82, 0.45),
       new THREE.MeshLambertMaterial({ color: 0x394e62 }),
     );
-    const card = new THREE.Mesh(
-      new THREE.BoxGeometry(0.45, 0.08, 0.29),
-      new THREE.MeshBasicMaterial({ color: 0x95ffe1 }),
+    const breaker = station.kind==='breaker';
+    const control = new THREE.Mesh(
+      breaker ? new THREE.BoxGeometry(.16,.52,.16) : new THREE.BoxGeometry(.45,.08,.29),
+      new THREE.MeshBasicMaterial({color:breaker ? 0xffa449 : station.kind==='card' ? 0xffdb76 : 0x95ffe1}),
     );
-    base.position.y = 0.41;
-    card.position.y = 0.9;
-    group.add(base, card);
+    base.position.y = .41;
+    control.position.y = breaker ? 1.02 : .9;
+    group.add(base,control);
     group.position.copy(p);
     scene.add(group);
     group.visible = false;
-    return { group, card };
+    const activate = used => {
+      if (breaker) control.rotation.x = used ? -.7 : .7;
+      control.visible = breaker || !used;
+    };
+    activate(false);
+    return {group,activate};
   });
   for (const wall of spec?.walls ?? []) {
     const [id, x, z, width, depth, height, glass] = wall;
@@ -312,6 +318,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     supports(mode) {
       return Boolean(spec && ['classic', 'timed', 'hold', 'escort', 'rescue'].includes(mode));
     },
+    bossDefeated(g) {
+      if (!this.managed || item?.kind !== 'boss' || !item.victory) return false;
+      g.journal?.complete(g,item.label);
+      g.finish(true,item.victory);
+      return true;
+    },
     get cap() { return group?.tag.cap ?? CONFIG.beasts.capacity; },
     prepare(mode) {
       this.managed = this.supports(mode);
@@ -319,9 +331,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
         this.managed &&
         ((spec.type === 'lab' && mode === 'classic') || (spec.type === 'rain' && mode === 'hold'));
       for (const id of panels.keys()) close(id, closed);
-      for (const { group, card } of consoles) {
+      for (const { group, activate } of consoles) {
         group.visible = closed;
-        card.visible = true;
+        activate(false);
       }
     },
     reset(g) {
@@ -338,7 +350,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       })) : [];
       this.detonated = stages.some((stage) => stage.kind === 'countdown') ? false : null;
       // 只以必清场次估算击杀评分，倒计时和突围的残敌不计入撤离门槛。
-      g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight' ? s.count : Number(s.kind === 'boss')), 0)
+      g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight'
+        ? (s.passage ? 0 : s.parts?.find(part => part.name === s.requiredRoom)?.count ?? s.count)
+        : Number(s.kind === 'boss')), 0)
         || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
@@ -414,9 +428,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
             startGroup(g);
           }
           if (!group) break;
-          const living = members(g);
-          if (!living.length && (!group.rooms || (group.rooms.every(room => room.cleared) &&
-              !g.beasts.traits.splits.some(child => child.storyWave === group.tag)))) {
+          const roomCleared = item.passage ? near(p,t,2.8) : item.requiredRoom
+            ? group.rooms.find(room => room.part.name === item.requiredRoom)?.cleared
+            : !members(g).length && (!group.rooms || (group.rooms.every(room => room.cleared) &&
+                !g.beasts.traits.splits.some(child => child.storyWave === group.tag)));
+          if (roomCleared) {
             group.record.clearedAt = g.time;
             this.droneDocked = false;
             advance(g);
@@ -497,12 +513,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           enter(g,group);
           g.sound.tone(440,720,.23,.16,'sine');
           for(const station of consoles)
-            if(separation(station.group.position,t)<1.1)station.card.visible=false;
+            if(separation(station.group.position,t)<1.1)station.activate(true);
           return true;
         }
         g.sound.tone(440, 720, 0.23, 0.16, 'sine');
         for (const station of consoles)
-          if (separation(station.group.position, t) < 1.1) station.card.visible = false;
+          if (separation(station.group.position, t) < 1.1) station.activate(true);
         if (item.door) close(item.door, false);
         if (item.kind === 'rescue') {
           this.stage = 'boarded';
@@ -550,8 +566,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           break;
         case 'fight':
           if (!group) title = item.lead ?? '前往' + item.name;
+          else if (item.passage) detail='配电已恢复 · 抵达梯口即可开门';
           else {
-            const living = members(g);
+            const living = members(g).filter(beast => !item.requiredRoom || beast.sectionRoom === item.requiredRoom);
             target =
               living.reduce(
                 (n, b) => (!n || separation(g.player, b) < separation(g.player, n) ? b : n),

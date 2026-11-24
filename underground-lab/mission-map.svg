@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" aria-labelledby="title desc" viewBox="0 0 850 835" role="img">
+  <title id="title">地下实验室 · 歼灭行动</title>
+  <desc id="desc">以北向上的平面图标出三条折廊、两间任务房、冷藏档案室、折返检修梯和反应堆首领。剖面图沿行走方向展开。</desc>
+  <rect width="850" height="835" fill="#f7f9f6" />
+  <text x="30" y="42" fill="#23383d" font-family="system-ui, sans-serif" font-size="26">地下实验室 · 歼灭行动</text>
+  <text x="30" y="73" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">平面图　北 ↑　　坐标单位为米，剖面沿检修梯行进方向展开。</text>
+  <g transform="translate(163 426) scale(3.6)">
+    <rect x="-23" y="-84" width="46" height="151" fill="#d6e2df" stroke="#354e55" stroke-width="0.33" />
+    <rect x="23" y="-42" width="28" height="30" fill="#eedbb6" stroke="#354e55" stroke-width="0.33" />
+    <rect x="-32" y="23" width="24.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <rect x="7.7" y="23" width="19.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <path d="M -7.7 34.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M 7.7 24.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M-7.7 35 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-1.2 26 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-23 52 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M3.4 52 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M0 50 V41 L4.4 37 V33 L-4.4 29 V25 L0 21" fill="none" stroke="#00746a" stroke-width="0.82" />
+    <circle cx="-2" cy="29" r="0.85" fill="#a34727" />
+    <circle cx="2" cy="37" r="0.85" fill="#a34727" />
+    <rect x="-27" y="-9" width="19.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <rect x="7.7" y="-9" width="24.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <path d="M -7.7 -7.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M 7.7 2.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M-1.2 3 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-7.7 -6 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-23 20 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M3.4 20 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M0 18 V9 L-4.4 5 V1 L4.4 -3 V-7 L0 -11" fill="none" stroke="#00746a" stroke-width="0.82" />
+    <circle cx="-2" cy="-3" r="0.85" fill="#a34727" />
+    <circle cx="2" cy="5" r="0.85" fill="#a34727" />
+    <rect x="-29" y="-41" width="21.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <rect x="7.7" y="-41" width="15.3" height="26" fill="#c5d9cb" stroke="#354e55" stroke-width="0.33" />
+    <path d="M -7.7 -29.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M 7.7 -39.5 v 6" fill="none" stroke="#d6e2df" stroke-width="1" />
+    <path d="M-7.7 -29 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-1.2 -38 h8.9" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M-23 -12 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M3.4 -12 h19.6" fill="none" stroke="#354e55" stroke-width="0.7" />
+    <path d="M0 -14 V-23 L4.4 -27 V-31 L-4.4 -35 V-39 L0 -43" fill="none" stroke="#00746a" stroke-width="0.82" />
+    <circle cx="-2" cy="-35" r="0.85" fill="#a34727" />
+    <circle cx="2" cy="-27" r="0.85" fill="#a34727" />
+    <path d="M0 63 V50 M0 -44 V-47 H-17 V-53 H0 V-58 L4 -60" fill="none" stroke="#00746a" stroke-width="1.0" />
+    <path d="M0 39 L-5 37.5 H-10 V41 H-16 V43 M0 8 L6 5.5 H10 V9 H16 V11" fill="none" stroke="#00746a" stroke-width="0.85" />
+    <path d="M-13 -50 H23 M-23 -56 H-3.4 M3.4 -56 H23" fill="none" stroke="#354e55" stroke-width="0.8" />
+    <path d="M0 -31 L6 -36.5 H10 V-21 H18 V-27 H38" fill="none" stroke="#a06924" stroke-width="0.75" stroke-dasharray="1 .65" />
+    <circle cx="0" cy="63" r="1.38" fill="#3975ad" />
+    <circle cx="-16" cy="43" r="1.38" fill="#00746a" />
+    <circle cx="16" cy="11" r="1.38" fill="#00746a" />
+    <circle cx="38" cy="-27" r="1.38" fill="#a06924" />
+    <circle cx="4" cy="-60" r="1.38" fill="#a34727" />
+    <circle cx="8" cy="-59" r="1.38" fill="#3975ad" />
+  </g>
+  <path d="M356 121 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="125" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">北端检修气闸（其他模式）</text>
+  <path d="M356 204 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="208" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">反应堆大厅 · 首领与破甲脉冲柱</text>
+  <path d="M356 247 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="251" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">折返检修梯 · 西端平台换向</text>
+  <path d="M356 327 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="331" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">冷藏档案室 · 可选，清场后领取样本箱</text>
+  <path d="M356 421 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="425" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">运输廊 · 左右翼隔开，室内掩体可退守</text>
+  <path d="M356 464 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="468" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">东侧配电房 · 清房后合上电闸</text>
+  <path d="M356 578 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="582" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">西侧安保室 · 清房后取卡</text>
+  <path d="M356 653 h24" fill="none" stroke="#819598" stroke-width="1" />
+  <text x="390" y="657" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">南气闸 · 出生点，门前领取固定补给</text>
+  <text x="426" y="525" fill="#23383d" font-family="system-ui, sans-serif" font-size="18">每段普通遭遇共 100 只</text>
+  <text x="426" y="552" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">入口巡逻 2　尽头门卫 35　西房 31　东房 32</text>
+  <text x="426" y="611" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">安保卡和电闸控制主路。击败首领立即结算。</text>
+  <text x="28" y="710" fill="#23383d" font-family="system-ui, sans-serif" font-size="19">高程剖面</text>
+  <path d="M36 738 H161 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 H352 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 h9 v2.4 H650" fill="none" stroke="#00746a" stroke-width="2.5" />
+  <text x="34" y="770" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">上层 0 m</text>
+  <text x="267" y="798" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">西端平台 −1.2 m</text>
+  <text x="495" y="823" fill="#23383d" font-family="system-ui, sans-serif" font-size="15">反应堆大厅 −2.4 m</text>
+</svg>

@@ -180,6 +180,7 @@ def verify(browser,ids):
               if(b) {
                 at(b);
                 for(let phase=0;phase<3;phase++){g.time+=2;g.beasts.damage(b,1e7,g);}
+                if(g.phase==='win' && defaultMode==='classic' && g.story.doorStates.reactor!==undefined){if(!g.bossDead || g.core)throw Error('首领歼灭结算错误');break;}
                 if(!g.bossDead || !g.pickups.keyItem)throw Error('首领未留下核心');
                 at(g.pickups.keyItem);
                 if(!g.pickups.takeKey(g.player,g))throw Error('核心无法拾取');
@@ -243,7 +244,7 @@ def verify(browser,ids):
           if(defaultMode==='rescue' && (g.phase!=='win'||g.story.elapsed!==90||climbs.size<2||!hitClimber))throw Error('高塔救援或登台射线失败 '+[g.phase,g.story.elapsed,climbs.size,hitClimber]);
           if(defaultMode==='escort' && (!escortGuarded||!escortDamaged))throw Error('护送未能拦截或承伤');
           if(defaultMode==='classic' && !g.core && g.phase!=='win')throw Error('缺少核心');
-          const mandatory=g.story.encounters.reduce((n,e)=>n+e.spawned,0);
+          const mandatory=location.pathname.includes('/underground-lab/') && defaultMode==='classic' ? 31+32 : g.story.encounters.reduce((n,e)=>n+e.spawned,0);
           if(g.stageKillTarget!==mandatory+Number(Boolean(g.bossDead)))throw Error('限时或撤离增援被计入必清评分');
           if(!location.pathname.includes('/underground-lab/')){
             const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='战区入口弹药');
@@ -265,7 +266,7 @@ def verify(browser,ids):
             if(getComputedStyle(panel).visibility!=='visible'||!note.textContent)throw Error('EMP 后未恢复任务');
           }
           if(defaultMode==='classic' && g.story.doorStates.reactor!==undefined){
-            for(const id of ['security','samples','power','reactor','service'])if(!g.story.doorStates[id])throw Error('重开门禁 '+id);
+            for(const id of ['security','samples','power','reactor'])if(!g.story.doorStates[id])throw Error('重开门禁 '+id);
             const door={x:0,y:0,z:20},from={x:0,y:1,z:21.5},dir={x:0,y:0,z:-1};
             if(!g.level.blocked(door.x,door.z,0,.33,1.77)||g.level.visible(from,dir,3))throw Error('封锁门穿过玩家或弹道');
             at({x:0,y:0,z:21.5});
@@ -378,7 +379,7 @@ def verify(browser,ids):
             assert len(layout['approaches']) == 9, layout
             assert len(layout['reports']) == 9 and len(layout['rooms']) == 6, layout
             for sample in layout['reports']:
-                assert sorted(sample['homes'].values()) == [26,26,48] and sample['gap'] >= 6, sample
+                assert sorted(sample['homes'].values()) == [2,31,32,35] and sample['gap'] >= 6, sample
                 assert sample['closedBefore'] and not sample['blocked'] and not sample['overlap'], sample
             print('PASS laboratory formation, approach and room rewards',layout,flush=True)
             print('PASS laboratory watch, hearing, pursuit and closed gate', page.evaluate('() => verifyLabWatch()'), flush=True)

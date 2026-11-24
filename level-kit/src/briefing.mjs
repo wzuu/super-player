@@ -31,7 +31,7 @@ export function initBriefing(stage, config, text, keys, campaign) {
         ' 秒内到达撤离点并引爆。',
       endless: '清空本波普通凶兽后，下一波敌群一起入场。此模式没有撤离结算。',
     };
-    if (stage === 1) rules.classic = '逐区清除守卫，使用门禁推进，取得' + text.keyItem + '后前往撤离点。';
+    if (stage === 1) rules.classic = '在安保室取卡，到配电房送电，击败零号实验体即完成歼灭行动。';
     if (stage === 3)
       rules.hold =
         '在钟楼坚守 ' +

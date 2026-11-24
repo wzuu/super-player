@@ -478,3 +478,9 @@ PR #28 合并审查修复了核心拾取后对象池复用的交互提示、首�
 第十关在 `jungle-temple/scene.mjs` 的 `MAP_GRID`、`LANDMARKS` 和 `WETLANDS` 修改布局。凶兽和伏击数量看 `CONFIG.beasts` 与 `CONFIG.storm.ambush`，机关枪手感看 `CONFIG.weapon`。运行 `node level-kit/pack.mjs jungle-temple/scene.mjs` 更新单文件。
 
 第十一关在 `bloodmoon-castle/scene.mjs` 的 `MAP_GRID`、`LANDMARKS` 调整地图，在 `CONFIG.beasts` 和 `CONFIG.bloodMoon` 调节敌人与血月。可用 `CONFIG.weapon` 覆盖机关枪参数。运行 `node level-kit/pack.mjs bloodmoon-castle/scene.mjs` 更新单文件。
+
+### 2026-11-24 · #97 地下实验室歼灭路线（开发分支）
+
+- 安保室门卡、配电房电闸、错位折廊、折返梯、反应堆歼灭结算及[标注图](underground-lab/mission-map.svg)已进入本地分支。三场普通遭遇各有 100 只，安保室 31 名、配电房 32 名守卫分别控制任务物。第三段可直接穿过。
+- Chrome 单关测试从每扇门左、中、右三个位置开门，核对整批部署、碰撞、房间登记和实际通路。清房后隔着实体隔板不能操作门卡或电闸。可选档案室独立部署 100 只。
+- 仍需按最终产物复跑首页默认步枪、静态与 SQLite 结算、两条压力路线及场景帧时间，并完成 PR 审查。临时浏览器测量均使用模拟鼠标。

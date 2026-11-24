@@ -61,7 +61,7 @@ def verify(browser, root, site):
         page.wait_for_function("run.game.phase === 'play'")
         treasures = page.evaluate("run.game.pickups.objects.filter(i => i.active && i.kind === 'rare').map(i => i.name)")
         if level["id"] == "underground-lab":
-            assert sorted(treasures) == sorted(["安检走廊记录", "培养走廊记录", "服务器走廊记录"]), treasures
+            assert sorted(treasures) == sorted(["安检折廊记录", "弯折运输廊记录", "检修运输廊记录"]), treasures
         else:
             assert len(treasures) == 10, (level["id"], treasures)
         if i == 0:

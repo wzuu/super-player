@@ -20,8 +20,8 @@ setup = """name => {
     else for(const b of m.pool)if(b.active&&b.storyWave)m.damage(b,1e7,g);
     g.time+=.3;m.releaseSplits(g);s.step(.3,g);
   }
-  const coords = {hall:[0,51,0,34],room:[-9,32,-20,33],reactor:[0,-45.1,1.5,-60]}[name];
-  at({x:coords[0],y:0,z:coords[1]});
+  const coords = {hall:[0,51,0,34],room:[-9,32,-20,33],reactor:[1,-57,1.5,-65]}[name];
+  at({x:coords[0],y:g.level.base(coords[0],coords[1]),z:coords[1]});
   p.look.rotation.set(-.025,Math.atan2(p.x-coords[2],p.z-coords[3]),0,'YXZ');p.positionCamera(0);
   document.querySelector('#menu').hidden=true;g.ui.nodes.hud.hidden=true;
   const gl=run.renderer.getContext(),ext=gl.getExtension('WEBGL_debug_renderer_info');
