@@ -21,11 +21,17 @@ LEVELS = json.loads((ROOT / "campaign/levels.json").read_text(encoding="utf-8"))
 NEW_STAGES = ["sakura-night-town", "brass-factory", "haunted-midway"]
 
 
-def expose_game(route, *, render=True):
+def expose_game(route, *, render=True, manual_steps=False):
     # startLevel 已返回运行状态，只在测试浏览器中保留引用以布置边界局面。
     response = route.fetch()
     entry = "    startLevel(definition, campaign, campaignStage);"
     html = response.text()
+    if manual_steps:
+        # 此类用例从键鼠驱动器按固定步长调用 game.step；截图只画当前画面。
+        advance = "pendingTime += dt;\n      advanceSimulation();"
+        html = html.replace("\r\n","\n")
+        assert html.count(advance)==1
+        html = html.replace(advance,"pendingTime = 0;")
     if not render:
         # 合成帧在一次 JS 调用中推进，只测时钟。真实战役用例保留每一帧的 WebGL 绘制。
         draw = "composer.render(dt);"
@@ -80,6 +86,7 @@ def finish_at_gate(page):
         const treasure=g.pickups.objects.find(i=>i.active && i.kind==='rare');
         const treasureName=treasure.name;
         at(treasure);g.pickups.update(.05,g.player,g);
+        if(treasure.manual && !g.pickups.takeNearbyReward(g.player,g))throw Error('手动拾取战利品失败');
         const tick=()=>{g.time+=.5;g.beasts.releaseSplits(g);g.objective.step(.5,g);s.step(.5,g);};
         for(let n=0;n<2400 && g.phase==='play' && s.stage!=='complete';n++) {
             const state=s.stage,t=s.target;

@@ -122,7 +122,12 @@ def verify(browser,ids):
     for stage in ids:
         page.goto((ROOT/stage/'index.html').as_uri())
         page.wait_for_function("!!window.run",polling=100)
-        result=page.evaluate("""() => {
+        expected = {
+            'underground-lab': {'objectiveCounts':[43,43], 'encounters':[100,100,100]},
+            'orbital-brood-ring': {'objectiveCounts':[10,12], 'encounters':[24,29]},
+            'moonlit-stained-glass-keep': {'objectiveCounts':[9,11], 'encounters':[20,28]},
+        }.get(stage)
+        result=page.evaluate("""expected => {
           const {game:g,nav,config:c}=run, choose=document.getElementById('mission-mode');
           const start=(mode)=>{choose.value=mode;g.reset();g.phase='play';};
           const at=(t)=>{Object.assign(g.player,{x:t.x,y:t.y,z:t.z});nav.rebuild(t.x,t.z);};
@@ -180,7 +185,7 @@ def verify(browser,ids):
               if(b) {
                 at(b);
                 for(let phase=0;phase<3;phase++){g.time+=2;g.beasts.damage(b,1e7,g);}
-                if(g.phase==='win' && defaultMode==='classic' && g.story.doorStates.reactor!==undefined){if(!g.bossDead || g.core)throw Error('首领歼灭结算错误');break;}
+                if(expected && defaultMode==='classic'){if(g.phase!=='win' || !g.bossDead || g.core)throw Error('首领歼灭结算错误');break;}
                 if(!g.bossDead || !g.pickups.keyItem)throw Error('首领未留下核心');
                 at(g.pickups.keyItem);
                 if(!g.pickups.takeKey(g.player,g))throw Error('核心无法拾取');
@@ -244,9 +249,9 @@ def verify(browser,ids):
           if(defaultMode==='rescue' && (g.phase!=='win'||g.story.elapsed!==90||climbs.size<2||!hitClimber))throw Error('高塔救援或登台射线失败 '+[g.phase,g.story.elapsed,climbs.size,hitClimber]);
           if(defaultMode==='escort' && (!escortGuarded||!escortDamaged))throw Error('护送未能拦截或承伤');
           if(defaultMode==='classic' && !g.core && g.phase!=='win')throw Error('缺少核心');
-          const mandatory=location.pathname.includes('/underground-lab/') && defaultMode==='classic' ? 43+43 : g.story.encounters.reduce((n,e)=>n+e.spawned,0);
+          const mandatory=expected && defaultMode==='classic' ? expected.objectiveCounts.reduce((a,b)=>a+b,0) : g.story.encounters.reduce((n,e)=>n+e.spawned,0);
           if(g.stageKillTarget!==mandatory+Number(Boolean(g.bossDead)))throw Error('限时或撤离增援被计入必清评分');
-          if(!location.pathname.includes('/underground-lab/')){
+          if(!expected){
             const boxes=g.pickups.objects.filter(i=>i.active && i.permanent && i.name==='战区入口弹药');
             if(boxes.length!==deployed || boxes.some(i=>i.value!==g.pickups.cacheAmount(100*c.pickups.roundsPerGuard)))
               throw Error('每个实际战区应有一份入口配给 '+[deployed,boxes.length]);
@@ -265,7 +270,7 @@ def verify(browser,ids):
             g.encounter.hudOffline=false;g.ui.update(.1,g);
             if(getComputedStyle(panel).visibility!=='visible'||!note.textContent)throw Error('EMP 后未恢复任务');
           }
-          if(defaultMode==='classic' && g.story.doorStates.reactor!==undefined){
+          if(defaultMode==='classic' && location.pathname.includes('/underground-lab/')){
             for(const id of ['security','samples','power','reactor'])if(!g.story.doorStates[id])throw Error('重开门禁 '+id);
             const door={x:0,y:0,z:20},from={x:0,y:1,z:21.5},dir={x:0,y:0,z:-1};
             if(!g.level.blocked(door.x,door.z,0,.33,1.77)||g.level.visible(from,dir,3))throw Error('封锁门穿过玩家或弹道');
@@ -285,9 +290,11 @@ def verify(browser,ids):
             start(defaultMode);
           }
           return result;
-        }""")
+        }""", expected)
         print(stage,result,flush=True)
-        assert result['groups'] and all(g['spawned'] == 100 and g['clearedAt'] > g['enteredAt'] for g in result['groups']), (stage, result['groups'])
+        groups=result['groups']
+        assert groups and all(g['clearedAt'] > g['enteredAt'] for g in groups), (stage, groups)
+        assert [g['spawned'] for g in groups] == (expected['encounters'] if expected else [100]*len(groups)), (stage, groups)
         assert not result['blocked'], (stage,result['blocked'])
         assert not result['unreachable'], (stage,result['unreachable'])
         if stage in ('underground-lab','rain-city','paris-tower'):

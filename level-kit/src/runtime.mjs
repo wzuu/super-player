@@ -196,7 +196,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   CONFIG.crouchLabel = keyName(prefs.keys.KeyC);
   CONFIG.deepKey = keyName(prefs.keys.KeyG);
   CONFIG.supportsHunt=Boolean(field?.cfg.hunt);
-  initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign, definition.story?.classicAction);
+  initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign, definition.story);
   const deck=variationDeck(campaignStage,CONFIG,visual,modeSelect,$('run-variation'));
   let packed = null,
     preparing = false;

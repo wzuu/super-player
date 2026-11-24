@@ -1,11 +1,11 @@
 import { defaultGear, packKit, supplies, modifications } from '@level-kit/gear.mjs';
 import { campaignMission, missionNames, missionRules } from '@level-kit/objectives.mjs';
 
-export function initBriefing(stage, config, text, keys, campaign, classicAction) {
+export function initBriefing(stage, config, text, keys, campaign, story) {
   const mode = document.getElementById('mission-mode');
   const defaultMode = campaignMission(stage);
   for (const id of new Set([defaultMode, 'classic', 'endless'])) {
-    const label = id==='classic' && classicAction ? classicAction : missionNames[id];
+    const label = id==='classic' && story?.classicAction ? story.classicAction : missionNames[id];
     mode.add(new Option(label + (id === defaultMode ? ' · 本关默认' : ''), id));
   }
   if (config.supportsHunt) mode.add(new Option('追踪猎杀', 'hunt'));
@@ -32,7 +32,7 @@ export function initBriefing(stage, config, text, keys, campaign, classicAction)
         ' 秒内到达撤离点并引爆。',
       endless: '清空本波普通凶兽后，下一波敌群一起入场。此模式没有撤离结算。',
     };
-    if (stage === 1) rules.classic = '在安保室取卡，到配电房送电，击败零号实验体即完成歼灭行动。';
+    if (story?.classicRule) rules.classic = story.classicRule;
     if (stage === 3)
       rules.hold =
         '在钟楼坚守 ' +

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="755" viewBox="0 0 840 755" role="img" aria-labelledby="title desc"><title id="title">环轨母巢平面与高程</title><desc id="desc">北朝上，实线为主线，虚线为可选支路，三角为守卫驻地，方块为可回撤的掩体。</desc><rect width="840" height="755" fill="#15222e"/><g font-family="system-ui,sans-serif" fill="#f1f5f7" font-size="14"><text x="36" y="33" font-size="21">环轨母巢　｜　战役路线与甲板高程</text><text x="684" y="34">↑ 北　上视图</text>
+<rect x="477.2" y="491.6" width="116.0" height="83.0" fill="#5b6962"/>
+<rect x="488.8" y="317.3" width="92.8" height="174.3" fill="#465966"/>
+<rect x="349.6" y="333.9" width="127.6" height="99.6" fill="#386e68"/>
+<rect x="465.6" y="375.4" width="34.8" height="33.2" fill="#465966"/>
+<rect x="604.8" y="292.4" width="127.6" height="107.9" fill="#4e536e"/>
+<rect x="570.0" y="333.9" width="46.4" height="24.9" fill="#465966"/>
+<rect x="477.2" y="275.8" width="116.0" height="49.8" fill="#465966"/>
+<rect x="210.4" y="267.5" width="290.0" height="41.5" fill="#455f84"/>
+<rect x="175.6" y="93.2" width="69.6" height="215.8" fill="#455f84"/>
+<rect x="175.6" y="60.0" width="429.2" height="49.8" fill="#4f6672"/>
+<rect x="48.0" y="126.4" width="104.4" height="107.9" fill="#8c6752"/>
+<rect x="140.8" y="176.2" width="46.4" height="24.9" fill="#455f84"/>
+<rect x="268.4" y="134.7" width="104.4" height="107.9" fill="#635476"/>
+<rect x="233.6" y="209.4" width="46.4" height="24.9" fill="#635476"/>
+<rect x="233.6" y="143.0" width="46.4" height="24.9" fill="#635476"/>
+<rect x="512.0" y="109.8" width="46.4" height="24.9" fill="#784c59"/>
+<rect x="442.4" y="126.4" width="185.6" height="99.6" fill="#784c59"/>
+<polyline points="535.2,549.7 535.2,495.8 546.8,446.0 535.2,392.0 378.6,392.0 378.6,365.0" stroke="#efc978" stroke-width="3" fill="none" />
+<polyline points="378.6,365.0 396.0,392.0 535.2,392.0 535.2,288.2 216.2,288.2 216.2,188.7 106.0,188.7 82.8,167.9" stroke="#efc978" stroke-width="3" fill="none" />
+<polyline points="82.8,167.9 106.0,188.7 216.2,188.7 216.2,84.9 535.2,84.9 535.2,197.0" stroke="#efc978" stroke-width="3" fill="none" />
+<polyline points="216.2,221.9 314.8,221.9 343.8,188.7 314.8,155.4 216.2,155.4" stroke="#b9aadf" stroke-width="3" fill="none" stroke-dasharray="5 4"/>
+<path d="M535.2 388.0l-4 8h8z" fill="#ff826c"/>
+<path d="M517.8 321.6l-4 8h8z" fill="#ff826c"/>
+<path d="M401.8 375.6l-4 8h8z" fill="#ff826c"/>
+<path d="M668.6 334.1l-4 8h8z" fill="#ff826c"/>
+<path d="M314.8 284.2l-4 8h8z" fill="#ff826c"/>
+<path d="M216.2 209.6l-4 8h8z" fill="#ff826c"/>
+<path d="M106.0 176.4l-4 8h8z" fill="#ff826c"/>
+<path d="M314.8 180.5l-4 8h8z" fill="#ff826c"/>
+<rect x="502.2" y="443.0" width="8" height="6" fill="#bbccd9"/>
+<rect x="559.0" y="364.1" width="8" height="6" fill="#bbccd9"/>
+<rect x="444.2" y="380.7" width="8" height="6" fill="#bbccd9"/>
+<rect x="218.0" y="223.0" width="8" height="6" fill="#bbccd9"/>
+<rect x="125.2" y="164.9" width="8" height="6" fill="#bbccd9"/>
+<rect x="479.0" y="181.5" width="8" height="6" fill="#bbccd9"/>
+<rect x="583.4" y="160.8" width="8" height="6" fill="#bbccd9"/>
+<circle cx="535.2" cy="512.4" r="4" fill="#79e9ce"/>
+<circle cx="390.2" cy="375.4" r="4" fill="#79e9ce"/>
+<circle cx="262.6" cy="292.4" r="4" fill="#79e9ce"/>
+<circle cx="106.0" cy="167.9" r="4" fill="#79e9ce"/>
+<circle cx="535.2" cy="105.7" r="4" fill="#79e9ce"/>
+<circle cx="593.2" cy="197.0" r="4" fill="#79e9ce"/>
+<text x="535" y="566" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">停靠舱 · 出生</text>
+<text x="535" y="471" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">转运门</text>
+<text x="413" y="421" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">指挥舱 · 凭证</text>
+<text x="674" y="384" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">东货舱</text>
+<text x="384" y="305" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">升高转接桥</text>
+<text x="112" y="147" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">维修舱 · 联锁</text>
+<text x="321" y="126" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">休眠舱 · 日志</text>
+<text x="373" y="77" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">北环冷却廊</text>
+<text x="535" y="172" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">反应堆 · 母体</text>
+<text x="535" y="218" text-anchor="middle" style="paint-order:stroke;stroke:#22313e;stroke-width:3">击败即结算</text>
+<text x="42" y="607" fill="#efc978">金线　主路</text><text x="155" y="607" fill="#c8b5ef">紫虚线　可选环线</text><text x="345" y="607" fill="#ff826c">▲ 驻防及来向</text><text x="497" y="607" fill="#bbccd9">■ 掩体</text><text x="609" y="607" fill="#79e9ce">● 固定弹箱</text>
+<path d="M45 683H246L340 644H504L580 683H661L712 703H790" stroke="#efc978" stroke-width="3" fill="none"/><text x="42" y="663">停靠舱与转运廊 0 m</text><text x="343" y="635">西环与维修舱 +2.4 m</text><text x="531" y="669">北环 0 m</text><text x="645" y="730">反应堆 −1.2 m</text></g></svg>
