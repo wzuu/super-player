@@ -14,7 +14,7 @@ function playLaboratoryCampaign() {
     bossShots = 0,
     lastGroup = null,
     previous = '',
-    stale = 0;
+    stale = 0, nextRoll = 0, rollingUntil = 0, rollAim = 0;
   const log = [];
   const reload = w.reload.bind(w);
   w.reload = (game) => {
@@ -61,27 +61,33 @@ function playLaboratoryCampaign() {
   let escape = null;
   function strafe(threats, step) {
     if (step % 5 && escape && distance(p, escape) > 1) return escape;
-    let best = -Infinity;
-    for (let i = 0; i < 20; i++) {
-      const angle = (2 * Math.PI * i) / 20,
-        dx = Math.cos(angle),
-        dz = Math.sin(angle);
+    let best = -Infinity, next = null;
+    const old = escape;
+    for (let i = 0; i < 24; i++) {
+      const angle = 2 * Math.PI * i / 24, dx = Math.cos(angle), dz = Math.sin(angle);
       let span = 0;
-      for (let j = 0.4; j <= 6; j += 0.4) {
-        if (g.level.blocked(p.x + j * dx, p.z + j * dz, p.y, p.radius, p.height)) break;
+      for (let j = 0.4; j <= 10; j += 0.4) {
+        const x=p.x+j*dx, z=p.z+j*dz;
+        if (g.level.blocked(x,z,p.y,p.radius,p.height) ||
+          [[-17.5,15],[19,11.5]].some(([sx,sz]) => Math.abs(x-sx)<3 && Math.abs(z-sz)<2.7)) break;
         span = j;
       }
       if (span < 1) continue;
-      const q = { x: p.x + dx * Math.min(span, 3), y: p.y, z: p.z + dz * Math.min(span, 3) };
-      const score =
-        Math.min(10, ...threats.map((b) => distance(b, q))) +
-        span * 0.6 +
-        (escape ? 0.12 * (dx * (escape.x - p.x) + dz * (escape.z - p.z)) : 0);
-      if (score > best) {
-        best = score;
-        escape = q;
+      const q = {x:p.x+dx*Math.min(span,5), y:p.y, z:p.z+dz*Math.min(span,5)};
+      let gap=16, pressure=0;
+      for (const threat of threats) {
+        const d=distance(threat,q);
+        gap=Math.min(gap,d);
+        if(d<12)pressure+=(12-d)*(12-d)/80;
       }
+      // 留出转身空间，绕开可见酸池。仅靠眼前距离容易把玩家逼进墙角。
+      const outward=Math.max(0,Math.abs(q.x)-32)+Math.max(0,Math.abs(q.z)-33);
+      const acid=g.projectiles.puddles.some(pool=>pool.life>0 && distance(pool.pos,q)<2.4);
+      const score=gap + .48*span - .65*pressure - 1.3*outward - (acid?5:0) +
+        (old ? .25*(dx*(old.x-p.x)+dz*(old.z-p.z)) : 0);
+      if (score>best) {best=score;next=q;}
     }
+    escape=next;
     return escape;
   }
   for (let step = 0; step < 32000 && g.phase === 'play'; step++) {
@@ -158,25 +164,7 @@ function playLaboratoryCampaign() {
       input.interact = g.pickups.nearKey(p);
     } else if (state === 'fight' && raw.stage.endsWith('-combat')) {
       if (!enemy) dest = route(raw.target);
-      const index = s.encounters.length;
-      // 用主路上的横向空间拉开距离，保留敌人过门和换弹的余地。
-      const lane =
-        index === 1
-          ? [
-              { x: 16, z: 26 },
-              { x: -16, z: 26 },
-            ]
-          : index === 2
-            ? [
-                { x: -21, z: 8 },
-                { x: -32, z: 8 },
-              ]
-            : [
-                { x: 27, z: 10 },
-                { x: 35, z: 9 },
-              ];
-      const anchor = lane[Math.floor(g.time / 4) % lane.length];
-      if (enemy) dest = route({ ...anchor, y: 0 });
+      if (enemy) dest = strafe(creatures,step);
     } else {
       dest = route(raw?.target ?? target);
       if ((state === 'use' && target && distance(p, target) < 2.55) || g.pickups.nearKey(p))
@@ -185,7 +173,7 @@ function playLaboratoryCampaign() {
     if (enemy) {
       const d = distance(p, enemy);
       p.look.rotation.set(
-        Math.atan2(enemy.y + enemy.height * (enemy === b ? 0.86 : 0.68) - p.y - p.eye, d) - p.recoil,
+        Math.atan2(enemy.y + enemy.height * 0.86 - p.y - p.eye, d) - p.recoil,
         Math.atan2(p.x - enemy.x, p.z - enemy.z),
         0,
         'YXZ',
@@ -196,10 +184,30 @@ function playLaboratoryCampaign() {
     const med = g.pickups.objects
       .filter((i) => i.active && i.permanent && i.kind === 'health' && distance(p, i) < 16)
       .sort((a, b) => distance(p, a) - distance(p, b))[0];
-    if (p.hp < 45 && med) dest = route(med);
+    if (p.hp < 60 && med && (!enemy || distance(p,enemy)>8)) dest = route(med);
     if (!enemy && !g.beasts.live && state !== 'fight' && w.ammo < config.weapon.magazine)
       input.reload = true;
-    if (p.hp < 65 && distance(p, enemy ?? p) > 4) g.kit.use(2, g);
+    const stock=g.kit.remaining();
+    if (stock.medkit && p.hp < 70 && (!enemy || distance(p,enemy)>5)) g.kit.use(2,g);
+    if (stock.grenade && enemy && state === 'fight' && distance(p,enemy)>6 &&
+        creatures.filter(a=>distance(a,enemy)<4.5).length>=7) g.kit.use(3,g);
+    if (enemy && dest && state==='fight' && g.time>=nextRoll && distance(p,enemy)<4.8 &&
+        distance(p,dest)>2.6) {
+      rollAim=Math.atan2(p.x-dest.x,p.z-dest.z);
+      rollingUntil=g.time+.32;
+      nextRoll=g.time+6.1;
+      g.kit.use(0,g);
+    }
+    if (g.time<rollingUntil) {
+      p.look.rotation.set(0,rollAim,0,'YXZ');
+      input.fire=false;
+      input.down.add('ShiftLeft');
+    } else if (enemy && dest && state === 'fight' && distance(p,enemy)<4 &&
+        !p.tired && (!w.ammo || g.time-p.lastHurt<.6)) {
+      p.look.rotation.set(0,Math.atan2(p.x-dest.x,p.z-dest.z),0,'YXZ');
+      input.fire=false;
+      input.down.add('ShiftLeft');
+    }
     if (state !== 'use' || p.hp >= 99 || g.beasts.live) move(dest);
     const beforeBreaks = b?.fight.breaks,
       cooldown = g.field.deviceAt;

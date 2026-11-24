@@ -320,8 +320,7 @@ function createEncounter({ CONFIG: settings, sound }) {
       this.warned = false;
       this.status = null;
       this.beat = -1;
-      this.population = undefined;
-      this.spawnEvery = undefined;
+      this.nextGroup = null;
       script.clear();
     },
     stepScriptedBeast(b, game, dt) {
@@ -342,29 +341,35 @@ function createEncounter({ CONFIG: settings, sound }) {
         game.ui.notify('东街灯火齐明，百鬼行列即将到来', 2);
       }
       if (!this.active && game.time >= this.next) {
-        this.active = true;
-        this.beat = -1;
-        this.population = Math.min(settings.beasts.capacity, settings.beasts.population + rules.extra);
-        this.spawnEvery = settings.beasts.spawnEvery / 2;
-        for (let i = 0; i < rules.lanterns && game.beasts.live < this.population; i++) {
-          const x = lanternRoad.x + (i % 2 ? 0.73 : -0.73),
-            z = lanternRoad.start - i * 1.31;
-          const ghost = game.beasts.spawn(0, x, z, 0, Math.PI);
-          if (ghost) script.set(ghost, i);
+        if (!this.nextGroup) {
+          const count = game.story?.managed || game.field?.hunting ? rules.lanterns : rules.extra;
+          this.nextGroup = Array.from({ length: count }, (_, i) => {
+            if (i >= rules.lanterns) return game.beasts.randomType();
+            return { type: 0, regular: false, angle: Math.PI, anchor: {
+              x: lanternRoad.x + (i % 2 ? .73 : -.73), z: lanternRoad.start - i * 1.31,
+            } };
+          });
         }
+        const ghosts = game.beasts.spawnGroup(this.nextGroup, {
+          accept: ({ x, y, z }, i) => i >= rules.lanterns ||
+            (Math.abs(x - lanternRoad.x) <= 3.2 && z <= lanternRoad.start + 2 && z > lanternRoad.end + 5 && y < .5),
+        });
+        if (!ghosts.length) return;
+        this.nextGroup = null;
+        this.active = true;
+        this.next = game.time;
+        this.beat = -1;
+        ghosts.slice(0, rules.lanterns).forEach((ghost, i) => script.set(ghost, i));
         game.ui.notify('百鬼行列穿过灯笼长街，击破灯笼妖可领取补给', 2.5);
       }
       const remaining = this.next + rules.duration - game.time;
       if (this.active && remaining <= 0) {
-        for (const ghost of script.keys()) ghost.reinforcement = true;
         script.clear();
         this.active = false;
         this.warned = false;
-        this.population = undefined;
-        this.spawnEvery = undefined;
         this.status = null;
         this.next += rules.interval;
-        game.ui.notify('百鬼散去，增援恢复', 1.6);
+        game.ui.notify('百鬼行列结束', 1.6);
         return;
       }
       if (this.active) {
@@ -540,8 +545,8 @@ function createEnvironment(context) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'鸟居参道',cap:9,interval:0.33,at:[-8,18],entries:[[-15,15],[0,10]]},
-    {name:'东侧河岸',cap:11,interval:0.30,at:[26,7],entries:[[29,5],[18,0]]},
+    {name:'鸟居参道',at:[-8,18],entries:[[-15,15],[0,10]]},
+    {name:'东侧河岸',at:[26,7],entries:[[29,5],[18,0]]},
   ]},
   config: CONFIG,
   grid: MAP_GRID,
@@ -612,7 +617,7 @@ export default {
     safe: '山脚鸟居安全区',
     rage: '九尾现形，群妖正向神社聚集',
     brief:
-      '沿枯山水庭院进入古町。东街百鬼游行时增援加快，击破队列灯笼妖可补给。夺取九尾狐守护的御神镜，到神社正殿解除结界。',
+      '沿枯山水庭院进入古町。百鬼在东街结队游行，击破灯笼妖可补给。夺取九尾狐守护的御神镜，到神社正殿解除结界。',
     winBrief: '御神镜映亮符纸，花瓣与光屑冲散东街的夜雾。你带着古町宝物撤离。',
   },
 };

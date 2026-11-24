@@ -418,11 +418,8 @@ function createEncounter({ CONFIG: setup, sound }) {
     },
     update(game) {
       if (!this.guardsPlaced) {
-        this.guardsPlaced = true;
-        // 用共享对象池放置墓园守卫。若常规刷新已占用该点，让出该次固定刷新。
-        for (const [type, x, z] of LANDMARKS.graveGuards) {
-          if (!game.beasts.pool.some(b => b.active && Math.hypot(b.x - x, b.z - z) < 1.7)) game.beasts.spawn(type, x, z);
-        }
+        const guards = LANDMARKS.graveGuards.map(([type, x, z]) => ({ type, regular: false, anchor: { x, z } }));
+        this.guardsPlaced = game.beasts.spawnGroup(guards).length === guards.length;
       }
 
       const cycle = game.time % moon.period;
@@ -852,8 +849,8 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }, rage = false)
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'荒冢墓园',cap:9,interval:0.33,at:[-8,25],entries:[[-16,24],[0,18]]},
-    {name:'古城祭坛',cap:11,interval:0.29,at:[4,-2],entries:[[-9,-8],[13,-7]]},
+    {name:'荒冢墓园',at:[-8,25],entries:[[-16,24],[0,18]]},
+    {name:'古城祭坛',at:[4,-2],entries:[[-9,-8],[13,-7]]},
   ]},
   weaponSkin: 'shanhai-secret-realm',
   pageTitle: '上古秘境 | 第二关',

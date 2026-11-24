@@ -14,7 +14,7 @@ const CONFIG = {
     ],
   },
   storm: {
-    interval: 90, duration: 15, warning: 5, extraPopulation: 18, spawnEvery: 0.23, spawnBurst: 5,
+    interval: 90, duration: 15, warning: 5, extraPopulation: 18,
     shotHearing: 42, walkHearing: 9.5, runHearing: 20, memory: 2.7, fog: 0.103,
   },
 };
@@ -394,22 +394,23 @@ function createEncounter({ CONFIG: options, sound }) {
   const rules = options.storm;
   return {
     shotHearing: rules.shotHearing, walkHearing: rules.walkHearing, runHearing: rules.runHearing, memory: rules.memory,
-    hearingOnly: false, status: null, population: undefined, spawnEvery: undefined, spawnBurst: undefined,
+    hearingOnly: false, status: null,
     reset() {
       this.hearingOnly = false; this.status = null;
-      this.population = this.spawnEvery = this.spawnBurst = undefined;
+      this.stormGroup = null;
     },
     update(game) {
       const elapsed = game.time % rules.interval;
       const active = game.time >= rules.interval && elapsed < rules.duration;
       if (active && !this.hearingOnly) {
+        if (!game.story?.managed && !game.field?.hunting && !game.blast) {
+          this.stormGroup = Array.from({length:rules.extraPopulation}, () => game.beasts.randomType());
+        }
         sound.hiss(2.7, 840, 120, .40);
         sound.tone(74, 31, .85, .21);
       }
       this.hearingOnly = active;
-      this.population = active ? options.beasts.population + rules.extraPopulation : undefined;
-      this.spawnEvery = active ? rules.spawnEvery : undefined;
-      this.spawnBurst = active ? rules.spawnBurst : undefined;
+      if (active && this.stormGroup && game.beasts.spawnGroup(this.stormGroup).length) this.stormGroup = null;
       if (active) {
         const quiet = game.player.crouched && game.time - Math.max(game.shotAt, game.footstep.at) > .40;
         this.status = {
@@ -707,8 +708,8 @@ function buildBeastModel(type, { THREE, shapes, mergeGeometries }) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'陵前沙地',cap:12,interval:0.27,at:[-10,24],entries:[[-17,21],[-2,18]]},
-    {name:'西侧柱廊',cap:14,interval:0.29,at:[-23,3],entries:[[-32,7],[-25,-5]]},
+    {name:'陵前沙地',at:[-10,24],entries:[[-17,21],[-2,18]]},
+    {name:'西侧柱廊',at:[-23,3],entries:[[-32,7],[-25,-5]]},
   ]},
   weaponSkin: 'buried-tomb',
   pageTitle: '流沙王陵 | 第四关',

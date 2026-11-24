@@ -33,7 +33,7 @@ def control(browser):
     print(browser.version,'呈现对照 FPS',json.dumps(samples,ensure_ascii=False),flush=True)
 
 
-def measure(browser,root,stage,baseline=None,label='本版',gpu_sync=False):
+def measure(browser,root,stage,label='本版',gpu_sync=False):
     page=browser.new_page(viewport={'width':960,'height':540},device_scale_factor=1)
     errors=[]
     page.on('pageerror',lambda error:errors.append(str(error)))
@@ -47,35 +47,32 @@ def measure(browser,root,stage,baseline=None,label='本版',gpu_sync=False):
     page.goto(file.as_uri())
     page.locator('#start').click()
     page.wait_for_function("window.run?.game.phase==='play'")
-    spawn=page.evaluate("""([stage,previous])=>{
+    spawn=page.evaluate("""stage=>{
       const g=run.game,s=g.story;
       function move(t){Object.assign(g.player,{x:t.x,y:t.y,z:t.z});run.nav.rebuild(t.x,t.z);}
       function tick(dt){g.time+=dt;g.objective.step(dt,g);s.step(dt,g);}
-      if(previous){
-        for(const b of g.beasts.pool)b.active=false;
-        g.beasts.live=0;g.beasts.boss=null;g.beasts.spawnTime=300;
-        for(const b of previous)if(!g.beasts.spawn(...b))throw Error('基线布置失败');
-      }else {
-        for(let i=0;i<1000;i++) {
-          const t=s.target, target=stage==='paris-tower'?'defend':'breakout';
-          if(t && s.stage!==target)move(t);
-          if(s.stage===target){
-            if(target==='defend')move({x:0,y:7.2,z:6.8});
-            else move({x:8,y:0,z:-15});
-            if((target==='defend' ? s.elapsed>32 && g.beasts.live===14 : g.beasts.live===9))break;
-          }else if(['use','beacon'].includes(s.stage))s.interact(g);
-          else for(const b of g.beasts.pool) if(b.active)g.beasts.damage(b,1e7,g);
-          tick(.5);
-          for(const b of g.beasts.pool)if(b.active && b.climbRoute)s.stepBeast(b,g,.48);
-          if(i===999)throw Error('峰值队列未到位 '+s.stage+' '+g.beasts.live);
-        }
+      for(let i=0;i<1000;i++) {
+        const t=s.target, target=stage==='paris-tower'?'defend':'breakout';
+        if(t && s.stage!==target)move(t);
+        if(s.stage===target){
+          if(target==='defend')move({x:0,y:7.2,z:6.8});
+          else move({x:8,y:0,z:-15});
+          const expected = g.beasts.spawnGroup ? run.config.beasts.encounterSize : (target==='defend' ? 14 : 9);
+          if(g.beasts.live===expected && (target!=='defend' || s.elapsed>32))break;
+        }else if(['use','beacon'].includes(s.stage))s.interact(g);
+        else if(s.stage!=='countdown')for(const b of g.beasts.pool) if(b.active)g.beasts.damage(b,1e7,g);
+        tick(.5);
+        for(const b of g.beasts.pool)if(b.active && b.climbRoute)s.stepBeast(b,g,.48);
+        if(i===999)throw Error('峰值队列未到位 '+s.stage+' '+g.beasts.live);
       }
       move(stage==='paris-tower'?{x:0,y:7.2,z:6.8}:{x:8,y:0,z:-15});
       g.player.look.rotation.set(-.03,stage==='paris-tower'?-.18:.48,0,'YXZ');
       g.player.hurtDelay=60;g.weapon.reserve=300;
       g.beasts.refreshHash();
-      return g.beasts.pool.filter(b=>b.active).map(b=>[b.type,b.x,b.z,b.y,b.yaw]);
-    }""",[stage,baseline])
+      const alive=g.beasts.pool.filter(b=>b.active);
+      window.sampleWave=alive.find(b=>b.storyWave)?.storyWave;
+      return alive.filter(b=>b.storyWave===window.sampleWave).length;
+    }""",stage)
     page.mouse.down()
     try:
         stats=page.evaluate("""async gpuSync=>{
@@ -83,19 +80,20 @@ def measure(browser,root,stage,baseline=None,label='本版',gpu_sync=False):
           for(let i=0;i<20;i++)await frame();
           const crowd=run.scene.children.find(m=>m.isInstancedMesh && m.material.color?.getHex()===0x373448);
           const matrixVersion=crowd?.instanceMatrix.version;
-          const before=g.weapon.ammo, samples=[], calls=[],triangles=[];let last=await frame(),min=g.beasts.live,max=min;
+          const before=g.weapon.ammo, samples=[], calls=[],triangles=[];let last=await frame(),min=g.beasts.live,max=min,missionPeak=0;
           const first=last;
           while(samples.length<120 || (gpuSync && last-first<2500)){
             const now=await frame();samples.push(now-last);last=now;
             if(gpuSync)gl.finish();
             min=Math.min(min,g.beasts.live);max=Math.max(max,g.beasts.live);
+            missionPeak=Math.max(missionPeak,g.beasts.pool.filter(b=>b.active&&b.storyWave===window.sampleWave).length);
             calls.push(run.renderer.info.render.calls);triangles.push(run.renderer.info.render.triangles);
           }
           const ext=gl.getExtension('WEBGL_debug_renderer_info');
           samples.sort((a,b)=>a-b);
           return {fps:+(1000*samples.length/(last-first)).toFixed(1),frames:samples.length,
               p50:samples[Math.floor(samples.length*.5)],p95:samples[Math.floor(samples.length*.95)],
-              peak:max,min,ammo:[before,g.weapon.ammo],phase:g.phase,buffer:[gl.drawingBufferWidth,gl.drawingBufferHeight],
+              peak:max,min,missionPeak,ammo:[before,g.weapon.ammo],phase:g.phase,buffer:[gl.drawingBufferWidth,gl.drawingBufferHeight],
               crowd:crowd?.count,matrixUpdates:crowd?crowd.instanceMatrix.version-matrixVersion:undefined,
               peakDraws:Math.max(...calls),peakTriangles:Math.max(...triangles),
               gpu:ext?gl.getParameter(ext.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)};
@@ -105,9 +103,9 @@ def measure(browser,root,stage,baseline=None,label='本版',gpu_sync=False):
         page.close()
     assert not errors,errors
     assert stats['phase']=='play' and stats['ammo'][0]!=stats['ammo'][1],stats
-    if stage=='paris-tower':assert stats['crowd']==96 and stats['peak']==14,stats
+    assert 0 < stats['missionPeak'] <= spawn, (stats,spawn)
+    if stage=='paris-tower':assert stats['crowd']==96,stats
     print(browser.version,stage,label,json.dumps(stats,ensure_ascii=False),flush=True)
-    return spawn
 
 
 if __name__=='__main__':
@@ -124,8 +122,8 @@ if __name__=='__main__':
         try:
             if args.gpu_throughput:print('GPU 吞吐诊断（解除同步，不代表显示帧率）',flush=True)
             if args.control:control(browser)
-            placements=measure(browser,ROOT,'rain-city',gpu_sync=args.gpu_throughput)
-            if args.main:measure(browser,args.main,'rain-city',placements,'main 基线',gpu_sync=args.gpu_throughput)
+            measure(browser,ROOT,'rain-city',gpu_sync=args.gpu_throughput)
+            if args.main:measure(browser,args.main,'rain-city',label='main 基线',gpu_sync=args.gpu_throughput)
             if args.tower_before:measure(browser,args.tower_before,'paris-tower',label='优化前',gpu_sync=args.gpu_throughput)
             measure(browser,ROOT,'paris-tower',gpu_sync=args.gpu_throughput)
         finally:browser.close()

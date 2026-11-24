@@ -13,7 +13,7 @@ const CONFIG = {
   },
   storm: {
     first: 46, period: 100, warning: 7, duration: 32, rise: 6, drain: 9,
-    depth: 1.10, shallowSpeed: 0.84, deepSpeed: 0.48, ambush: 10, ambushInterval: 0.68,
+    depth: 1.10, shallowSpeed: 0.84, deepSpeed: 0.48, ambush: 10,
   },
   poison: { damage: 3, interval: 1.9, herbRegrow: 34, reach: 1.35 },
 };
@@ -497,11 +497,10 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
       this.phase = 'calm';
       this.height = 0;
       this.nextRain = settings.first;
-      this.leftToSpawn = 0;
+      this.nextAmbush = Infinity;
       this.strike = -Infinity;
       this.poisonTick = Infinity;
       this.poisoned = false;
-      this.population = tune.beasts.population;
       this.ambushers.clear();
       this.status = null;
       for (const herb of herbs) herb.ready = 0;
@@ -522,14 +521,12 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
       }
       if (this.phase === 'warning' && t >= this.nextRain) {
         this.phase = 'rain';
-        this.leftToSpawn = settings.ambush;
         this.nextAmbush = t + 1.8;
         this.nextStrike = t + .3;
         game.ui.notify('丛林涨水，留意浅滩伏击', 2.6);
       }
       if (this.phase === 'rain' && t >= rainEnds) {
         this.phase = 'drain';
-        this.leftToSpawn = 0;
         game.ui.notify('雷雨已停，低地正在退水', 2.3);
       }
       if (this.phase === 'drain' && t >= rainEnds + settings.drain) {
@@ -554,12 +551,8 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
           sound.hiss(1.45, 970, 85, .39, .20);
           sound.tone(74, 25, 1.51, .42, 'triangle', .22);
         }
-        if (this.leftToSpawn > 0 && t >= this.nextAmbush) {
-          this.nextAmbush = t + settings.ambushInterval;
-          this.spawnAmbush(game);
-        }
+        if (t >= this.nextAmbush && this.spawnAmbush(game)) this.nextAmbush = Infinity;
       }
-      this.population = tune.beasts.population + (this.phase === 'rain' ? this.ambushers.size : 0);
       if (!game.blast && this.poisoned) {
         const herb = herbs.find(h => t >= h.ready && Math.abs(p.y - h.y) < .82 && Math.hypot(p.x - h.x, p.z - h.z) < poison.reach);
         if (herb) {
@@ -598,29 +591,25 @@ function createEncounter({ CONFIG: tune, level, THREE, dynamicMesh, setInstance,
       this.drawHerbs(t);
     },
     spawnAmbush(game) {
-      if (game.beasts.live >= tune.beasts.capacity) return;
-      const p = game.player, offset = Math.floor(Math.random() * AMBUSH_SITES.length);
-      // 优先检查临近的淹水点，近身浮出水面前必须留出反应距离。
-      let site, distance = Infinity;
-      for (let i = 0; i < AMBUSH_SITES.length; i++) {
-        const candidate = AMBUSH_SITES[(offset + i) % AMBUSH_SITES.length];
-        const [x, z] = candidate, d = Math.hypot(x - p.x, z - p.z);
-        const hunter = tune.beasts.types[0];
-        if (d < 8 || d > distance + 2 || level.blocked(x, z, 0, hunter.radius, hunter.height)) continue;
-        if (game.beasts.pool.some(b => b.active && Math.hypot(b.x - x, b.z - z) < 1.8)) continue;
-        site = candidate;
-        distance = d;
+      const offset = Math.floor(Math.random() * AMBUSH_SITES.length);
+      const members = Array.from({ length: settings.ambush }, (_, i) => {
+        const [x, z] = AMBUSH_SITES[(offset + i) % AMBUSH_SITES.length];
+        return { type: 0, regular: false, anchor: { x, z } };
+      });
+      const hunters = game.beasts.spawnGroup(members, {
+        safeDistance: 8,
+        accept: ({ x, y, z }) => y < .35 && WETLANDS.some(pool => contains(pool, x, z)),
+      });
+      if (!hunters.length) return false;
+      for (const hunter of hunters) {
+        hunter.reinforcement = true;
+        if (Math.hypot(hunter.x - game.player.x, hunter.z - game.player.z) < 22) hunter.alert = tune.beasts.memory;
+        this.ambushers.add(hunter);
+        const water = WETLANDS.find(pool => contains(pool, hunter.x, hunter.z)).water + this.height;
+        game.effects.spray(splash.set(hunter.x, water + .08, hunter.z), brighter(0xabf0c8, 1.7), 15, 4.8, .075, 'mist');
       }
-      if (!site) return;
-      const [x, z] = site, hunter = game.beasts.spawn(0, x, z, 0);
-      if (!hunter) return;
-      this.leftToSpawn--;
-      hunter.reinforcement = true;
-      if (distance < 22) hunter.alert = tune.beasts.memory;
-      this.ambushers.add(hunter);
-      game.sound.stageEvent('warning',game,hunter);
-      const water = WETLANDS.find(pool => contains(pool, x, z)).water + this.height;
-      game.effects.spray(splash.set(x, water + .08, z), brighter(0xabf0c8, 1.7), 15, 4.8, .075, 'mist');
+      game.sound.stageEvent('warning', game, hunters[0]);
+      return true;
     },
     drawHerbs(t) {
       let growing = 0;
@@ -1171,8 +1160,8 @@ function jungleBeast(type, { THREE, shapes, mergeGeometries }, rage = false) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'河岸石阶',cap:9,interval:0.33,at:[-9,29],entries:[[-17,25],[0,22]]},
-    {name:'西侧瀑布池',cap:11,interval:0.30,at:[-25,6],entries:[[-32,11],[-22,-3]]},
+    {name:'河岸石阶',at:[-9,29],entries:[[-17,25],[0,22]]},
+    {name:'西侧瀑布池',at:[-25,6],entries:[[-32,11],[-22,-3]]},
   ]},
   weaponSkin: 'jungle-temple',
   pageTitle: '雨蚀天阶 | 第十关',

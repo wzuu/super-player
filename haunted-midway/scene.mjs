@@ -845,8 +845,8 @@ function carnivalModel(type, { THREE, shapes, mergeGeometries }, rage = false) {
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'游园售票亭',cap:12,interval:0.27,at:[-8,27],entries:[[-16,24],[0,19]]},
-    {name:'旋转木马广场',cap:14,interval:0.28,at:[16,5],entries:[[24,6],[12,-1]]},
+    {name:'游园售票亭',at:[-8,27],entries:[[-16,24],[0,19]]},
+    {name:'旋转木马广场',at:[16,5],entries:[[24,6],[12,-1]]},
   ]},
   weaponSkin: 'haunted-midway',
   pageTitle: '永夜游园 | 第十四关',

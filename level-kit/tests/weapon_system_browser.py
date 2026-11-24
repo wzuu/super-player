@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from uuid import uuid4
 from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT, LEVELS, expose_game
+from controls_browser import check_weapon_model
 
 
 def sample_volley(page):
@@ -131,6 +132,7 @@ def run(browser,url):
     assert "扩容弹匣" in page.locator("#weapon-build").inner_text()
     page.click("#start")
     page.wait_for_function("run?.game.phase==='play'")
+    check_weapon_model(page)
     page.keyboard.down("v")
     page.wait_for_function("run.game.player.thirdPerson && !run.game.weapon.group.visible")
     page.keyboard.down("v")
@@ -242,12 +244,17 @@ def run(browser,url):
     print("PASS exclusive ammunition branches against a column and a cluster, damage per target",branches,flush=True)
     page.evaluate("document.exitPointerLock()")
     live_shake(page,url)
+    page.route(url+"/practice/?*",expose_game)
     for mode in ["range","tutorial"]:
         page.goto(url+"/practice/?mode="+mode+"&weapon=shotgun-pump")
         page.wait_for_function("document.querySelector('#practice-weapon').value==='shotgun-pump'")
         page.click("#start")
         page.wait_for_function("!document.querySelector('#hud').hidden")
         assert "雨巷破阵" in page.locator("#rifle-label").inner_text()
+        check_weapon_model(page)
+        page.keyboard.press("v")
+        page.wait_for_function("run.game.player.thirdPerson && !run.game.weapon.group.visible")
+        assert page.evaluate("getComputedStyle(run.game.ui.nodes.cross).visibility === 'visible'")
         page.evaluate("document.exitPointerLock()")
     assert not errors,errors
     print("PASS SQLite / IndexedDB legacy purchases, free per-gun switch, hip fire, reload and camera obstruction",result,flush=True)

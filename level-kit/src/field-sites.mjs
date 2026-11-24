@@ -139,7 +139,6 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     relic,
     lore,
     guards: Math.ceil(encounterSize * 0.4),
-    guardCap: 6 + Math.floor(stage / 4),
     value,
     treasure,
     guardTypes: [1, 2, 0, 0],

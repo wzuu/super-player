@@ -44,13 +44,13 @@ function makeRifle(id, { firstPerson = false } = {}) {
   if (skin.category === '霰弹枪') return createShotgun(id,skin);
   const root = new THREE.Group();
   root.name = id;
-  const groups = Object.fromEntries(['枪身', '枪管', '护木', '弹匣', '枪托', '瞄具'].map(name => {
+  const groups = Object.fromEntries(['枪身', '枪管', '护木', '弹匣', '枪托'].map(name => {
     const group = new THREE.Group();
     group.name = name;
     root.add(group);
     return [name, group];
   }));
-  const { 枪身: body, 枪管: barrel, 护木: guard, 弹匣: magazine, 枪托: stock, 瞄具: sight } = groups;
+  const { 枪身: body, 枪管: barrel, 护木: guard, 弹匣: magazine, 枪托: stock } = groups;
   const muzzle = new THREE.Vector3(1.06, .046, 0);
   const batches = new Map();
   const materials = new Set();
@@ -213,14 +213,8 @@ function makeRifle(id, { firstPerson = false } = {}) {
     }
   };
 
-  box(sight, hardware, .066, .138, 0, .192, .026, .102);
-  const sightPosts = (mat, y = .185) => {
-    for (const z of [-.046, .046]) box(sight, mat, .046, y, z, .073, .079, .023, -.09);
-    box(sight, mat, .046, y + .042, 0, .073, .017, .115, -.09);
-  };
-  sightPosts(accent);
-  for (const z of [-.039, .039]) box(sight, dark, .741, .112, z, .053, .053, .024, -.19);
-  box(sight, indicator, .739, .135, 0, .027, .012, .056);
+  for (const z of [-.039, .039]) box(barrel, dark, .741, .112, z, .053, .053, .024, -.19);
+  box(barrel, indicator, .739, .135, 0, .027, .012, .056);
   for (const z of [-.085, .085]) {
     for (const x of [-.223, .302]) tube(body, hardware, x, .008, z, .011, .010, 'z', .01, 8);
   }
@@ -272,10 +266,6 @@ function makeRifle(id, { firstPerson = false } = {}) {
         box(body, talisman, -.09, .025, z, .061, .132, .006, -.19);
         box(body, talisman, .16, .019, z, .056, .12, .006, .15);
         add(body, petal, new THREE.SphereGeometry(.014, 7, 4), .243, .063, z);
-      }
-      for (let i = -3; i <= 3; i++) {
-        const angle = i * .24;
-        box(sight, i % 2 ? accent : enamel, .047 + Math.sin(angle) * .06, .18 + Math.cos(angle) * .06, .015, .022, .116, .009, -angle);
       }
       const bell = pivot(stock, '青铜铃', -.56, -.073, 0);
       add(bell, accent, new THREE.TorusGeometry(.02, .004, 5, 12), 0, -.017, 0);
@@ -332,9 +322,9 @@ function makeRifle(id, { firstPerson = false } = {}) {
         }
         ctx.fillStyle = '#4d4236'; ctx.font = '18px serif'; ctx.fillText('BAR', -17, 27);
       }) });
-      tube(sight, copper, .07, .217, .036, .072, .063, 'z');
-      add(sight, dial, new THREE.CircleGeometry(.063, 32), .07, .217, .07);
-      const needle = pivot(sight, '压力指针', .07, .217, .072);
+      tube(body, copper, .22, .035, .09, .056, .043, 'z');
+      add(body, dial, new THREE.CircleGeometry(.05, 32), .22, .035, .113);
+      const needle = pivot(body, '压力指针', .22, .035, .115);
       box(needle, dark, 0, .021, 0, .006, .048, .004);
       const key = pivot(magazine, '上弦钥匙', .124, -.157, .063);
       tube(key, copper, 0, 0, .017, .011, .041, 'z');
@@ -366,7 +356,7 @@ function makeRifle(id, { firstPerson = false } = {}) {
         plate(loop, color, [[0,0],[.025,0],[.052,-.039],[.032,-.077],[.047,-.11],[.018,-.079],[.031,-.043]], .003);
         return loop;
       });
-      const balloon = pivot(sight, '气球', .044, .177, 0);
+      const balloon = pivot(stock, '气球', -.47, .055, .065);
       for (const [i, color] of bands.entries()) {
         const x = (i - 1) * .045;
         line(balloon, dark, 0, 0, x, .065, 0, .004);
@@ -389,7 +379,7 @@ function makeRifle(id, { firstPerson = false } = {}) {
       animations.push((t, e) => {
         const dt = Math.max(0, Math.min(.05, t - lastCycle)); lastCycle = t;
         crankAngle += dt * (e.shot ?? 0) * 20; crank.rotation.z = crankAngle;
-        balloon.position.y = .177 + Math.sin(t * 1.8) * .009;
+        balloon.position.y = .055 + Math.sin(t * 1.8) * .009;
         doll.rotation.z = Math.sin(t * 2.3) * .15;
         ribbons.forEach((r, i) => { r.rotation.x = Math.sin(t * 3 + i) * .24; });
         bands.forEach((m, i) => { m.emissiveIntensity = .5 + .85 * Math.sin(t * 2.1 + i) ** 2; });
@@ -399,7 +389,7 @@ function makeRifle(id, { firstPerson = false } = {}) {
     case 'underground-lab': {
       canister(skin.light, hardware);
       const alarm = glow('#ff252f', 2);
-      for (const z of [-.063, .063]) tube(sight, alarm, .053, .18, z, .022, .018, 'z');
+      for (const z of [-.088, .088]) tube(body, alarm, .23, .057, z, .022, .018, 'z');
       animations.push(t => { alarm.emissiveIntensity = t % 1.15 < .23 ? 2.9 : .36; });
       break;
     }
@@ -425,8 +415,6 @@ function makeRifle(id, { firstPerson = false } = {}) {
         box(guard, wrap, .486 + i * .024, -.015, 0, .018, .113, .175, -.14);
       }
       const drops = physical('#9cc8dc', { roughness: .1, clearcoat: 1, transparent: true, opacity: .62, depthWrite: false });
-      const wetOptic = physical('#7196b7', { roughness: .13, clearcoat: 1 });
-      box(sight, wetOptic, .046, .235, 0, .071, .013, .097);
       const rand = rifleRandom(175);
       for (let i = 0; i < 32; i++) {
         tube(body, drops, -.209 + rand() * .51, -.017 + rand() * .092, i % 2 ? .09 : -.09, .002 + rand() * .004, .004, 'z', 0, 6);
@@ -436,7 +424,6 @@ function makeRifle(id, { firstPerson = false } = {}) {
     case 'buried-tomb': {
       const lapis = physical('#1744a3', { roughness: .43, clearcoat: .55 });
       standardMagazine(lapis);
-      for (const z of [-.06, .06]) tube(sight, lapis, .047, .186, z, .025, .009, 'z');
       for (const z of [-.086, .086]) line(body, accent, -.216, .076, .28, .076, z, .009);
       break;
     }
@@ -455,7 +442,6 @@ function makeRifle(id, { firstPerson = false } = {}) {
         for (let i = 0; i < 4; i++) {
           const x = .074 + i * .019, y = -.176 + Math.sin(i * 2.1) * .024;
           line(magazine, indicator, x, y, x + .019, -.176 + Math.sin((i + 1) * 2.1) * .024, z, .005);
-          line(sight, indicator, .037 + i * .005, .154 + i * .014, .052, .164 + i * .014, z, .004);
         }
       }
       animations.push(t => { indicator.emissiveIntensity = .72 + 2.05 * Math.max(0, Math.sin(t * 11) * Math.cos(t * 4)); });
@@ -485,11 +471,6 @@ function makeRifle(id, { firstPerson = false } = {}) {
         box(guard, windowGlass, .535, .015, z * 1.16, .256, .067, .01);
         for (const x of [-.189, -.119, -.049]) tube(body, hardware, x, .047, z * .88, .018, .012, 'z');
       }
-      const hologram = physical('#54caff', {
-        emissive: '#2178f1', emissiveIntensity: 1.5, transparent: true, opacity: .46, depthWrite: false,
-      });
-      box(sight, hologram, .041, .19, 0, .012, .059, .066);
-      tube(sight, indicator, .048, .192, 0, .007, .014);
       break;
     }
     case 'neon-undercity': {

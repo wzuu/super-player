@@ -270,58 +270,27 @@ export function createFieldOperations(context, campaign) {
     if (drop) drop.origin = origin;
     return drop;
   }
-  function guards(g, p, count, tag, elite = false, offset = 0) {
-    const members = [];
-    for (let i = 0; i < 90 && members.length < count; i++) {
-      const a = i * 2.39996,
-        r = 3 + (i % 8),
-        x = p.x + Math.cos(a) * r,
-        z = p.z + Math.sin(a) * r;
-      const y = level.surface(x, z, p.y + 0.46);
-      if (Math.abs(y - p.y) > 0.5 || dist({ x, z }, g.player) < 2.5 || nav.dist[nav.index(x, z)] < 0)
-        continue;
-      if (g.beasts.pool.some((b) => b.active && Math.hypot(x - b.x, z - b.z) < 1.55)) continue;
-      const index = offset + members.length;
-      const b = g.beasts.spawnRegular(
-        cfg.guardTypes[index % cfg.guardTypes.length],
-        x,
-        z,
-        y,
-        elite && index % 3 === 0,
-      );
-      if (b) {
-        b.fieldGroup = tag;
-        b.alert = 8;
-        members.push(b);
-      }
-    }
-    return members;
+  function guardEntries(count, elite) {
+    return Array.from({ length: count }, (_, i) => ({
+      type: cfg.guardTypes[i % cfg.guardTypes.length],
+      elite: elite && i % 3 === 0,
+    }));
   }
-  function deployWave(g, tag) {
-    if (!field.waitingGuards || g.time < field.spawnAt) return;
-    // 子体可能复用刚阵亡守卫的对象槽，按当前对象池计数。
-    field.guards = g.beasts.pool.filter((b) => b.active && b.fieldGroup === tag);
-    const free = field.guardCount - field.guards.length;
-    if (free <= 0) return;
-    const arrivals = guards(
-      g,
-      tag === 'deep' ? deepRoom.front : vault.front,
-      Math.min(2, free, field.waitingGuards),
-      tag,
-      tag === 'deep',
-      field.waveSize - field.waitingGuards,
-    );
-    for (const b of arrivals) if (tag === 'deep') b.traitSpeed *= 1.23;
-    field.guards.push(...arrivals);
-    field.waitingGuards -= arrivals.length;
-    field.spawnAt = g.time + 0.35;
+  function markGuards(members, tag) {
+    for (const b of members) {
+      b.fieldGroup = tag;
+      b.alert = 8;
+      if (tag === 'deep') b.traitSpeed *= 1.23;
+    }
   }
   function beginWave(g, tag, count) {
-    field.guards = [];
-    field.waveSize = field.waitingGuards = count;
-    field.guardCount = cfg.guardCap + (tag === 'deep' ? 3 : 0);
-    field.spawnAt = g.time;
-    deployWave(g, tag);
+    // 深入由原撤离台触发，守卫的接敌点在新开的深层宝库门外。
+    const anchor = tag === 'deep' ? deepRoom.front : vault.front;
+    const members = g.beasts.spawnGroup(guardEntries(count, tag === 'deep'), {anchors: [anchor], target: anchor});
+    if (!members.length) return false;
+    markGuards(members, tag);
+    field.guards = members;
+    return true;
   }
   function releaseTrap(t, g) {
     if (!t.active) return;
@@ -386,6 +355,7 @@ export function createFieldOperations(context, campaign) {
       this.deepFinished = false;
       this.hunting = this.enabled && g.objective.mode === 'hunt';
       this.huntWon = false;
+      this.huntLimit = cfg.huntSeconds;
       this.prey = null;
       this.traceIndex = 0;
       this.nextFlee = 0;
@@ -410,10 +380,15 @@ export function createFieldOperations(context, campaign) {
           dist(p, level.spawn) > 9 &&
           !level.blocked(p.x, p.z, p.y, size.radius, size.height),
       );
-      if (!options.length) throw Error('猎场缺少可达藏匿点');
+      if (!options.length) return;
       const p = options[Math.floor(Math.random() * options.length)];
-      this.prey = g.beasts.spawn(0, p.x, p.z, p.y);
-      if (!this.prey) throw Error('猎物出生点无净空');
+      const [prey, ...escorts] = g.beasts.spawnGroup([{ type: 0, regular: false }, ...guardEntries(2, true)], {
+        anchors: [p],
+      });
+      if (!prey) return;
+      this.prey = prey;
+      this.escorts = escorts;
+      markGuards(escorts, 'hunt-guard');
       this.prey.hunted = true;
       this.prey.hp = this.prey.maxHP = cfg.huntHP;
       this.prey.alert = 0;
@@ -424,7 +399,6 @@ export function createFieldOperations(context, campaign) {
       this.lastPreyHP = cfg.huntHP;
       this.huntLimit = cfg.huntSeconds;
       this.huntTime = null;
-      this.escorts = guards(g, p, 2, 'hunt-guard', true);
       this.hints = options;
     },
     huntStep(b, g, dt) {
@@ -507,6 +481,7 @@ export function createFieldOperations(context, campaign) {
         }
       }
       if (this.hunting && !this.huntWon) {
+        if (!this.prey) this.startHunt(g);
         if (g.time >= this.huntLimit) {
           g.finish(false, '猎物逃脱');
           return;
@@ -524,13 +499,10 @@ export function createFieldOperations(context, campaign) {
         }
       }
       if (this.vaultStage === 'warning' && g.time >= this.waveAt) {
-        beginWave(g, 'vault', this.reinforced ? cfg.reinforcements : cfg.guards);
-        this.vaultStage = 'guards';
+        if (beginWave(g, 'vault', this.reinforced ? cfg.reinforcements : cfg.guards)) this.vaultStage = 'guards';
       }
-      if (this.vaultStage === 'guards') deployWave(g, 'vault');
       if (
         this.vaultStage === 'guards' &&
-        !this.waitingGuards &&
         !this.guards.some((b) => b.active && b.fieldGroup === 'vault')
       ) {
         if (!this.reinforced) {
@@ -547,10 +519,9 @@ export function createFieldOperations(context, campaign) {
           g.ui.notify('宝库守卫已清除', 1.5);
         }
       }
-      if (this.deep === 'guards') deployWave(g, 'deep');
+      if (this.deep === 'opening' && beginWave(g, 'deep', cfg.deepGuards)) this.deep = 'guards';
       if (
         this.deep === 'guards' &&
-        !this.waitingGuards &&
         !this.guards.some((b) => b.active && b.fieldGroup === 'deep')
       ) {
         this.legend = treasure(g, deepRoom.center, '传奇·' + cfg.relic, 1550, 'legendary');
@@ -568,7 +539,7 @@ export function createFieldOperations(context, campaign) {
           stage: 'deep-' + this.deep,
           title: exit
             ? '携传奇宝物前往深入撤离点'
-            : this.deep === 'guards'
+            : this.deep === 'guards' || this.deep === 'opening'
               ? '突破深层宝库守卫'
               : '拾取传奇宝物',
           detail: exit ? '抵达后按 ' + CONFIG.interactLabel + ' 撤离' : '深入期间阵亡会失去本局全部收益',
@@ -622,11 +593,11 @@ export function createFieldOperations(context, campaign) {
         g.ui.notify('再次确认深入 · 阵亡会失去本局全部战利品', 3);
         return;
       }
-      this.deep = 'guards';
+      this.deep = 'opening';
       this.deepAt = g.time;
       this.vaultStage = 'deep';
       open(deepRoom.door, false);
-      beginWave(g, 'deep', cfg.deepGuards);
+      if (beginWave(g, 'deep', cfg.deepGuards)) this.deep = 'guards';
       g.pickups.deepSupplies = true;
       for (const item of g.pickups.objects)
         if (item.active && ['health', 'ammo', 'grenade', 'sample'].includes(item.kind)) item.active = false;

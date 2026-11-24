@@ -29,7 +29,7 @@ export function initBriefing(stage, config, text, keys, campaign) {
         '，在 ' +
         missionRules.escapeSeconds +
         ' 秒内到达撤离点并引爆。',
-      endless: '尽可能长时间生存，每 ' + missionRules.waveSeconds + ' 秒增加一波增援。此模式没有撤离结算。',
+      endless: '清空本波普通凶兽后，下一波敌群一起入场。此模式没有撤离结算。',
     };
     if (stage === 1) rules.classic = '逐区清除守卫，使用门禁推进，取得' + text.keyItem + '后前往撤离点。';
     if (stage === 3)

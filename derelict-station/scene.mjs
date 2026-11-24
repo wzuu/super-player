@@ -451,6 +451,7 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
   const readout={title:'',detail:'',remaining:0};
   const point=new THREE.Vector3(), sparks=brighter(0x9dd6ec,1.57), larva=brighter(0xac98f3,1.72);
   const eggs=Array.from({length:14},()=>({active:false,x:0,y:0,z:0,hatch:0}));
+  const broods=[];
   function intact() {
     for(const {collider} of level.bulkheads)collider.active=true;
   }
@@ -476,11 +477,23 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
       this.phase='calm';this.panel=null;this.previous=-1;this.nextDamage=0;this.ejected=0;this.status=null;
       this.opens=randomRange(...rules.first);this.seals=0;
       for(const egg of eggs)egg.active=false;
+      broods.length=0;
     },
-    stage(x,y,z,game) {
-      const egg=eggs.find(o=>!o.active);
-      if(!egg)return false;
-      egg.active=true;egg.x=x;egg.y=y;egg.z=z;egg.hatch=game.time+rules.eggDelay+randomRange(-.14,.47);
+    stage(boss,count,game) {
+      const free=eggs.filter(egg=>!egg.active);
+      if(free.length<count)return false;
+      const entries=Array.from({length:count},(_,i)=>{
+        const angle=i*Math.PI*2/count;
+        return {type:0,regular:false,anchor:{x:boss.x+Math.cos(angle)*3.6,y:boss.y,z:boss.z+Math.sin(angle)*3.6}};
+      });
+      const sites=game.beasts.planGroup(entries);
+      if(!sites.length)return false;
+      const brood=free.slice(0,count),hatch=game.time+rules.eggDelay;
+      for(let i=0;i<count;i++){
+        const {x,y,z}=sites[i];
+        Object.assign(brood[i],{active:true,x,y,z,hatch});
+      }
+      broods.push(brood);
       return true;
     },
     update(game,dt=0) {
@@ -508,15 +521,21 @@ function createEncounter({CONFIG:setup,level,THREE,brighter,sound,randomRange}) 
         sound.tone(155,79,.66,.24,'triangle');
         this.phase='calm';this.panel=null;this.opens=t+randomRange(...rules.calm);
       }
-      for(const egg of eggs){
-        if(!egg.active||egg.hatch>t||game.beasts.live>=game.beasts.pool.length)continue;
-        const child=game.beasts.spawn(0,egg.x,egg.z,egg.y);
-        egg.active=false;
-        sound.stageEvent('impact',game,egg);
-        if(!child)continue;
-        child.alert=5.2;
-        point.set(egg.x,egg.y+.25,egg.z);
-        game.effects.spray(point,larva,13,4.4,.076,'mist');
+      for(let i=broods.length-1;i>=0;i--){
+        const brood=broods[i];
+        if(brood[0].hatch>t)continue;
+        // 卵只是预警。玩家可能在孵化前靠近它，整窝按此刻的净空重新落位。
+        const children=game.beasts.spawnGroup(brood.map(egg=>({type:0,regular:false,anchor:egg})));
+        if(!children.length)continue;
+        broods.splice(i,1);
+        sound.stageEvent('impact',game,children[0]);
+        for(let j=0;j<children.length;j++){
+          const child=children[j];
+          brood[j].active=false;
+          child.alert=5.2;
+          point.set(child.x,child.y+.25,child.z);
+          game.effects.spray(point,larva,13,4.4,.076,'mist');
+        }
       }
       if(this.phase==='calm'){this.status=null;return;}
       const s=this.panel.data;
@@ -908,8 +927,8 @@ function alienModel(type,{THREE,shapes,mergeGeometries},rage=false){
 
 export default {
   story:{type:'regions',sectors:[
-    {name:'南停靠舱',cap:7,interval:0.39,at:[-8,20],entries:[[-15,21],[0,14]]},
-    {name:'西侧农业舱',cap:9,interval:0.37,at:[-26,-6],entries:[[-32,-9],[-21,-3]]},
+    {name:'南停靠舱',at:[-8,20],entries:[[-15,21],[0,14]]},
+    {name:'西侧农业舱',at:[-26,-6],entries:[[-32,-9],[-21,-3]]},
   ]},
   weaponSkin: 'derelict-station',
   pageTitle:'失压环站 | 第八关',
@@ -927,7 +946,7 @@ export default {
   buildBeastModel:alienModel,
   buildRageModel(helpers){return alienModel(3,helpers,true);},
   beastSurface,
-  stageBossSummon(x,y,z,game){return game.encounter.stage(x,y,z,game);},
+  stageBossSummon(boss,count,game){return game.encounter.stage(boss,count,game);},
   portal:{width:1.70,depth:1.20,verticalRange:.48,useRadius:3.85},
   terrain:{ramp:stationRamp,canEnter:mayEnter},
   area(x,z,level,y){

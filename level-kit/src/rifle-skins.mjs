@@ -51,7 +51,7 @@ export const rifleSkins = {
     backdrop: '#291c1b', key: '#ffbb91', fill: '#b54b35', metalness: .4, roughness: .2,
   },
   'derelict-station': {
-    name: '太空工业型', detail: '舱段编号、微陨石划痕、能量观察窗和全息瞄具。反重力弹可将目标击退并悬浮。进入失压舱段时伤害提高，命中壁上的异形可将其击落。',
+    name: '太空工业型', detail: '舱段编号、微陨石划痕和随时可见的能量观察窗。反重力弹可将目标击退并悬浮。进入失压舱段时伤害提高，命中壁上的异形可将其击落。',
     base: '#cad3db', trim: '#749bae', dark: '#354a5a', light: '#51bbff',
     backdrop: '#151e32', key: '#ecf7ff', fill: '#658fc0', metalness: .35, roughness: .52,
   },

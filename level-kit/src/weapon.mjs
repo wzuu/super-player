@@ -47,19 +47,9 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
       this.rifle.root.rotation.y = Math.PI / 2;
       this.group.add(this.rifle.root);
       this.shoulder = createShoulderView(THREE, scene, this.rifle);
-      this.sight = new THREE.Group();
       const shotgun = Boolean(CONFIG.weapon.pellets);
+      this.adsHeight = shotgun ? .40 : .36;
       this.adsDistance = shotgun ? 1.09 : .99;
-      this.sight.position.set(0,shotgun ? .40 : .36,-.20);
-      this.group.add(this.sight);
-      const metal = new THREE.MeshStandardMaterial({color:0x28343c,metalness:.55,roughness:.4});
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(.060,.005,6,32),metal);
-      const lens = new THREE.Mesh(new THREE.CircleGeometry(.056,32),new THREE.MeshBasicMaterial({color:0x87ced2,transparent:true,opacity:.035,depthWrite:false}));
-      // 镜座连到机匣，光轴和准星在两把武器上都穿过镜片中心。
-      const mountHeight = this.sight.position.y - .06 - (shotgun ? .10 : .12);
-      const mount = new THREE.Mesh(new THREE.BoxGeometry(.031,mountHeight,.054),metal);
-      mount.position.y = -.06 - mountHeight / 2;
-      this.sight.add(rim,lens,mount);
       this.signals = {};
       this.empRecovery = 0;
       const glove = new THREE.MeshStandardMaterial({ color: 0x35373b, roughness: .86 });
@@ -264,7 +254,7 @@ export function createWeaponClass({ CONFIG, THREE, V3, TAU, camera, scene, weapo
         this.group.rotation.z += .18 * mix;
       }
       this.group.position.x *= 1-ads;
-      this.group.position.y = lerp(this.group.position.y,-this.sight.position.y,ads);
+      this.group.position.y = lerp(this.group.position.y,-this.adsHeight,ads);
       this.group.position.z = lerp(this.group.position.z,-this.adsDistance,ads);
       this.group.rotation.set(this.group.rotation.x*(1-ads),this.group.rotation.y*(1-ads),this.group.rotation.z*(1-ads));
       const playing = game.phase === 'play' && !game.blast;

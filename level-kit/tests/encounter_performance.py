@@ -1,4 +1,4 @@
-"""同机在正式机房/街区验证分批入场、接敌间隔、入口净空和峰值帧时间。
+"""同机在正式机房/街区验证整群入场、接敌间隔、入口净空和峰值帧时间。
 
 可选参数为含同版本 vendor 的旧构建根目录。同一房间先按固定击倒节奏跑完，
 再从相同种子重进，在该版本战斗峰值采样实际 RAF。固定击倒仅用于控制负载。
@@ -44,7 +44,7 @@ EXERCISE = """([expected,peakOnly])=>{
     if(b) {
       const f=nav.fields[type];
       if(l.blocked(x,z,y,b.radius,b.height)||f.dist[f.index(x,z)]<0)
-        throw Error('入口不可通行 '+[type,x,y,z]);
+        throw Error('入口不可通行 '+JSON.stringify({type,x,y,z,blocked:l.blocked(x,z,y,b.radius,b.height),ai:f.dist[f.index(x,z)],spawn:g.beasts.spawnFields?.get(type+':'+b.scale)?.dist[f.index(x,z)]}));
       nearestSpawn=Math.min(nearestSpawn,Math.hypot(x-p.x,z-p.z,y-p.y));
     }
     return b;
@@ -133,14 +133,14 @@ def measure(browser, root, stage, expected):
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline",type=Path,help="bb3a78b 构建根目录")
+    parser.add_argument("--baseline",type=Path,help="#82 改动前的每场一百只版本构建根目录")
     args=parser.parse_args()
     with sync_playwright() as pw:
         browser=pw.chromium.launch(channel=os.environ.get("GAME_TEST_BROWSER","chrome"))
         try:
             for stage in ROOMS:
-                if args.baseline:measure(browser,args.baseline,stage,6 if stage=="underground-lab" else 9)
+                if args.baseline:measure(browser,args.baseline,stage,100)
                 result=measure(browser,ROOT,stage,100)
-                assert result["peak"]<= (14 if stage=="underground-lab" else 16),result
+                assert result["peak"] == result["spawned"] == 100,result
         finally:
             browser.close()

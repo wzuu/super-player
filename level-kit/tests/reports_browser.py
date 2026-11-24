@@ -147,6 +147,32 @@ def departure_retry(context, url, static):
         for tab in pages: tab.close()
 
 
+def verify_endless_report(page, url, level):
+    page.goto(f"{url}/{level}/")
+    page.locator("#mission-mode").select_option("endless")
+    page.locator("#start").click()
+    page.wait_for_function("run.game.phase==='play'")
+    kills = page.evaluate("""() => {
+      const g=run.game,m=g.beasts, wave=m.pool.filter(b=>b.active && b.waveMember);
+      if(wave.length!==run.config.beasts.population-1)throw Error('无尽首波数量错误');
+      for(const b of wave)m.eject(b,g);
+      g.step(.04);
+      if(g.objective.wave!==2 || !m.boss.active)throw Error('首领仍在场时应按普通敌群清空结算波次');
+      g.finish(false,'无尽撤出');
+      return g.kills;
+    }""")
+    page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    page.goto(url)
+    page.locator("#continue").wait_for()
+    saved = page.evaluate("""async () => {
+      const store=await (await import('./campaign/store.mjs')).campaignStore();
+      const {battles}=await store.progress();
+      const saved=await store.report(battles[0].id);
+      return [saved.kills,saved.report.mode,saved.report.scores.wave];
+    }""")
+    assert saved == [kills,"endless",2], saved
+
+
 def run(browser, url, static, database):
     backend="IndexedDB" if static else "SQLite"
     context = browser.new_context(viewport={"width": 920, "height": 680})
@@ -424,6 +450,7 @@ def run(browser, url, static, database):
       return [await store.report(id),await store.replay(id),(await store.statistics()).length];
     }""",detail["recorded"])
     assert isolated == [None,None,0], isolated
+    verify_endless_report(page,url,level)
     if not static:
         page.route("**/api/statistics",lambda route:route.fulfill(status=503,body=""))
         page.reload()

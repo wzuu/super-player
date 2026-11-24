@@ -7,79 +7,97 @@ from campaign_browser import ROOT, LEVELS
 from playwright.sync_api import sync_playwright
 
 
-def timed_reinforcements(page, stage):
-    """同一组残敌和未入场者随时间目标推进；分别验证立即撤离和留下战斗。"""
+def timed_encounters(page, stage):
+    """同一场的一百只全部在计时开始时入场，切换目标不补刷。"""
     result=page.evaluate("""tower=>{
       const g=run.game,s=g.story,p=g.player,m=g.beasts;
       const first=tower?'defend':'countdown',last=tower?'rescue':'breakout';
-      const limits=tower?[8,14]:[7,9];
       function at(t){Object.assign(p,{x:t.x,y:t.y,z:t.z});run.nav.rebuild(p.x,p.z);}
       function tick(dt){g.time+=dt;m.releaseSplits(g);g.objective.step(dt,g);s.step(dt,g);}
-      const alive=()=>m.pool.filter(b=>b.active&&b.storyWave);
-      const kill=()=>{for(const b of alive())m.damage(b,1e7,g);};
+      const alive=()=>m.pool.filter(b=>b.active && b.storyWave);
       const runs=[];
-      for(const strategy of (tower?['leave','stay','clearEarly']:['leave','stay'])){
-        const clearEarly=strategy==='clearEarly';
+      for(const leave of [true,false]){
         g.reset();g.phase='play';
-        let deployed=0,holdTotal=0;
-        const original=m.spawnRegular;
-        m.spawnRegular=function(...args){
-          const b=original.apply(this,args);
-          if(b&&s.stage==='hold')holdTotal++;
-          if(b&&(s.stage===first||s.stage===last))deployed++;
-          return b;
+        const before=new Set();let hold=[];
+        let groups=0;
+        const spawn=m.spawnGroup.bind(m);
+        m.spawnGroup=(entries,options)=>{
+          const result=spawn(entries,options);
+          if(result.length===100)groups++;
+          return result;
         };
-        try{
-          for(let n=0;n<1800&&s.stage!==first;n++){
-            if(s.target)at(s.target);
-            kill();
-            if(['use','beacon'].includes(s.stage))s.interact(g);
-            if(s.stage!==first)tick(s.stage==='hold'?.05:.5);
+        for(let i=0;i<460 && s.stage!==first;i++){
+          if(s.target)at(s.target);
+          if(s.stage==='fight'||s.stage==='approach')for(const b of alive())m.damage(b,1e7,g);
+          if(s.stage==='use'||s.stage==='beacon'){
+            for(const b of alive())before.add(b);
+            s.interact(g);
           }
-          if(s.stage!==first||(!tower&&(holdTotal!==100||g.objective.held!==45)))
-            throw Error('前置阶段或独立坚守队列未完成 '+[s.stage,holdTotal]);
-          at(s.target);
-          let before=[],tag,peak=0;
-          const began=g.time;
-          for(let step=0;step<600&&s.stage===first;step++){
-            if(clearEarly)kill();
-            before=alive().map(b=>[b,b.spawnGeneration]);
-            tick(.25);
-            const active=alive();
-            peak=Math.max(peak,active.length);
-            const limit=tower&&s.elapsed>=30?limits[1]:limits[0];
-            if(active.length>limit||(s.stage===first&&s.cap!==limit))throw Error('定时阶段或子体超过活跃上限');
-            if(active.length)tag??=active.at(-1).storyWave;
-          }
-          if(s.stage!==last)throw Error('未能进入撤离阶段');
-          if(clearEarly ? deployed!==100 : (deployed<=0||deployed>=100||!before.length))
-            throw Error('切换阶段时部署与残敌异常 '+[strategy,deployed,before.length]);
-          const seconds=g.time-began;
-          if(seconds!==(tower?90:10)||(tower?s.elapsed!==90:!s.detonated||s.doorStates.barricade))
-            throw Error('时间或爆破门禁改变 '+seconds);
-          if(!before.every(([b,n])=>b.active&&b.spawnGeneration===n))throw Error('切换阶段清掉原有守卫');
-          if(s.remaining!==100-deployed)throw Error('切换阶段丢失或重置了待入场者 '+[s.remaining,deployed]);
-          const atExit=deployed, routes=new Set();
-          if(strategy!=='leave'){
-            if(tower)at({x:0,y:7.2,z:2});
-            for(let n=0;n<650 && (deployed<100||alive().length);n++){
-              kill();tick(.25);const active=alive();
-              for(const b of active)if(b.climbRoute)routes.add(b.climbRoute[0].join());
-              if(active.length>limits[1]||active.some(b=>b.storyWave!==tag))throw Error('后半段另建队列或突破上限');
-            }
-            if(tower&&!clearEarly&&routes.size!==4)throw Error('救援到达后攀登方向不足 '+routes.size);
-            for(let i=0;i<40;i++)tick(.25);
-            if(g.phase!=='play'||deployed!==100||s.remaining||alive().length)throw Error('留下后实际部署异常 '+[deployed,s.remaining,alive().length]);
-          }
-          at(s.target);
-          if(tower)s.interact(g);else tick(.04);
-          if(g.phase!=='win')throw Error('撤离不应受残敌和待入场数影响');
-          runs.push({strategy,atExit,total:deployed,peak,seconds,routes:routes.size,holdTotal});
-        }finally{m.spawnRegular=original;}
+          if(s.stage!==first)tick(.5);
+          if(s.stage==='hold' && alive().length)hold=alive();
+        }
+        if(s.stage!==first)throw Error('前置阶段未完成 '+[s.stage,g.beasts.live]);
+        if(!tower && (hold.length!==100 || g.objective.held!==45 || hold.some(b=>!b.active)))
+          throw Error('坚守残敌或时间异常 '+[hold.length,g.objective.held]);
+        const team=alive().filter(b=>!before.has(b)), tag=team[0]?.storyWave;
+        if(team.length!==100 || team.some(b=>b.storyWave!==tag) || s.remaining)
+          throw Error('计时任务触发时未完整集结 '+[s.stage,team.length,alive().length]);
+        if(tower && new Set(team.map(b=>b.climbRoute[0].join(','))).size!==4)
+          throw Error('救援防守应在开启时向四面集结');
+        at(s.target);
+        const began=g.time, initialGroups=groups, remove=leave?6:100;
+        for(const b of team.slice(0,remove))m.damage(b,1e7,g);
+        const generations=team.slice(remove).map(b=>b.spawnGeneration);
+        for(let i=0;i<370 && s.stage===first;i++)tick(.25);
+        const seconds=g.time-began;
+        if(s.stage!==last || seconds!==(tower?90:10) || (!tower && (!s.detonated||s.doorStates.barricade)))
+          throw Error('计时或出口异常 '+[s.stage,seconds]);
+        if(team.slice(remove).some((b,i)=>!b.active||b.storyWave!==tag||b.spawnGeneration!==generations[i]))
+          throw Error('阶段切换清除了原队伍');
+        if(groups!==initialGroups || alive().some(b=>b.storyWave!==tag && !before.has(b)))
+          throw Error('击杀或阶段切换创建了另一场敌群');
+        m.spawnGroup=spawn;
+        at(s.target);
+        if(tower)s.interact(g);else tick(.04);
+        if(g.phase!=='win')throw Error('撤离不应受残敌影响');
+        runs.push({leave,initial:team.length,previous:hold.length,seconds});
       }
       return runs;
     }""", stage=='paris-tower')
-    print('PASS finite timed encounters',stage,result,flush=True)
+    print('PASS timed encounters',stage,result,flush=True)
+
+
+def check_trigger_edges(page, stage):
+    result=page.evaluate("""isLab=>{
+      const g=run.game,p=g.player,s=g.story,m=g.beasts;
+      const coordinates=isLab?[[0,29.88],[-2.1,29.8],[1.1,28.2]]:[[-6,24],[6,24],[0,29]];
+      const reports=[];
+      for(const [cx,cz] of coordinates){
+        g.reset();g.phase='play';
+        const t=s.target;
+        let position;
+        for(const [dx,dz] of [[0,0],[0,.4],[-.4,0],[.4,0],[0,-.4],[0,.9],[-.9,0],[.9,0],[0,-.9]]){
+          const x=cx+dx,z=cz+dz,y=g.level.foot(x,z,t.y+1,p.radius);
+          if(!g.level.blocked(x,z,y,p.radius,p.height)){position={x,y,z};break;}
+        }
+        if(!position)throw Error('测试入口周围缺少可站立地点 '+[cx,cz]);
+        Object.assign(p,position);
+        const {x,z}=position;
+        // 模拟玩家在一个模拟步内逼近入口；上一次寻路终点仍是出生点。
+        s.step(.016,g);
+        const team=m.pool.filter(b=>b.active && b.storyWave), tag=team[0]?.storyWave;
+        if(team.length!==100||s.encounters[0]?.spawned!==100)throw Error('入口未一次集结 '+[x,z,team.length]);
+        const victims=team.filter(b=>!b.affixes?.includes('split')).slice(0,4);
+        if(victims.length!==4)throw Error('缺少可验证的普通守卫');
+        for(const b of victims)m.damage(b,1e7,g);
+        for(let i=0;i<48;i++){g.time+=.25;m.releaseSplits(g);s.step(.25,g);}
+        if(m.pool.filter(b=>b.active && b.storyWave===tag).length!==96 || s.remaining)
+          throw Error('击杀普通守卫后本场又生出敌人');
+        reports.push([x,z,Math.min(...team.map(b=>Math.hypot(b.x-x,b.z-z))).toFixed(2)]);
+      }
+      return reports;
+    }""",stage=='underground-lab')
+    print('PASS immediate formation at entrance and edges',stage,result,flush=True)
 
 
 def verify(browser,ids):
@@ -92,7 +110,8 @@ def verify(browser,ids):
         html=html.replace("    startLevel(definition, campaign, campaignStage);","    window.run=startLevel(definition,campaign,campaignStage);")
         route.fulfill(body=html,content_type='text/html')
     page.route(re.compile(r"/[a-z-]+/index\.html$"),entry)
-    page.add_init_script("window.requestAnimationFrame=()=>1;")
+    page.add_init_script("""window.requestAnimationFrame=()=>1;
+      Element.prototype.requestPointerLock=()=>{throw Error('任务验收不使用系统鼠标')};""")
     for stage in ids:
         page.goto((ROOT/stage/'index.html').as_uri())
         page.wait_for_function("!!window.run",polling=100)
@@ -104,6 +123,20 @@ def verify(browser,ids):
           start('endless');
           if (g.story.managed || !g.beasts.boss || g.beasts.live<35) throw Error('无尽增援未保留 '+[g.story.managed,Boolean(g.beasts.boss),g.beasts.live]);
           const tick=(dt)=>{g.time+=dt;g.beasts.releaseSplits(g);g.objective.step(dt,g);g.story.step(dt,g);};
+          const manager=g.beasts, spawn=manager.spawnGroup.bind(manager);
+          manager.spawnGroup=(entries,options)=>{
+            const group=spawn(entries,options);
+            if(entries.length!==100)return group;
+            if(group.length!==100)throw Error('当前交战区未能一次部署百只 '+[g.story.stage,g.player.x,g.player.z]);
+            for(const [i,b] of group.entries()){
+              if(g.level.blocked(b.x,b.z,b.y,b.radius,b.height)||g.level.inSafeZone(b.x,b.z)||
+                 Math.hypot(b.x-g.player.x,b.z-g.player.z)<6)throw Error('出生净空或距离异常 '+[b.type,b.x,b.z]);
+              if(group.slice(0,i).some(other=>b.y<other.y+other.height && other.y<b.y+b.height &&
+                 Math.hypot(b.x-other.x,b.z-other.z)+.001<b.radius+other.radius))
+                throw Error('同一群出生碰撞 '+[b.type,b.x,b.z]);
+            }
+            return group;
+          };
           start(defaultMode);
           const panel=document.getElementById('task-panel'), note=document.getElementById('objective');
           g.ui.nodes.hud.hidden=false;g.ui.update(.1,g);
@@ -374,8 +407,10 @@ def verify(browser,ids):
               return {metres:Math.round(sideWalk),treasure:boxes};
             }""")
             print('PASS optional rooms, wrong turn, alternative route and combat navigation',detour,flush=True)
+        if stage in ('rain-city','underground-lab'):
+            check_trigger_edges(page,stage)
         if stage in ('rain-city','paris-tower'):
-            timed_reinforcements(page,stage)
+            timed_encounters(page,stage)
         assert not errors,errors
     page.close()
 

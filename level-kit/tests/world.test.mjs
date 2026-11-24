@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
-import { createGrid, createWorld } from '../src/world.mjs';
+import { createGrid, createWorld, SpatialHash } from '../src/world.mjs';
 import { createMissionNavigation } from '../src/mission-navigation.mjs';
 import { makeConfig } from '../src/config.mjs';
 
@@ -69,13 +69,13 @@ test('处于任务、特殊动作、伤害持续期的远敌始终走原感知�
   assert.equal(manager.simulationStats.deferred,0);
 });
 
-test('实验池可设 192，战役原有补兵量、遭遇总数和难度参数维持不变', () => {
+test('正式池容纳两场百只遭遇和额外成员，实验池可独立设为 192', () => {
   for (const stage of [1,8,15]) {
     const baseline = makeConfig({},stage).beasts;
-    const experiment = makeConfig({beasts:{capacity:192}},stage).beasts;
+    const experiment = makeConfig({beasts:{simulation:{poolCapacity:192}}},stage).beasts;
     assert.equal(experiment.capacity,192);
-    assert.deepEqual({...experiment,capacity:baseline.capacity},baseline);
-    assert.ok(baseline.capacity<192);
+    assert.deepEqual({...experiment,capacity:baseline.capacity,simulation:baseline.simulation},baseline);
+    assert.ok(baseline.capacity >= 2*baseline.encounterSize+64);
   }
 });
 
@@ -88,6 +88,71 @@ const CONFIG = makeConfig({ map: { cell: 2, navCell: 2 } });
 const GRID = createGrid(Array(7).fill('.......'), 2);
 const { Level, Navigation } = createWorld({ CONFIG, GRID, V3: Vector, definition: {},
   clamp: (v, min, max) => Math.min(max, Math.max(min, v)) });
+
+test('凶兽在矮台边缘按实际足底采样，出生场和追击场都能找到玩家路线', () => {
+  const level=new Level(), radius=CONFIG.beasts.types[2].radius;
+  level.box(radius+.02,0,.25,4,0,.35,true);
+  const nav=new Navigation(level), precise=nav.routeFor(2,true);
+  nav.rebuild(-4,0);precise.rebuild(-4,0);
+  const i=precise.index(0,0);
+  assert.equal(level.surface(0,0,.5),0);
+  assert.equal(level.foot(0,0,.5,radius),.35);
+  assert.equal(nav.fields[2].ground(0,0,i),.35);
+  assert.ok(nav.fields[2].dist[i]>=0 && precise.dist[i]>=0);
+});
+
+test('百只整群按当前玩家净距、完整模型和门体连通性规划；失败不留下部分实体', () => {
+  const config=makeConfig({map:{cell:2,navCell:1.25}});
+  const grid=createGrid(Array(40).fill('.'.repeat(40)),2);
+  const def={inSafeZone:()=>false};
+  const world=createWorld({CONFIG:config,GRID:grid,V3:Vector,definition:def,
+    clamp:(v,min,max)=>Math.min(max,Math.max(min,v))});
+  const level=new world.Level();
+  const gate=level.box(0,0,.4,80,0,6);
+  const nav=new world.Navigation(level), player={x:-23,y:0,z:3,radius:.36};
+  const {BeastManager}=createBeastClasses({CONFIG:config,definition:def,colors:{},TAU:2*Math.PI,
+    randomRange:(a,b)=>(a+b)/2});
+  const manager=Object.assign(Object.create(BeastManager.prototype),{
+    level,nav,currentGame:{player,time:0,training:true},pool:Array.from({length:132},(_,id)=>({id,active:false})),
+    hash:new SpatialHash(4),spawnFields:new Map(),live:0,
+    footprints:[{x:.72,z:1.14},{x:1.15,z:.91},{x:.8,z:1.1},{x:1.8,z:1.6}],
+  });
+  const entries=Array.from({length:100},(_,i)=>({type:i%3,angle:i%2*Math.PI/2,regular:false}));
+  const options={anchors:[{x:-16,y:0,z:0}]};
+  const preview=manager.planGroup(entries,options);
+  assert.equal(preview.length,100);
+  assert.equal(manager.live,0);
+  Object.assign(player,{x:preview[0].x,z:preview[0].z}); // 预警后玩家跑到原来打算投放的位置。
+  const group=manager.spawnGroup(entries,options);
+  assert.equal(group.length,100);
+  for(const [i,b] of group.entries()) {
+    assert.equal(b.type,i%3);
+    assert.ok(b.x1<gate.x0);
+    const dx=Math.max(0,b.x0-player.x,player.x-b.x1), dz=Math.max(0,b.z0-player.z,player.z-b.z1);
+    assert.ok(Math.hypot(dx,dz)>=config.beasts.safeSpawnGap+player.radius);
+    for(const other of group.slice(0,i)) assert.ok(b.x1<=other.x0 || b.x0>=other.x1 || b.z1<=other.z0 || b.z0>=other.z1);
+  }
+  assert.equal(manager.hash.query(-40,-40,40,40,[]).length,100);
+  assert.deepEqual(manager.spawnGroup([0,0],{accept:(_,i)=>i===0}),[]);
+  assert.deepEqual(manager.spawnGroup([0,0],{accept:s=>s.x>0}),[]);
+  const arena={x:20,y:0,z:-8};
+  const bossSite={anchors:[arena],target:arena,accept:s=>Math.hypot(s.x-arena.x,s.z-arena.z)<7};
+  assert.deepEqual(manager.spawnGroup([3],bossSite),[]); // 目标本身在锁门后，不能据此宣告玩家可达。
+  assert.equal(manager.live,100);
+  level.setBarrier(gate,null,false);
+  assert.equal(manager.spawnGroup([0,0],{accept:s=>s.x>0}).length,2);
+  assert.equal(manager.spawnGroup([3],bossSite).length,1);
+  const previous=manager.boss;
+  manager.currentGame.patrolRemaining=2;
+  let failedCommits=0;
+  manager.spawnRegular=()=>{failedCommits++;manager.currentGame.patrolRemaining--;return null;};
+  assert.deepEqual(manager.spawnGroup([3,0],bossSite),[]);
+  assert.equal(failedCommits,1);
+  assert.equal(manager.boss,previous);
+  assert.equal(manager.currentGame.patrolRemaining,2);
+  assert.equal(manager.live,103);
+  assert.equal(manager.hash.query(-40,-40,40,40,[]).length,103);
+});
 
 test('涨潮时玩家路标绕过禁行低沟，退潮后恢复直接路线', () => {
   let flooded = false;

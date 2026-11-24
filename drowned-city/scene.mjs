@@ -895,12 +895,12 @@ function seaModel(type,{THREE,shapes,mergeGeometries}){
 export default {
   story:{
     type:'escort',
-    sectors:[{name:'海藻林廊',cap:7,interval:0.40,at:[-8,23],entries:[[-15,20],[0,18]]},
-      {name:'议事厅前庭',cap:9,interval:0.35,at:[0,11],entries:[[-10,9],[10,10]]}],
+    sectors:[{name:'海藻林廊',at:[-8,23],entries:[[-15,20],[0,18]]},
+      {name:'议事厅前庭',at:[0,11],entries:[[-10,9],[10,10]]}],
     route:[{kind:'fight',name:'海藻林补给点',label:'掩护停靠无人机，拦截伏击者',escort:true,at:[-8,23],
-        entries:[[-15,20],[-6,15]],cap:7,interval:.40,mix:[0,2,0,1],range:8},
+        entries:[[-15,20],[-6,15]],mix:[0,2,0,1],range:8},
       {kind:'fight',name:'议事厅坡道',label:'保护无人机，打通议事厅坡道',escort:true,at:[12,10],
-        entries:[[19,10],[9,3]],cap:9,interval:.35,mix:[0,1,0,2],range:8}],
+        entries:[[19,10],[9,3]],mix:[0,1,0,2],range:8}],
   },
   weaponSkin: 'drowned-city',
   pageTitle: '沉穹古都 | 第六关',

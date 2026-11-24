@@ -26,8 +26,8 @@ const DEFAULT_CONFIG = {
     heatPerShot: 0.061, heatRecovery: 1.1, hitStop: 0.03, hearingRadius: 32,
   },
   beasts: {
-    population: 64, capacity: 96, encounterSize: 100, spawnEvery: 0.50, spawnBurst: 2,
-    spawnDistance: 21, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
+    population: 64, capacity: 96, encounterSize: 100,
+    spawnDistance: 21, safeSpawnGap: 6, farDistance: 30, farUpdateFrames: 6, sight: 25, sightDot: 0.18,
     memory: 7, separation: 1.35,
     simulation: { farCadence: true, profile: false },
     visibility: { enabled:true, occlusion:true, occlusionRange:40 },
@@ -116,7 +116,10 @@ export function makeConfig(overrides = {}, campaignStage = 0) {
     const steps = campaignStage - 1;
     const beasts = config.beasts;
     beasts.population = rules.firstPopulation + steps * rules.populationStep;
-    beasts.capacity = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity);
+    // 坚守结束后上一战区可仍有百只在场；为下一整群、首领召唤和支线预留槽位。
+    beasts.capacity = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity, 2*beasts.encounterSize+64);
+    if (beasts.simulation.poolCapacity != null)
+      beasts.capacity = Math.max(beasts.population, beasts.simulation.poolCapacity);
 
     // 关卡只填写原速。追击、冲撞和狂暴统一缩放，弹丸和事件倍率沿用各自配置。
     const speedScale = Math.min(1, rules.firstSpeedScale * (1 + steps * rules.speedStepFromBase));

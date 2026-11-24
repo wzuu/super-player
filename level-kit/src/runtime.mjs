@@ -235,7 +235,6 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.journal?.start(this, { difficulty: prefs.difficulty, recordReplay: preferences().recordReplay }, packed);
       packed = null;
       story.prepare(training ? null : objective.mode);
-      training?.prepare();
       beasts.reset(player, this);
       projectiles.reset();
       effects.reset();

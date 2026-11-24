@@ -44,8 +44,10 @@ def capture(browser, root, stage, weapon, size):
           Array.from(hud.children).forEach(n=>{ if(!n.contains(document.querySelector('#aim-dot'))) n.style.display='none'; });
           document.querySelector('#aim-dot').hidden=false;
           w.render(0,p,g);w.group.updateMatrixWorld(true);
-          const centre=w.sight.getWorldPosition(camera.position.clone()).project(weaponCamera);
-          if(Math.hypot(centre.x,centre.y)>1e-6)throw Error('镜片未与红点对准');
+          if (w.sight) {
+            const centre=w.sight.getWorldPosition(camera.position.clone()).project(weaponCamera);
+            if(Math.hypot(centre.x,centre.y)>1e-6)throw Error('历史样板的镜片未与红点对准');
+          }
         }""",stage)
         page.evaluate("run.weaponPass.enabled=true;run.composer.render(0)")
         image = Image.open(BytesIO(page.screenshot())).convert("RGB")
@@ -72,7 +74,8 @@ def capture(browser, root, stage, weapon, size):
             let count=0;for(let i=0;i<data.length;i+=4)if(data[i]>127)count++;
             return count*400/data.length;
           }
-          w.flashGroup.visible=false;w.sight.children[1].visible=false;
+          w.flashGroup.visible=false;
+          if (w.sight) w.sight.children[1].visible=false;
           const gun=mask(W*.27,H*.46,W*.46,H*.34);
           white.dispose();
           return gun;

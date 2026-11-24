@@ -2,6 +2,7 @@ import { createBeastBatches } from '@level-kit/beast-model-batches.mjs';
 import { BeastDetailBudget } from '@level-kit/beast-lod.mjs';
 import { stageTactic } from '@level-kit/tactics.mjs';
 import { SpatialHash } from '@level-kit/world.mjs';
+import { planBeastGroup } from '@level-kit/beast-spawns.mjs';
 import { resetTargetEffects } from '@level-kit/weapon-perks.mjs';
 import { FoeTraits, roleRules, affixTitles } from '@level-kit/foe-traits.mjs';
 import { bossDamage, bossStep, createBossFight } from '@level-kit/boss-fight.mjs';
@@ -454,6 +455,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.visibility = new BeastVisibility(THREE, CONFIG.beasts.visibility, level);
       this.level = level; this.nav = nav;
       this.hash = new SpatialHash(CONFIG.map.hash);
+      this.spawnFields = new Map();
       this.resetSimulationStats();
       this.pool = Array.from({ length: CONFIG.beasts.capacity }, (_, id) => ({ id, active: false, mark: 0, aim: new V3() }));
       this.air = new V3(); this.line = new V3();
@@ -502,31 +504,81 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     reset(player, game) {
       this.currentGame=game;
       this.traits.splits.length=0;
-      this.live = 0; this.boss = null; this.frame = 0; this.spawnTime = 0; this.navTime = 0;
+      this.live = 0; this.boss = null; this.frame = 0; this.navTime = 0;
       for (const b of this.pool) b.active = false;
       for (const corpse of this.corpses) corpse.until=0;
       this.nav.rebuild(player.x, player.z); this.hash.clear();
-      if (game?.training?.kind === 'tutorial' || game?.objective.mode==='hunt' || game?.story?.managed) {this.render();return;}
-      const anchor = definition.initialPopulationAnchor;
-      if (anchor) this.nav.rebuild(...anchor);
-      const spawn = this.level.bossSpawn;
-      if (!game?.training) this.spawn(3, spawn.x, spawn.z, spawn.y, 1);
-      for (let i = 1; i < Math.min(CONFIG.beasts.population, this.pool.length); i++) {
-        const type = this.randomType(), site = this.spawnSite(type, player, true, null);
-        if (site !== -1) this.spawnRegular(type, this.nav.x(site), this.nav.z(site));
-      }
-      if (anchor) this.nav.rebuild(player.x, player.z);
+      this.pendingWave = null;
+      this.waveRetryAt = 0;
+      this.openingPending = !(game.training || game.objective.mode==='hunt' || game.story?.managed);
+      if (this.openingPending) this.deployPopulation(game);
       this.refreshHash(); this.render();
+    }
+    planGroup(entries,options={}) {
+      const game=this.currentGame;
+      let patrol=game.patrolRemaining;
+      const planned=entries.map(value=>{
+        const entry=typeof value==='number' ? {type:value} : value;
+        if (!campaignStage || game.training || entry.type===3 || entry.regular===false) return entry;
+        const traits=this.traits.roll(entry.type,game,entry.elite||patrol>0);
+        if (patrol>0 && traits.affixes) patrol--;
+        return {...entry,traits};
+      });
+      return planBeastGroup(this,planned,options,CONFIG,definition.allowSpawnSite);
+    }
+    spawnGroup(entries,options={}) {
+      const sites = this.planGroup(entries,options);
+      const group=[], previousBoss=this.boss, patrol=this.currentGame.patrolRemaining;
+      for (const [i,{type,x,y,z,angle,traits}] of sites.entries()) {
+        const entry=entries[i];
+        const b=type!==3 && entry.regular!==false ? this.spawnRegular(type,x,z,y,entry.elite,angle,traits) :
+          this.spawn(type,x,z,y,angle);
+        if (!b) {
+          for (const member of group) member.active=false;
+          this.live-=group.length;
+          this.boss=previousBoss;
+          this.currentGame.patrolRemaining=patrol;
+          this.refreshHash();
+          return [];
+        }
+        group.push(b);
+      }
+      if (group.length) this.refreshHash();
+      return group;
+    }
+    deployPopulation(game) {
+      const opening=this.openingPending;
+      if (this.waveRetryAt>game.time) return;
+      if (!opening && (game.objective.mode!=='endless' || this.pool.some(b=>b.active && b.waveMember))) return;
+      if (!this.pendingWave) {
+        const target=Math.min(CONFIG.beasts.population + (opening ? 0 : game.objective.reinforcements+2),
+          this.pool.length-32);
+        this.pendingWave=Array.from({length:target},()=>this.randomType());
+        if (opening) this.pendingWave[0]={type:3,anchor:this.level.bossSpawn,angle:1};
+      }
+      const anchor=(opening || this.level.inSafeZone(game.player.x,game.player.z)) && definition.initialPopulationAnchor;
+      const target=anchor ? {x:anchor[0],y:this.level.base(...anchor),z:anchor[1]} : game.player;
+      const group=this.spawnGroup(this.pendingWave,{target,safeDistance:CONFIG.beasts.spawnDistance});
+      if (!group.length) {
+        if (!this.waveRetryAt) game.ui.notify('正为整波凶兽寻找安全集结区',2);
+        this.waveRetryAt=game.time+.5;
+        return;
+      }
+      this.waveRetryAt=0;
+      for (const b of group) b.waveMember=b.type!==3;
+      this.openingPending=false;
+      this.pendingWave=null;
+      if (!opening) game.objective.advanceWave(game);
     }
     randomType() {
       const r = Math.random();
       return r < 0.66 ? 0 : r < 0.86 ? 1 : 2;
     }
-    spawnRegular(type,x,z,y,elite=false) {
-      const b=this.spawn(type,x,z,y);
+    spawnRegular(type,x,z,y,elite=false,angle,traits) {
+      const b=this.spawn(type,x,z,y,angle);
       if (this.currentGame && b && !this.currentGame.training) {
         const patrol=this.currentGame.patrolRemaining>0;
-        this.traits.assign(b,this.currentGame,elite||patrol);
+        this.traits.assign(b,this.currentGame,elite||patrol,traits);
         if(patrol && b.affixes) this.currentGame.patrolRemaining--;
       }
       return b;
@@ -542,7 +594,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
-        active: true, storyWave:null, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
+        active: true, storyWave:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
         nearLOD:false, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
         traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,
@@ -578,33 +630,6 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
         steps: 0, actors: 0, perceptions: 0, deferred: 0, spawnScans: 0,
         perceptionMs: 0, navigationMs: 0, statusMs: 0, hashMs: 0, spawnScanMs: 0,
       };
-    }
-    visibleToPlayer(x, y, z, viewDirection) {
-      const dx = x - camera.position.x, dz = z - camera.position.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 0.001 && (viewDirection.x * dx + viewDirection.z * dz) / d <= 0.30) return false;
-      const length = this.line.set(dx, y + 0.80 - camera.position.y, dz).length();
-      return this.level.visible(camera.position, this.line.divideScalar(Math.max(length, 0.01)), length);
-    }
-    spawnSite(type, player, initial, viewDirection) {
-      const sites = this.level.sites, cursor = Math.floor(Math.random() * sites.length);
-      const stats = CONFIG.beasts.types[type];
-      for (let k = 0; k < sites.length; k++) {
-        const i = sites[(cursor + k) % sites.length];
-        if (this.nav.fields[type].dist[i] < 0) continue;
-        const x = this.nav.x(i), z = this.nav.z(i);
-        const dx = x - player.x, dz = z - player.z, d = Math.hypot(dx, dz);
-        if (d < CONFIG.beasts.spawnDistance || (initial && d > 76) || this.level.inSafeZone(x, z, 3)) continue;
-        if (this.level.blocked(x, z, this.level.base(x, z), stats.radius, stats.height)) continue;
-        let occupied = false;
-        for (const b of this.pool) {
-          if (b.active && (b.x - x) ** 2 + (b.z - z) ** 2 < (initial ? 1.65 : 2.3) ** 2) { occupied = true; break; }
-        }
-        if (occupied) continue;
-        if (viewDirection && this.visibleToPlayer(x, this.level.base(x, z), z, viewDirection)) continue;
-        return i;
-      }
-      return -1;
     }
     retire(b, game, source = 'environment', hit = null) {
       if (!b.active) return false;
@@ -693,7 +718,9 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     releaseSplits(game) {
       if (this.traits.splits.length) {
-        for (const position of this.traits.splits.splice(0)) this.traits.offspring(position,game,2);
+        for (const position of this.traits.splits.splice(0)) {
+          if (!this.traits.offspring(position,game,2)) this.traits.splits.push(position);
+        }
       }
     }
     update(dt, player, game) {
@@ -733,44 +760,21 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
           b.yaw += Math.atan2(Math.sin(delta), Math.cos(delta)) * Math.min(1, dt * 16);
         }
       }
-      this.spawnTime -= dt;
-      if (this.spawnTime <= 0 && !game.story?.managed && !game.field?.hunting) {
-        this.spawnTime = encounter?.spawnEvery ?? CONFIG.beasts.spawnEvery;
-        const target = Math.min((encounter?.population ?? CONFIG.beasts.population) + (game.objective?.reinforcements ?? 0), this.pool.length);
-        const burst = encounter?.spawnBurst ?? CONFIG.beasts.spawnBurst;
-        camera.getWorldDirection(this.air);
-        for (let i = 0; i < burst && this.live < target; i++) {
-          const type = this.randomType(), spawn = this.spawnSite(type, player, false, this.air);
-          if (spawn !== -1) {
-            const child = this.spawnRegular(type, this.nav.x(spawn), this.nav.z(spawn));
-            if (child) child.reinforcement = this.live > CONFIG.beasts.population;
-          }
-        }
-        if (!encounter?.hearingOnly && this.live > target) {
-          for (const b of this.pool) {
-            if (this.live <= target) break;
-            if (!b.active || !b.reinforcement || Math.hypot(player.x - b.x, player.z - b.z) < CONFIG.beasts.spawnDistance ||
-                this.visibleToPlayer(b.x, b.y, b.z, this.air)) continue;
-            b.active = false; this.live--;
-          }
-        }
-      }
+      if (!game.training && !game.story?.managed && !game.field?.hunting && game.objective.mode!=='hunt')
+        this.deployPopulation(game);
       if (this.boss?.summon > 0) {
-        const b = this.boss;
-        const a = Math.random() * TAU;
-        const x = b.x + Math.cos(a) * 3.6, z = b.z + Math.sin(a) * 3.6;
-        const floor = this.level.surface(x, z, b.y + 0.45);
-        const swarm = CONFIG.beasts.types[0];
-        if (this.live < this.pool.length && !this.level.blocked(x, z, floor, swarm.radius, swarm.height)) {
-          const stage = definition.stageBossSummon;
-          if (!stage || stage(x, floor, z, game)) {
-            if (!stage) {
-              const child = this.spawn(0, x, z, floor);
-              if (!encounter?.hearingOnly) child.alert = CONFIG.beasts.memory;
+        const b = this.boss, count = b.summon;
+        if (definition.stageBossSummon) {
+          if (definition.stageBossSummon(b,count,game)) b.summon=0;
+        } else {
+          const group=this.spawnGroup(Array.from({length:count},()=>({type:0,regular:false})),{anchors:[b]});
+          if (group.length) {
+            b.summon=0;
+            for (const child of group) {
+              if (!encounter?.hearingOnly) child.alert=CONFIG.beasts.memory;
+              this.air.set(child.x,child.y+.28,child.z);
+              game.effects.spray(this.air,ichor,8,4.2,.10,'mist');
             }
-            b.summon--;
-            this.air.set(x, floor + 0.28, z);
-            game.effects.spray(this.air, ichor, 8, 4.2, 0.10, 'mist');
           }
         }
       }

@@ -92,7 +92,11 @@ test('坚守、护送、限时和无尽分别显示可执行的指引', () => {
   goal.reset('endless', g);
   g.time = 46;
   goal.step(0.1, g);
+  assert.equal(guide().stage, 'wave-1');
+  assert.match(guide().detail, /清空本波/);
+  goal.advanceWave(g);
   assert.equal(guide().stage, 'wave-2');
+  assert.equal(goal.reinforcements, 2);
 });
 test('漏过护送伏击直达屋顶后仍可带无人机返回任务区', () => {
   const { goal, g } = fixture();
@@ -110,7 +114,7 @@ test('漏过护送伏击直达屋顶后仍可带无人机返回任务区', () =>
   goal.step(0.1, g);
   assert.equal(goal.ready(g), true);
 });
-test('孵化与延时分裂继承小队和宝库守卫身份，并遵守两种人数上限', () => {
+test('孵化与延时分裂在各自的触发时完整出生并继承小队和宝库身份', () => {
   const traits = new FoeTraits(13, { beasts: { population: 55 } }),
     group = { cap: 2 };
   const b = { x: 0, y: 0, z: 0, active: true, storyWave: group, fieldGroup: 'vault', affixes: ['split'] };
@@ -120,11 +124,11 @@ test('孵化与延时分裂继承小队和宝库守卫身份，并遵守两种�
         pool,
         live: 1,
         dropHeight: () => 0,
-        spawn() {
-          const child = { active: true };
-          pool.push(child);
-          this.live++;
-          return child;
+        spawnGroup(entries) {
+          const children = entries.map(() => ({active:true}));
+          pool.push(...children);
+          this.live+=children.length;
+          return children;
         },
       },
       field: { guards: [b], guardCount: 2 },
@@ -136,13 +140,13 @@ test('孵化与延时分裂继承小队和宝库守卫身份，并遵守两种�
   // 对象池容量与当前存活数分开。
   pool.push(...Array.from({ length: 6 }, () => ({ active: false })));
   traits.offspring(b, g, 3);
-  assert.equal(g.field.guards.length, 2);
+  assert.equal(g.field.guards.length, 4);
   assert.equal(pool.at(-1).storyWave, group);
   b.active = false;
   g.beasts.live--;
   traits.defeated(b, g);
   const [deferred] = traits.splits;
   traits.offspring(deferred, g, 2);
-  assert.equal(pool.filter((v) => v.active && v.storyWave === group).length, 2);
-  assert.equal(pool.filter((v) => v.active && v.fieldGroup === 'vault').length, 2);
+  assert.equal(pool.filter((v) => v.active && v.storyWave === group).length, 5);
+  assert.equal(pool.filter((v) => v.active && v.fieldGroup === 'vault').length, 5);
 });
