@@ -85,7 +85,8 @@ def check_trigger_edges(page, stage):
         const {x,z}=position;
         // 模拟玩家在一个模拟步内逼近入口；上一次寻路终点仍是出生点。
         s.step(.016,g);
-        const team=m.pool.filter(b=>b.active && b.storyWave), tag=team[0]?.storyWave;
+        const tag=s.guide(g,{keyItem:'核心'}).target?.storyWave;
+        const team=m.pool.filter(b=>b.active && tag && b.storyWave===tag);
         if(team.length!==100||s.encounters[0]?.spawned!==100)throw Error('入口未一次集结 '+[x,z,team.length]);
         const victims=team.filter(b=>!b.affixes?.includes('split')).slice(0,4);
         if(victims.length!==4)throw Error('缺少可验证的普通守卫');
@@ -347,7 +348,9 @@ def verify(browser,ids):
               const first=follow();
               for(let i=0;i<420 && s.encounters[0]?.clearedAt===undefined;i++){
                 run.nav.rebuild(p.x,p.z);
-                for(const b of g.beasts.pool)if(b.active)g.beasts.damage(b,1e7,g);
+                s.step(.016,g);
+                const current=s.guide(g,{}).target?.storyWave;
+                for(const b of g.beasts.pool)if(b.active && current && b.storyWave===current)g.beasts.damage(b,1e7,g);
                 g.time+=.5;g.beasts.releaseSplits(g);s.step(.5,g);
               }
               if(s.encounters[0]?.spawned!==100||s.target.x!==1)throw Error('钟楼南街未开放');

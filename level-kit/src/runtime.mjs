@@ -652,6 +652,11 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   function animate(now) {
     requested = 0;
     if (document.hidden) return;
+    if (!training && (game.phase==='ready' || game.phase==='play')) {
+      const deadline=performance.now()+2;
+      beasts.detailParts.prepareMaterial(renderer,scene,camera,composer.readBuffer);
+      beasts.prepareSpawnRoutes(deadline);
+    }
     const dt = lastFrame === null ? 0 : Math.max(0, (now - lastFrame) / 1000);
     lastFrame = Math.max(lastFrame ?? now, now);
     worldTime += dt;

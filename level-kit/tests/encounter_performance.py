@@ -17,6 +17,27 @@ SEED = """
   Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
   localStorage.setItem('super-player:preferences:v1',JSON.stringify({quality:'medium'}));
 """
+BIRTHS = """()=>{
+  const g=run.game,m=g.beasts,s=g.story;
+  if(!m.spawnGroup)return;
+  // 预驻发生于 reset；剧情给成员赋组后按身份保存当时的计时和玩家位置。
+  const original=m.spawnGroup.bind(m),pending=[];
+  window.measuredGroups=new Map();
+  m.spawnGroup=(...args)=>{
+    const x=g.player.x,z=g.player.z,begin=performance.now(),members=original(...args),ms=performance.now()-begin;
+    if(members.length===100)pending.push({members,count:members.length,ms,
+      gap:Math.min(...members.map(b=>Math.hypot(b.x-x,b.z-z)))});
+    return members;
+  };
+  for(const key of ['reset','step','interact']){
+    const fn=s[key].bind(s);s[key]=(...args)=>{
+      const result=fn(...args);
+      for(const row of pending.splice(0)){const tag=row.members[0].storyWave;
+        if(tag)measuredGroups.set(tag,{count:row.count,ms:row.ms,gap:row.gap});}
+      return result;
+    };
+  }
+}"""
 PREPARE = """([name,x,z])=>{
   const g=run.game,s=g.story,p=g.player,nav=run.nav;
   const move=t=>{Object.assign(p,{x:t.x,y:t.y,z:t.z});nav.rebuild(p.x,p.z);};
@@ -28,7 +49,9 @@ PREPARE = """([name,x,z])=>{
       window.room=name;
       return;
     }
-    for(const b of g.beasts.pool)if(b.active)g.beasts.damage(b,1e7,g);
+    const current=s.guide(g,{keyItem:'核心'})?.target?.storyWave;
+    for(const b of g.beasts.pool)if(b.active && (!b.storyWave || current && b.storyWave===current))
+      g.beasts.damage(b,1e7,g);
     g.time+=.5;g.beasts.releaseSplits(g);g.objective.step(.5,g);s.step(.5,g);
     if(s.stage==='use' && s.target){move(s.target);s.interact(g);}
   }
@@ -55,6 +78,8 @@ EXERCISE = """([expected,peakOnly])=>{
       const log=s.encounters.find(e=>e.name===window.room);
       if(log?.clearedAt) {
         if(log.spawned!==expected)throw Error('实际入场数不符 '+log.spawned);
+        const earlier=window.measuredGroups?.get(window.measuredTag);
+        if(earlier)nearestSpawn=Math.min(nearestSpawn,earlier.gap);
         if(nearestSpawn<3.29)throw Error('在玩家脚下出生 '+nearestSpawn);
         return {spawned:log.spawned,peak,firstSeconds:+first.toFixed(2),
           longestGapSeconds:+maxGap.toFixed(2),durationSeconds:+activeTime.toFixed(2),
@@ -62,7 +87,9 @@ EXERCISE = """([expected,peakOnly])=>{
       }
       if(!log)continue;
       activeTime+=dt;
-      const alive=g.beasts.pool.filter(b=>b.active&&b.storyWave);
+      const current=s.guide(g,{keyItem:'核心'})?.target?.storyWave;
+      window.measuredTag??=current;
+      const alive=g.beasts.pool.filter(b=>b.active&&b.storyWave && (!window.measuredTag||b.storyWave===window.measuredTag));
       peak=Math.max(peak,alive.length);
       eye.set(p.x,p.y+1.55,p.z);
       const visible=alive.filter(b=>{
@@ -116,6 +143,8 @@ def measure(browser, root, stage, expected):
         page.route(file.as_uri(),lambda r:r.fulfill(body=html,content_type="text/html"))
         try:
             page.goto(file.as_uri())
+            page.wait_for_function("!!window.run")
+            page.evaluate(BIRTHS)
             page.locator("#start").click()
             page.wait_for_function("window.run?.game.phase==='play'")
             page.evaluate(PREPARE,ROOMS[stage])

@@ -571,8 +571,8 @@ export default {
     walls:[[null,-3.9,-24,.42,7.6,4.6],[null,3.9,-24,.42,7.6,4.6],
       [null,0,-27.8,8.2,.42,4.6],['barricade',0,-20.2,8.2,.5,4.6]],
     route:[
-      {kind:'fight',name:'地铁口下沉广场',label:'清理广场出口',at:[0,29],entries:[[-7,24],[8,21]],mix:[0,0,2]},
-      {kind:'fight',name:'钟楼南街',label:'打通钟楼南街',at:[1,8],entries:[[-7,6],[10,4]],mix:[0,1,2]},
+      {kind:'fight',name:'地铁口下沉广场',stationed:true,label:'清理广场出口',at:[0,29],entries:[[-7,24],[8,21]],mix:[0,0,2]},
+      {kind:'fight',name:'钟楼南街',stationed:true,label:'打通钟楼南街',at:[1,8],entries:[[-7,6],[10,4]],mix:[0,1,2]},
       {kind:'hold',at:[1.6,-14],label:'守住钟楼裂隙',mix:[0,0,2,1],entries:[[-12,-14],[11,-19],[-8,-21]]},
       {kind:'use',at:[0,-19],label:'在高架隔离门布设爆破装置'},
       {kind:'countdown',encounter:'demolition',at:[8,-15],label:'撤到东侧路障后方',charge:[0,-20.2],door:'barricade',clearLanes:[[-3.8,-28,3.8,-13]],mix:[0,0,1,2],entries:[[-9,-13],[12,-16],[-12,-21],[12,-21],[-8,-9]]},

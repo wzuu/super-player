@@ -172,6 +172,13 @@ test('百只整群按当前玩家净距、完整模型和门体连通性规划�
   const preview=manager.planGroup(entries,options);
   assert.equal(preview.length,100);
   assert.equal(manager.live,0);
+  // 同坐标锚点的不同对象和按槽过滤的通用接口必须得到完全相同的最近合法格。
+  const independent=entries.map(e=>({...e,anchor:{...options.anchors[0]}}));
+  assert.deepEqual(manager.planGroup(independent,{accept:()=>true}),preview);
+  const partition=(site,i)=>i%2===0 ? site.z>1 : site.z<-1;
+  const strict=manager.planGroup(independent,{accept:partition});
+  assert.equal(strict.length,100);
+  assert.deepEqual(manager.planGroup(independent,{accept:partition,acceptGroup:i=>i%2}),strict);
   Object.assign(player,{x:preview[0].x,z:preview[0].z}); // 预警后玩家跑到原来打算投放的位置。
   const group=manager.spawnGroup(entries,options);
   assert.equal(group.length,100);
@@ -202,6 +209,41 @@ test('百只整群按当前玩家净距、完整模型和门体连通性规划�
   assert.equal(manager.currentGame.patrolRemaining,2);
   assert.equal(manager.live,103);
   assert.equal(manager.hash.query(-40,-40,40,40,[]).length,103);
+  assert.deepEqual(manager.spawnGroup(Array(30).fill({type:0,regular:false})),[]);
+  assert.equal(manager.live,103);
+});
+
+test('出生网格分帧准备期间开关隔门，最终净空与实时重建一致',()=>{
+  const level=new Level(), gate=level.box(0,0,.4,22,0,4);
+  const nav=new Navigation(level), warm=nav.routeFor(0,true,1.25,true);
+  assert.equal(warm.prepare(-1),false);
+  level.setBarrier(gate,null,false);
+  while(warm.warmCell<warm.walkable.length)warm.prepare(-1);
+  level.setBarrier(gate,null,true);
+  while(!warm.prepare(-1)){}
+  level.setBarrier(gate,null,false);
+  warm.rebuild(-5,3);
+  const cold=nav.routeFor(0,true,1.25);cold.rebuild(-5,3);
+  for(const prop of ['edges','walkable','floors','dist'])assert.deepEqual(warm[prop],cold[prop]);
+});
+
+test('合并格桶查询后仍与原五点足底采样逐点等高',()=>{
+  const level=new Level();
+  level.box(0,0,1.4,1.1,0,.34,true);
+  level.box(.72,.8,.6,.9,0,.86,true);
+  level.box(-.9,0,.32,.41,0,.46,false);
+  const panel=level.box(-.7,-.8,.35,.3,0,.27,true);
+  for(const closed of [true,false]){
+    level.setBarrier(panel,null,closed);
+    for(const r of [.34,.65,1.05])for(const ceiling of [.31,.47,1.3]){
+      const d=r+.021;
+      for(let i=-12;i<=12;i++)for(let j=-11;j<=11;j++){
+        const x=i*.13,z=j*.17;
+        const expected=Math.max(...[[x,z],[x-d,z],[x+d,z],[x,z-d],[x,z+d]].map(([a,b])=>level.surface(a,b,ceiling)));
+        assert.equal(level.foot(x,z,ceiling,r),expected);
+      }
+    }
+  }
 });
 
 test('涨潮时玩家路标绕过禁行低沟，退潮后恢复直接路线', () => {

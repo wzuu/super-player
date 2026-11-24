@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT
-from encounter_performance import PREPARE, EXERCISE, ROOMS
+from encounter_performance import BIRTHS, PREPARE, EXERCISE, ROOMS
 
 FIXTURE = Path(__file__).with_name("herd_sample.js").read_text(encoding="utf-8")
 STAGES = {"open": "rain-city", "dense": "rain-city", "legacy96": "rain-city", "indoor": "underground-lab", "wall": "underground-lab", "mirror": "haunted-midway",
@@ -45,6 +45,7 @@ def measure(browser, root, mode, sample, size, frames):
         page.goto(file.as_uri())
         page.wait_for_function("!!window.run", polling=50)
         page.add_script_tag(content=FIXTURE)
+        if story: page.evaluate(BIRTHS)
         page.evaluate("herdSetup", [mode,sample,size])
         if sample == "legacy96":
             page.add_script_tag(content=Path(__file__).with_name("shotgun_stress.js").read_text(encoding="utf-8"))
@@ -56,18 +57,8 @@ def measure(browser, root, mode, sample, size, frames):
             page.evaluate(PREPARE, ROOMS[STAGES[sample]])
             expected = page.evaluate("run.config.beasts.encounterSize")
             peak = expected if page.evaluate("typeof run.game.beasts.spawnGroup === 'function'") else (14 if sample == "machine-room" else 16)
-            page.evaluate("""() => {
-              const manager = run.game.beasts;
-              if (!manager.spawnGroup) return;
-              const spawn = manager.spawnGroup.bind(manager);
-              manager.spawnGroup = (...args) => {
-                const start = performance.now(), group = spawn(...args);
-                if (group.length) window.spawnBatch = {count:group.length, ms:performance.now()-start};
-                return group;
-              };
-            }""")
             page.evaluate(EXERCISE, [peak, True])
-            spawn_batch = page.evaluate("window.spawnBatch ?? null")
+            spawn_batch = page.evaluate("window.measuredGroups?.get(window.measuredTag) ?? null")
         result = page.evaluate("herdMeasure", frames)
         if story and spawn_batch:
             assert spawn_batch["count"] == expected, spawn_batch

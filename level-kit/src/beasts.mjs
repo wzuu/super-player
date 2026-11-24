@@ -532,6 +532,22 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       });
       return planBeastGroup(this,planned,options,CONFIG,definition.allowSpawnSite);
     }
+    prepareSpawnRoutes(deadline) {
+      // 地图和体型的几何可跨局复用。只预热普通交战的体型；稀有首领仍于触发时验证。
+      this.spawnWarmIndex ??= 0;
+      const travel=this.spawnTravelFields ??= new Map();
+      while(this.spawnWarmIndex<9 && performance.now()<deadline) {
+        const index=this.spawnWarmIndex,type=index%3,checked=index<6,scale=index<3||!checked ? 1 : 1.25;
+        const cache=checked ? this.spawnFields : travel, key=checked ? type+':'+scale : type;
+        let field=cache.get(key);
+        if(!field){
+          field=this.nav.routeFor(type,checked,scale,true);
+          cache.set(key,field);
+        }
+        if(!field.prepare(deadline))return;
+        this.spawnWarmIndex++;
+      }
+    }
     spawnGroup(entries,options={}) {
       const sites = this.planGroup(entries,options);
       const group=[], previousBoss=this.boss, patrol=this.currentGame.patrolRemaining;
@@ -613,7 +629,7 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       const stats = CONFIG.beasts.types[type];
       if (this.level.blocked(x, z, y, stats.radius, stats.height)) return null;
       Object.assign(b, {
-        active: true, storyWave:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
+        active: true, storyWave:null, guardPost:null, waveMember:false, droneRaider:false, droneAttack:0, climbRoute:null, stairLeg:null,
         nearLOD:false, farLOD:false, x, y, z, type, hp: stats.hp, radius: stats.radius, height: stats.height,
         maxHP:stats.hp,scale:1,traitSpeed:1,role:null,affixes:null,shield:0,charging:false,fight:null,hunted:false,fieldGroup:null,
         traitAt:(this.currentGame?.time ?? 0)+4,trailAt:0,broods:0,

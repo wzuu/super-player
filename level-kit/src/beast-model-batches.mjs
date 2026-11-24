@@ -95,10 +95,35 @@ export function createBeastBatches(manager, context, definition, basicModel, gra
   manager.legacyFarStart=manager.nearStart+high.length;
   manager.farStart=manager.legacyFarStart+legacyFar.length;
   manager.modelBatches=[...legacy,...mid,...high,...legacyFar,...far];
+  const warmMeshes=[...high,...mid,...far].flat();
+  for(const {head,tail} of joints)warmMeshes.push(head,tail);
+  const eyes=new Set([...high,...mid,...far].map(pair=>pair[1]));
+  const warmScene=new THREE.Scene();
+  warmScene.matrixWorldAutoUpdate=false;
+  let warmIndex=0;
   const parent=new THREE.Matrix4(), relative=new THREE.Matrix4(), rotation=new THREE.Euler(0,0,0,'YXZ');
   let specular=true;
   return {
     joints,
+    prepareMaterial(renderer,scene,camera,target) {
+      const mesh=warmMeshes[warmIndex];
+      if(!mesh)return;
+      warmIndex++;
+      // 用真实的几何、材质与灯光提交零实例，完成首次上传与编译，不改变真正相机的场景内容。
+      warmScene.children.length=0;
+      scene.traverseVisible(o=>{if(o.isLight)warmScene.children.push(o);});
+      warmScene.fog=scene.fog;warmScene.environment=scene.environment;
+      warmScene.children.push(mesh);
+      const previous=renderer.getRenderTarget(),clear=renderer.autoClear,visible=mesh.visible,count=mesh.count;
+      if(eyes.has(mesh) && !mesh.instanceColor)mesh.setColorAt(0,new THREE.Color(1,1,1));
+      mesh.visible=true;mesh.count=0;
+      try {
+        renderer.setRenderTarget(target);renderer.autoClear=false;renderer.render(warmScene,camera);
+      }finally{
+        mesh.visible=visible;mesh.count=count;renderer.autoClear=clear;renderer.setRenderTarget(previous);
+        warmScene.children.length=0;
+      }
+    },
     apply(form,index,bodyMatrix,headPitch,headYaw,tailPitch,tailYaw,flash,light) {
       bodyMatrix.getMatrixAt(index,parent);
       const part=joints[form];

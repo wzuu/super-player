@@ -164,9 +164,9 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       }
       return floor;
     }
-    blocked(x, z, y, radius, height) {
+    blocked(x, z, y, radius, height, candidates) {
       if (x - radius <= -GRID.halfX || z - radius <= -GRID.halfZ || x + radius >= GRID.halfX || z + radius >= GRID.halfZ) return true;
-      const list = this.hash.query(x - radius, z - radius, x + radius, z + radius, this.near);
+      const list = candidates ?? this.hash.query(x - radius, z - radius, x + radius, z + radius, this.near);
       for (const b of list) {
         if (b.active === false) continue;
         if (x + radius > b.x0 && x - radius < b.x1 && z + radius > b.z0 && z - radius < b.z1 &&
@@ -195,11 +195,21 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       }
       return {x:player.x,y:this.surface(player.x,player.z,player.y+.48),z:player.z};
     }
-    foot(x, z, ceiling, radius) {
-      let floor = this.surface(x, z, ceiling);
-      const edge = radius + 0.021;
-      floor = Math.max(floor, this.surface(x - edge, z, ceiling), this.surface(x + edge, z, ceiling));
-      return Math.max(floor, this.surface(x, z - edge, ceiling), this.surface(x, z + edge, ceiling));
+    foot(x, z, ceiling, radius, candidates) {
+      const d=radius+.021;
+      let floor=0;
+      if(definition.terrain?.ground || definition.terrain?.ramp || this.extraGround)
+        floor=Math.max(this.terrainFloor(x,z,ceiling),this.terrainFloor(x-d,z,ceiling),this.terrainFloor(x+d,z,ceiling),
+          this.terrainFloor(x,z-d,ceiling),this.terrainFloor(x,z+d,ceiling));
+      // 与五次 surface 取最大值完全相同：向哈希只查一次，但四角仍不计入 AI 的十字支撑。
+      const list=candidates ?? this.hash.query(x-d,z-d,x+d,z+d,this.near);
+      for(const b of list){
+        if(!b.climb || b.active===false || b.y1<=floor || b.y1>ceiling)continue;
+        const ix=x>=b.x0 && x<=b.x1, iz=z>=b.z0 && z<=b.z1;
+        if((ix && (iz || (z-d>=b.z0 && z-d<=b.z1) || (z+d>=b.z0 && z+d<=b.z1))) ||
+          (iz && ((x-d>=b.x0 && x-d<=b.x1) || (x+d>=b.x0 && x+d<=b.x1))))floor=b.y1;
+      }
+      return floor;
     }
     playerFloor(x, z, ceiling, radius, solidCeiling) {
       const edge = radius + 0.021;
@@ -244,7 +254,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
   }
 
   class RouteField {
-    constructor(level, body, collectSites, checkEdges = false) {
+    constructor(level, body, collectSites, checkEdges = false, deferred = false) {
       this.level = level;
       this.body = body;
       this.cell = CONFIG.map.navCell;
@@ -255,39 +265,89 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       this.floors = checkEdges ? new Float32Array(count) : null;
       this.dist = new Int32Array(count);
       this.queue = new Int32Array(count);
-      for (let i = 0; i < count; i++) {
-        const x = this.x(i), z = this.z(i);
-        const y = this.ground(x, z, i);
-        this.walkable[i] = !level.blocked(x, z, y, body.radius, body.height);
-        if (collectSites && i % 7 === 2 && (definition.allowSpawnSite?.(x, z) ?? true)) level.sites.push(i);
-      }
       this.target = -1;
       this.terrainRevision = -1;
       this.routes = definition.terrain?.routeOpen ? new Uint8Array(count) : this.walkable;
       this.edges = checkEdges ? new Uint8Array(count) : null;
+      this.warmCell=0;this.warmEdge=0;this.warmRevision=level.terrainRevision;
+      this.localSolids=[];
+      this.collectSites=collectSites;
+      if (!deferred) this.prepare(Infinity,true);
     }
-    ground(x, z, i) {
+    prepare(deadline,cellsOnly=false) {
+      const {walkable,level,body,routes}=this, count=walkable.length;
+      if(this.warmCell===count && this.warmEdge===count)return true;
+      // 首次网格和边的净空允许在之前帧逐段准备；真正部署必须补完并检查此后的门态。
+      while(this.warmCell<count) {
+        const i=this.warmCell++;
+        const x = this.x(i), z = this.z(i);
+        const d=body.radius+.021;
+        const candidates=level.hash.query(x-d,z-d,x+d,z+d,this.localSolids);
+        const y = this.ground(x, z, i,candidates);
+        walkable[i] = !level.blocked(x, z, y, body.radius, body.height,candidates);
+        if(routes!==walkable)routes[i]=Number(Boolean(walkable[i] && definition.terrain.routeOpen(x,z,level)));
+        if(this.collectSites && i%7===2 && (definition.allowSpawnSite?.(x,z) ?? true))level.sites.push(i);
+        if(deadline!==Infinity && (i & 15)===15 && performance.now()>=deadline)return false;
+      }
+      if(cellsOnly && this.edges)return false;
+      if(!this.edges)this.warmEdge=count;
+      while(this.warmEdge<count) {
+        const i=this.warmEdge++;
+        this.updateEdges(i);
+        if(deadline!==Infinity && (i & 7)===7 && performance.now()>=deadline && this.warmEdge<count)return false;
+      }
+      this.terrainRevision=this.warmRevision;
+      return true;
+    }
+    updateEdges(i) {
+      const {width,routes,edges,floors}=this, x=this.x(i),z=this.z(i);
+      for(let axis=0;axis<2;axis++){
+        const j=axis ? i+width : i+1, bit=axis?8:2, reverse=axis?4:1;
+        if(j>=routes.length || (!axis && j%width===0))continue;
+        edges[i]&=~bit;edges[j]&=~reverse;
+        if(routes[i] && routes[j] && this.canWalk({x,y:floors[i],z},{x:this.x(j),y:floors[j],z:this.z(j)})){
+          edges[i]|=bit;edges[j]|=reverse;
+        }
+      }
+    }
+    ground(x, z, i,candidates) {
       const ceiling = this.level.base(x,z) + .50;
       // 移动按四足支撑高度站在矮台边缘；AI 路线和出生净空必须使用同一落脚高度。
-      const floor=this.level.foot(x,z,ceiling,this.body.radius);
+      const floor=this.level.foot(x,z,ceiling,this.body.radius,candidates);
       if (this.floors) this.floors[i]=floor;
       return floor;
     }
     canWalk(a,b,profile=this.body) {
-      const samples = Math.max(1, Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/(profile.radius*.8)));
+      const distance=Math.hypot(b.x-a.x,b.z-a.z);
+      const samples = Math.max(1, Math.ceil(distance/(profile.radius*.8)));
       const body = { x:a.x, y:a.y, z:a.z, radius:profile.radius, height:profile.height };
+      // 近邻边的每个足底样本落在同一包围盒中。长路径仍使用每步的局部空间哈希。
+      let candidates;
+      if(distance<=this.cell*1.5){
+        const d=profile.radius+.021;
+        const x0=Math.min(a.x,b.x)-d,z0=Math.min(a.z,b.z)-d,x1=Math.max(a.x,b.x)+d,z1=Math.max(a.z,b.z)+d;
+        candidates=this.level.hash.query(x0,z0,x1,z1,this.localSolids);
+        let n=0;
+        for(const solid of candidates){
+          if(solid.active!==false && solid.x1>=x0 && solid.x0<=x1 && solid.z1>=z0 && solid.z0<=z1)
+            candidates[n++]=solid;
+        }
+        candidates.length=n;
+        if(!n && !definition.terrain && !this.level.extraGround && a.y===0 && b.y===0 &&
+          x0>-GRID.halfX && x1<GRID.halfX && z0>-GRID.halfZ && z1<GRID.halfZ)return true;
+      }
       const allowed = definition.terrain?.routeOpen;
       let open = allowed?.(a.x,a.z,this.level) ?? true;
       for (let j=1; j<=samples; j++) {
         const x=a.x+(b.x-a.x)*j/samples, z=a.z+(b.z-a.z)*j/samples;
-        const floor=this.level.foot(x,z,body.y+profile.step,body.radius);
+        const floor=this.level.foot(x,z,body.y+profile.step,body.radius,candidates);
         const nextOpen = allowed?.(x,z,this.level) ?? true;
         // 玩家可以走出脚下刚刚上涨的岩浆，但导航不能把开放路段拉直成穿越禁行带的近路。
         // 水平移动逐轴结算。斜线掠过沟道拐角时，两个端点都可能在干地上。
         if ((open && !nextOpen) || (definition.terrain?.canEnter &&
             (!this.level.canEnter(body,x,z,floor) || !this.level.canEnter(body,x,body.z,floor) ||
              !this.level.canEnter(body,body.x,z,floor))) ||
-            Math.abs(floor-body.y)>profile.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height)) return false;
+            Math.abs(floor-body.y)>profile.step+.025 || this.level.blocked(x,z,floor,body.radius,body.height,candidates)) return false;
         body.x=x;body.z=z;body.y=floor;
         open=nextOpen;
       }
@@ -301,6 +361,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
       return row * this.width + column;
     }
     rebuild(x, z) {
+      this.prepare(Infinity);
       const routes = this.routes;
       if (this.terrainRevision !== this.level.terrainRevision) {
         const dirty = this.edges && this.terrainRevision >= this.level.globalTerrainRevision ? new Set() : null;
@@ -331,19 +392,7 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
         }
         if (this.edges) {
           // 隔墙可能正好横跨两个可站立格之间。玩家路标同时检查边界处的净空。
-          for (const i of dirty ?? routes.keys()) {
-            const x = this.x(i), z = this.z(i);
-            for (const [j, bit, reverse] of [[i + 1, 2, 1], [i + this.width, 8, 4]]) {
-              if (j >= routes.length || (bit === 2 && j % this.width === 0)) continue;
-              this.edges[i] &= ~bit;
-              this.edges[j] &= ~reverse;
-              if (!routes[i] || !routes[j]) continue;
-              if (this.canWalk({x,y:this.floors[i],z}, {x:this.x(j),y:this.floors[j],z:this.z(j)})) {
-                this.edges[i] |= bit;
-                this.edges[j] |= reverse;
-              }
-            }
-          }
+          for (const i of dirty ?? routes.keys()) this.updateEdges(i);
         }
       }
       let start = this.index(x, z);
@@ -395,10 +444,10 @@ export function createWorld({ CONFIG, GRID, V3, clamp, definition }) {
   // 每种体型共享自己的目标距离场。同一格内移动不会重复计算路径。
   class Navigation extends RouteField {
     playerRoute() { return new RouteField(this.level, CONFIG.player, false, true); }
-    routeFor(type, checked = false, scale = 1) {
+    routeFor(type, checked = false, scale = 1, deferred = false) {
       const stats = CONFIG.beasts.types[type];
       const body = checked ? {radius:stats.radius*scale,height:stats.height*scale,step:.47} : stats;
-      return new RouteField(this.level, body, false, checked);
+      return new RouteField(this.level, body, false, checked, deferred);
     }
     constructor(level) {
       const types = CONFIG.beasts.types;
