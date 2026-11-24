@@ -16,6 +16,8 @@ export function createMissionNavigation(nav) {
     if (layered && walkable(p,target)) return [{x:target.x,y:target.y,z:target.z}];
     field.rebuild(target.x, target.z);
     let cell = field.index(p.x, p.z);
+    // 涨潮后脚下的格子可退出，但不会被纳入新的方向场。先按实体碰撞验证通往岸边的直线路径。
+    if(!field.routes[cell] && walkable(p,target))return [{x:target.x,y:target.y,z:target.z}];
     if (field.dist[cell] < 0 || !walkable(p, point(cell))) {
       // 靠墙时玩家可能站在可行走格的边沿，连接最近且能直接走到的格心。
       let nearest = Infinity;

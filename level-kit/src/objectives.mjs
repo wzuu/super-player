@@ -120,6 +120,7 @@ export function createObjective(stage, { THREE, scene }, config, plan) {
       const deep = g.field?.deep ? {deepCompleted:Boolean(g.field.deepFinished),deepSeconds:Math.floor(g.time-g.field.deepAt)} : {};
       if (mode==='hunt') return {...deep,huntWon:g.field?.huntWon??false, huntSeconds:g.field?.huntTime ?? Math.floor(g.time)};
       if (mode === 'endless') return { wave };
+      if (mode === 'classic' && g.story?.rifts) return { ...deep,...g.story.rifts.result() };
       if (mode === 'hold') {
         if(g.story?.defense)return {...deep,...g.story.defense.result()};
         const demolition=typeof g.story?.detonated==='boolean' ? {detonated:g.story.detonated} : {};
@@ -148,6 +149,7 @@ export function createObjective(stage, { THREE, scene }, config, plan) {
       return '';
     },
     guide(g, text) {
+      if(mode==='classic' && g.story?.rifts?.countingDown)return g.story.rifts.guide(g,config.interactLabel);
       const optional=g.field?.guide(g);
       if(optional)return optional;
       const gate = g.level.gate;

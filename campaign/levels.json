@@ -24,5 +24,8 @@
   {"id":"steam-service-rail","title":"蒸汽检修线","brief":"伴随载有校准设备的检修车通过机器棚，沿两段折返坡道上到出厂升降机。"},
   {"id":"dune-signal-terrace","title":"沙海信号台","brief":"由绿洲柱廊登上陵台，点亮信标，在沙暴中守住两条坡道。"},
   {"id":"waterfall-temple-defense","title":"瀑顶神庙防线","brief":"沿河滩石梯登上瀑顶祭台，在水位变化间守住三处木栏。"},
-  {"id":"tower-observation-defense","title":"铁塔观景台防线","brief":"登上折返梯，点亮求救信标，守住四面观景台直到直升机到达。"}
+  {"id":"tower-observation-defense","title":"铁塔观景台防线","brief":"登上折返梯，点亮求救信标，守住四面观景台直到直升机到达。"},
+  {"id":"rift-temple-valley","title":"裂隙三殿","brief":"在石匠库取弹，穿越竹林、断桥与崖壁石窟，封闭血月下的三处裂隙。"},
+  {"id":"caldera-rift-works","title":"火口三门","brief":"从南吊桥进入熔铸廊，沿低沟或高桥携弹摧毁火口设施的三座门。"},
+  {"id":"midnight-midway-backstage","title":"午夜三幕后台","brief":"穿过售票廊进入游园后台，绕开运转的设施，摧毁三座机房传送门。"}
 ]

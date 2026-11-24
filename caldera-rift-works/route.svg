@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1010" height="730" viewBox="0 0 1010 730" role="img" aria-labelledby="title"><title id="title">火口三门的路线与高程</title><rect width="1010" height="730" fill="#19292f"/><g font-family="system-ui,sans-serif" fill="#f5f1e8">
+<text x="28.0" y="39.0" fill="#efece0" font-size="25">火口三门　／　三门爆破</text>
+<text x="437.0" y="58.0" fill="#efece0" font-size="15">北 ↑</text>
+<rect x="231" y="376.75" width="48" height="108.75" fill="#485e65"/>
+<rect x="95" y="335.5" width="320" height="60.0" fill="#485e65"/>
+<rect x="343" y="174.25" width="40" height="168.75" fill="#485e65"/>
+<rect x="363" y="331.75" width="76" height="56.25" fill="#485e65"/>
+<rect x="343" y="204.25" width="112" height="78.75" fill="#485e65"/>
+<rect x="119" y="178.0" width="40" height="165.0" fill="#485e65"/>
+<rect x="47" y="215.5" width="104" height="86.25" fill="#485e65"/>
+<rect x="59" y="320.5" width="72" height="56.25" fill="#485e65"/>
+<rect x="119" y="144.25" width="264" height="45.0" fill="#485e65"/>
+<rect x="199" y="76.75" width="120" height="82.5" fill="#485e65"/>
+<rect x="303" y="118.0" width="64" height="60.0" fill="#485e65"/>
+<rect x="239" y="170.5" width="32" height="180.0" fill="#485e65"/>
+<polyline points="255.0,463.0 269.0,382.4 413.0,378.6 413.0,363.6 411.0,361.8 377.0,326.1 381.0,277.4 423.0,230.5 381.0,239.9 349.0,254.9 345.0,341.1 87.0,346.8 125.0,322.4 121.0,292.4 81.0,284.9 79.0,241.8 153.0,228.6 157.0,179.9 345.0,168.6 343.0,136.8 271.0,103.0" stroke="#9ad9b4" stroke-width="2.8" fill="none" stroke-dasharray="" stroke-linejoin="round"/>
+<polyline points="255.0,350.5 255.0,178.0" stroke="#ffca87" stroke-width="2.8" fill="none" stroke-dasharray="5 3" stroke-linejoin="round"/>
+<circle cx="263.0" cy="410.5" r="2.5" fill="#90bfff"/>
+<circle cx="183.0" cy="350.5" r="2.5" fill="#90bfff"/>
+<circle cx="343.0" cy="365.5" r="2.5" fill="#90bfff"/>
+<circle cx="367.0" cy="268.0" r="2.5" fill="#90bfff"/>
+<circle cx="135.0" cy="286.8" r="2.5" fill="#90bfff"/>
+<circle cx="255.0" cy="163.0" r="2.5" fill="#90bfff"/>
+<circle cx="295.0" cy="121.8" r="2.5" fill="#90bfff"/>
+<circle cx="227.0" cy="358.0" r="4" fill="#fa9a83"/>
+<circle cx="407.0" cy="245.5" r="4" fill="#fa9a83"/>
+<circle cx="107.0" cy="249.2" r="4" fill="#fa9a83"/>
+<circle cx="235.0" cy="118.0" r="4" fill="#fa9a83"/>
+<circle cx="255.0" cy="463.0" r="5" fill="#e9d58f"/>
+<text x="263.0" y="466.0" fill="#efece0" font-size="13">出生</text>
+<text x="71.0" y="364.0" fill="#ffe19c" font-size="17">☆</text>
+<circle cx="411.0" cy="361.8" r="9" fill="#294b41"/>
+<text x="406.0" y="366.2" fill="#b0efd1" font-size="13">A</text>
+<circle cx="87.0" cy="346.8" r="9" fill="#294b41"/>
+<text x="82.0" y="351.2" fill="#b0efd1" font-size="13">B</text>
+<circle cx="343.0" cy="136.8" r="9" fill="#294b41"/>
+<text x="338.0" y="141.2" fill="#b0efd1" font-size="13">C</text>
+<circle cx="423.0" cy="230.5" r="9" fill="#654377"/>
+<text x="419.0" y="235.0" fill="#f4deff" font-size="13">1</text>
+<circle cx="79.0" cy="241.8" r="9" fill="#654377"/>
+<text x="75.0" y="246.2" fill="#f4deff" font-size="13">2</text>
+<circle cx="271.0" cy="103.0" r="9" fill="#654377"/>
+<text x="267.0" y="107.5" fill="#f4deff" font-size="13">3</text>
+<text x="525.0" y="85.0" fill="#efece0" font-size="19">任务弹箱与敌群来向</text>
+<text x="525.0" y="117.0" fill="#efece0" font-size="15">A　检修库　　 1　炉芯门　最多 4 名增援</text>
+<text x="525.0" y="145.0" fill="#efece0" font-size="15">B　冷却控制房　　 2　地窖门　最多 4 名增援</text>
+<text x="525.0" y="173.0" fill="#efece0" font-size="15">C　桥头封存间　　 3　转运室门　最多 5 名增援</text>
+<text x="525.0" y="223.0" fill="#efece0" font-size="19">驻守区域</text>
+<text x="525.0" y="252.0" fill="#efece0" font-size="15">湖廊巡查　4 名</text>
+<text x="525.0" y="277.0" fill="#efece0" font-size="15">铸造守卫　5 名</text>
+<text x="525.0" y="302.0" fill="#efece0" font-size="15">箭塔驻防　5 名</text>
+<text x="525.0" y="327.0" fill="#efece0" font-size="15">转运守卫　6 名</text>
+<text x="525.0" y="380.0" fill="#efece0" font-size="15">绿线示范正序路线，最后一门为本局结算点。</text>
+<text x="525.0" y="408.0" fill="#efece0" font-size="15">涨潮前可走中央低沟，涨潮时沿两侧高桥。</text>
+<text x="525.0" y="436.0" fill="#efece0" font-size="14">金色虚线为支路，空心星标为蓝釉测温杯。</text>
+<text x="525.0" y="464.0" fill="#efece0" font-size="14">浅蓝点为固定弹箱，珊瑚色点为驻防中心。</text>
+<text x="30.0" y="555.0" fill="#efece0" font-size="18">沿示范路线的地面高程</text>
+<polyline points="48.0,663.0 956.0,663.0" stroke="#687e81" stroke-width="1" fill="none" stroke-dasharray="" stroke-linejoin="round"/>
+<polyline points="48.0,659.0 102.8,659.0 193.5,659.0 203.5,659.0 205.3,659.0 237.4,659.0 270.2,659.0 311.3,659.0 338.5,659.0 361.0,659.0 418.9,659.0 581.3,659.0 610.3,659.0 630.6,659.0 656.2,659.0 685.2,659.0 732.6,659.0 765.4,659.0 883.9,659.0 905.4,659.0 956.0,659.0" stroke="#9ad9b4" stroke-width="2.8" fill="none" stroke-dasharray="" stroke-linejoin="round"/>
+<text x="48.0" y="698.0" fill="#efece0" font-size="15">出生　3.8 m</text>
+<text x="421.0" y="698.0" fill="#efece0" font-size="15">最高　3.8 m</text>
+<text x="816.0" y="698.0" fill="#efece0" font-size="15">第三门　3.8 m</text>
+</g></svg>

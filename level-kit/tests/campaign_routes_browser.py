@@ -57,7 +57,8 @@ if __name__ == "__main__":
         if item["id"] not in ("underground-lab","moonlit-stained-glass-keep","orbital-brood-ring",
                               "storm-city-overpass","lantern-shrine-escape","neon-northline-escape",
                               "sunken-rooftop-recovery","frost-sample-escort","steam-service-rail",
-                              "dune-signal-terrace","waterfall-temple-defense","tower-observation-defense")
+                              "dune-signal-terrace","waterfall-temple-defense","tower-observation-defense",
+                              "rift-temple-valley","caldera-rift-works","midnight-midway-backstage")
     ]
     with sync_playwright() as pw, pw.chromium.launch(channel=os.getenv("GAME_TEST_BROWSER", "chrome")) as browser:
         for stage in stages:

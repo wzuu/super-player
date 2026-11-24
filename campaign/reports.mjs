@@ -17,6 +17,8 @@ const scores = {
   escortHealth: '护送目标生命',
   escorted: '护送已抵达',
   detonated: '爆破成功',
+  chargesCollected: '已领取任务弹',
+  riftsDestroyed: '已摧毁传送门',
   escapeSeconds: '撤离剩余秒数',
   wave: '最高波次',
   targets: '猎杀目标',

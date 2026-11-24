@@ -40,13 +40,20 @@ DEFENSE={
     'tower-observation-defense': ('铜版首日票',[4,4,5,7,7,8,7],'paris-tower','rescue'),
 }
 
+RIFTS={
+    'rift-temple-valley': ('竹简星图',[4,5,6,4],'shanhai-secret-realm','classic'),
+    'caldera-rift-works': ('蓝釉测温杯',[4,5,5,6],'ember-fortress','classic'),
+    'midnight-midway-backstage': ('釉面木马徽章',[4,5,5,6],'haunted-midway','classic'),
+}
+
 
 def play(browser,url,stage,out,collect):
     page,errors,before=open_campaign(browser,url,stage)
     escort=ESCORT.get(stage)
     defense=DEFENSE.get(stage)
-    if escort or defense:
-        reward,counts,*original=escort or defense
+    rifts=RIFTS.get(stage)
+    if escort or defense or rifts:
+        reward,counts,*original=escort or defense or rifts
         direct=side=[]
     else:
         direct,side,reward,counts=CASES[stage]
@@ -91,13 +98,21 @@ def play(browser,url,stage,out,collect):
     capture('entry')
     while True:
         result=page.evaluate('walk.advance()')
+        if 'pauseFuse' in result:
+            page.keyboard.press('Escape')
+            state='run.game.story.rifts.gates.map(g=>[g.state,g.fuse,g.spawned])'
+            frozen=page.evaluate(state)
+            page.wait_for_timeout(140)
+            assert page.evaluate('run.game.phase')=='pause' and page.evaluate(state)==frozen
+            page.locator('#start').click()
+            page.wait_for_function("run.game.phase==='play'",polling=100)
         if 'shot' in result:capture(result['shot'])
         if 'done' in result:break
     report=result['done']
     report['performance']={**perf,'browser':browser.version}
     print(stage,json.dumps(report,ensure_ascii=False),flush=True)
     (out/(stage+'-play.json')).write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf8')
-    assert report['phase']=='win' and (escort or defense or report['live']>0) and report['shots']>0,report
+    assert report['phase']=='win' and (escort or defense or rifts or report['live']>0) and report['shots']>0,report
     if escort:assert len(report['docks'])==2 and report['escort']['escorted'] and report['escort']['escortHealth']>0,report
     assert perf.get('frames')==30 and (out/(stage+'-transition.png')).exists(),report
     assert (reward in report['loot'])==collect and [v['deployed'] for v in report['peaks'].values()]==counts,report
@@ -109,12 +124,17 @@ def play(browser,url,stage,out,collect):
     if len(saved['levels'])>len(before)+1:assert saved['levels'][len(before)+1]['unlocked']
     record=page.request.get(url+'/api/battles').json()['battles'][0]
     detail=page.request.get(url+'/api/report',params={'id':record['id']}).json()
-    assert record['level']==stage and record['won'] and detail['report']['actionName']==('坚守' if defense else '护送' if escort else '突围'),detail
+    assert record['level']==stage and record['won'] and detail['report']['actionName']==('爆破' if rifts else '坚守' if defense else '护送' if escort else '突围'),detail
+    if rifts:
+        assert {'transition','combat','pauseFuse'}<=set(report['captured']),report
+        assert report['vault']=='idle',report
+        assert report['gateOrder']==([2,1,0] if collect else [0,1,2]),report
+        assert detail['report']['scores']['riftsDestroyed']==3 and detail['report']['scores']['chargesCollected']==3
     if defense:
         scores=detail['report']['scores']
         assert scores['holdSeconds']=={'dune-signal-terrace':50,'waterfall-temple-defense':55,'tower-observation-defense':90}[stage]
         if stage=='tower-observation-defense':assert scores['boarded']
-    if not escort and not defense:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
+    if not escort and not defense and not rifts:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
               'neon-northline-escape':('neon-undercity','timed')}[stage]
     page.locator('a.mission-action[href$="/'+original[0]+'/"]').click(force=True)
     page.wait_for_function("mode=>document.querySelector('#mission-mode')?.value===mode",arg=original[1],polling=100)
@@ -124,7 +144,7 @@ def play(browser,url,stage,out,collect):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser()
-    parser.add_argument('stage',choices=[*CASES,*ESCORT,*DEFENSE])
+    parser.add_argument('stage',choices=[*CASES,*ESCORT,*DEFENSE,*RIFTS])
     parser.add_argument('--output',type=Path,required=True)
     parser.add_argument('--collect',action='store_true')
     args=parser.parse_args()

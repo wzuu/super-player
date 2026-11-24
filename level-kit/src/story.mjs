@@ -9,6 +9,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   const escape = spec?.type === 'escape';
   const convoy = spec?.type === 'convoy';
   const defense = spec?.defense?.create({THREE,level,scene},spec.defense);
+  const rifts = spec?.rifts?.create({THREE,level,scene},spec.rifts);
   let route;
   const groundDirections=createGroundDirections(THREE,scene,level);
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
@@ -149,7 +150,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (item.kind === 'boss') startBoss(g);
     if (openFight(item) && !item.escort) startGroup(g);
     if (item.kind === 'countdown' || item.kind === 'defend') startGroup(g);
-    if ((escape && item.kind === 'breakout') || ['convoy','signal','fortify'].includes(item.kind)) startGroup(g);
+    if ((escape && item.kind === 'breakout') || ['convoy','signal','fortify','rifts'].includes(item.kind)) startGroup(g);
     if (item.alarm && g.encounter) {
       g.encounter.setAlarm(true);
       g.encounter.alarmUntil = g.time + 14;
@@ -265,12 +266,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (!spec.watchRooms) {
       for (const b of members(g)) if (b.sectionRoom===item.parts?.[0].name) b.roomAlert = true;
     }
-    if (['fight','convoy','signal','fortify'].includes(item.kind) || (escape && item.kind === 'breakout')) {
+    if (['fight','convoy','signal','fortify','rifts'].includes(item.kind) || (escape && item.kind === 'breakout')) {
       director.droneDocked = item.kind==='fight' && Boolean(item.escort);
       group.record = {name:item.name, deployedAt:group.deployedAt, enteredAt:g.time, spawned:item.count};
       director.encounters.push(group.record);
     }
-    if (!annihilation && !escape && !convoy && !defense) {
+    if (!annihilation && !escape && !convoy && !defense && !rifts) {
       const t = item.target;
       const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
       if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药',
@@ -299,7 +300,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function build(g) {
     const mode = g.objective.mode,
       type = spec.type;
-    if ((annihilation || escape) && mode === 'classic') return spec.route;
+    if ((annihilation || escape || rifts) && mode === 'classic') return spec.route;
     if (convoy && mode === 'escort') return spec.route;
     if (defense && mode === 'hold') return spec.route;
     if (type === 'rain' && mode === 'hold') return spec.route;
@@ -325,6 +326,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   }
   const director = {
     defense,
+    rifts,
     managed: false,
     blocksExit: false,
     droneDocked: false,
@@ -346,6 +348,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       this.actionName = convoy && mode==='escort' ? '护送' : mode==='classic' ? spec?.classicAction : undefined;
       if(defense && mode==='hold')this.actionName='坚守';
       defense?.reset(mode==='hold');
+      rifts?.reset(mode==='classic');
       this.managed = this.supports(mode);
       const closed =
         this.managed &&
@@ -364,7 +367,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       this.encounters = [];
       stages = this.managed ? build(g).map((s) => ({
         ...s,
-        count: ['fight', 'hold', 'countdown', 'breakout', 'defend', 'rescue','convoy','signal','fortify'].includes(s.kind)
+        count: ['fight', 'hold', 'countdown', 'breakout', 'defend', 'rescue','convoy','signal','fortify','rifts'].includes(s.kind)
           ? (s.count ?? CONFIG.beasts.encounterSize) : 0,
         target: s.at ? asPoint(s.at) : undefined,
       })) : [];
@@ -373,7 +376,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight'
         ? (s.passage ? 0 : s.parts?.find(part => part.name === s.requiredRoom)?.count ?? s.count)
         : Number(s.kind === 'boss')), 0)
-        || (defense && stages.reduce((sum,s)=>sum+s.count,0)) || ((escape || convoy) && stages[0]?.count) || CONFIG.beasts.encounterSize;
+        || (defense && stages.reduce((sum,s)=>sum+s.count,0)) || ((escape || convoy || rifts) && stages[0]?.count) || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
       this.roomTreasureCount = stages.reduce((count, stage) => count + (stage.parts?.filter(part => part.reward).length ?? 0), 0);
@@ -440,6 +443,9 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       const p = g.player,
         t = item.target;
       switch (item.kind) {
+        case 'rifts':
+          if(startGroup(g))rifts.step(dt,g);
+          break;
         case 'signal':
           startGroup(g);
           break;
@@ -536,6 +542,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     },
     interact(g) {
       if (!item) return false;
+      if(item.kind==='rifts')return Boolean(group) && rifts.interact(g);
       if(item.kind==='signal'){
         if(!defense.canInteract(g))return false;
         // 信标启动时整批部署，随后竖起挡栏。玩家不能在点亮信标之前消灭救援波。
@@ -590,6 +597,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     },
     guide(g, text) {
       if (!item) return null;
+      if(item.kind==='rifts')return rifts.guide(g,CONFIG.interactLabel);
       if(item.kind==='signal' || item.kind==='fortify')return defense.guide(g,CONFIG.interactLabel);
       const t = item.target;
       let target = t,

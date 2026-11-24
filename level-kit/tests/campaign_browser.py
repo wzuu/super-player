@@ -90,6 +90,12 @@ def finish_at_gate(page):
         const tick=()=>{g.time+=.5;g.beasts.releaseSplits(g);g.objective.step(.5,g);s.step(.5,g);};
         for(let n=0;n<2400 && g.phase==='play' && s.stage!=='complete';n++) {
             const state=s.stage,t=s.target;
+            if(state==='rifts'){
+                const task=s.rifts.guide(g,'F');
+                at(task.target);
+                if(task.stage==='collect'||task.stage==='plant')s.interact(g);
+                tick();continue;
+            }
             if(s.defense && (state==='signal'||state==='fortify')){
                 at(s.defense.target);
                 if(!s.defense.started || s.defense.boardable)s.interact(g);

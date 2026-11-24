@@ -6,9 +6,11 @@ function playArmedRoute({via,reward,stage}) {
   points.push(story.target);
   let leg=0,lastWaypoint,steps=0;
   const convoy=g.objective.convoy,defense=story.defense,docks=new Set();
+  const rifts=story.rifts,gateOrder=[];
   let defenseDeployed=false;
   const actor=()=>{const v=g.objective.drone.position;return {x:v.x,y:v.y-1,z:v.z};};
   const phases=new Set(),captured=new Set(),peaks={};
+  let combatScore=0;
   function countGuards(){
     for(const b of g.beasts.pool.filter(b=>b.active && story.isCurrentGuard(b))){
       const section=peaks[b.sectionRoom]??={deployed:0,visible:0,threats:0,melee:0};
@@ -18,11 +20,19 @@ function playArmedRoute({via,reward,stage}) {
   countGuards();
   function advance(){
     for(let i=0;i<90 && g.phase==='play' && g.time<165;i++){
-
+      // 第二次火口行动在吊桥等第一轮涨潮，再带着可选收藏走反向路线。
+      if(stage==='caldera-rift-works' && reward && g.time<30){g.step(.033);continue;}
       const loot=reward && g.pickups.objects.find(o=>o.active && o.name===reward);
       if(loot && distance(p,loot)<1.6)tap('KeyF');
       let target;
-      if(defense){
+      if(rifts){
+        const {chargesCollected,riftsDestroyed}=rifts.result();
+        const gate=rifts.gates[reward?2-riftsDestroyed:riftsDestroyed];
+        const task=chargesCollected===riftsDestroyed?rifts.cases[riftsDestroyed]:gate;
+        target=loot ?? (gate.state==='armed'?gate.retreatPoint:task.position);
+        if(!loot && gate.state!=='armed' && distance(p,target)<1.8)tap('KeyF');
+        leg=2*riftsDestroyed+Number(chargesCollected>riftsDestroyed);
+      }else if(defense){
         const task=defense.target;
         if(!defense.started){
           target=loot||task;
@@ -70,6 +80,12 @@ function playArmedRoute({via,reward,stage}) {
       if(p.hp<64 && g.kit.remaining().medkit)tap('Digit1');
       buttons(keys,gap<range);
       g.step(.033);
+      if(rifts)for(const [j,gate] of rifts.gates.entries()){
+        if(gate.state==='destroyed' && !gateOrder.includes(j))gateOrder.push(j);
+      }
+      if(rifts?.countingDown && !captured.has('pauseFuse')){
+        captured.add('pauseFuse');buttons(new Set(),false);return {pauseFuse:true};
+      }
       if(defense?.started && !defenseDeployed){countGuards();defenseDeployed=true;}
       phases.add(g.encounter?.phase??(g.encounter?.parading?'parade':'calm'));
       if(++steps%3===0){
@@ -88,12 +104,14 @@ function playArmedRoute({via,reward,stage}) {
         }
         const screen=Object.values(counts).reduce((n,c)=>n+c.visible,0);
         const midway=convoy && leg>=4;
-        if(!captured.has('combat') && screen>=3 && gap>=3 && gap<(defense?14:convoy?17:10) &&
+        const pressure=rifts ? Math.min(screen,6)+Math.max(0,16-gap)*.7 : 0;
+        if((!captured.has('combat') || rifts && pressure>combatScore+2) && screen>=3 && gap>=3 && gap<(defense?14:convoy || rifts?17:10) &&
             (defense?defense.elapsed>10:convoy?midway:g.time>1)){
-          captured.add('combat');buttons(new Set(),false);return {shot:'combat'};
+          combatScore=pressure;captured.add('combat');buttons(new Set(),false);return {shot:'combat'};
         }
       }
-      const landmark=stage==='dune-signal-terrace' && p.z>3 && p.z<10 ? [-6,11.8,-26] :
+      const landmark=rifts && leg%2===1 && distance(p,target)>7 && distance(p,target)<12 ? [target.x,target.y+2,target.z] :
+        stage==='dune-signal-terrace' && p.z>3 && p.z<10 ? [-6,11.8,-26] :
         stage==='waterfall-temple-defense' && p.z<9 && p.z>2 ? [-25,10,-8] :
         stage==='tower-observation-defense' && p.z<31 && p.z>19 && p.x>12 ? [-1.5,23,-13] :
         stage==='sunken-rooftop-recovery' && leg===7 && p.x>-7 ? [22,8,-25] :
@@ -112,7 +130,7 @@ function playArmedRoute({via,reward,stage}) {
     if(g.phase==='play' && g.time<165)return {};
     buttons(new Set(),false);
     return {done:{phase:g.phase,leg,lastWaypoint,at:[p.x,p.y,p.z],time:g.time,hp:p.hp,live:g.beasts.live,
-      docks:[...docks],escort:g.objective.result(g),actor:convoy && actor(),lanes:defense?.lanes.map(l=>l.hp),shots:g.performance.shots,kills:g.kills,ammo:[g.weapon.ammo,g.weapon.reserve],phases:[...phases],peaks,
+      captured:[...captured],gateOrder,vault:g.field?.vaultStage,portalSpawns:rifts?.gates.map(gate=>gate.spawned),docks:[...docks],escort:g.objective.result(g),actor:convoy && actor(),lanes:defense?.lanes.map(l=>l.hp),shots:g.performance.shots,kills:g.kills,ammo:[g.weapon.ammo,g.weapon.reserve],phases:[...phases],peaks,
       loot:g.loot.map(o=>o.name)}};
   }
   return {advance};

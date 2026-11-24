@@ -105,10 +105,10 @@ jobs:
             python -u level-kit/tests/annihilation_browser.py "$stage" --collect --output "$RUNNER_TEMP/$stage-reward"
           done
           python -u level-kit/tests/annihilation_checks.py
-      - name: Play escape, escort and defense routes from the campaign home
+      - name: Play escape, escort, defense and demolition routes from the campaign home
         if: matrix.suites == 'campaign_routes_browser'
         run: |
-          for stage in storm-city-overpass lantern-shrine-escape neon-northline-escape sunken-rooftop-recovery frost-sample-escort steam-service-rail dune-signal-terrace waterfall-temple-defense tower-observation-defense; do
+          for stage in storm-city-overpass lantern-shrine-escape neon-northline-escape sunken-rooftop-recovery frost-sample-escort steam-service-rail dune-signal-terrace waterfall-temple-defense tower-observation-defense rift-temple-valley caldera-rift-works midnight-midway-backstage; do
             python -u level-kit/tests/breakout_browser.py "$stage" --output "$RUNNER_TEMP/$stage-main"
             python -u level-kit/tests/breakout_browser.py "$stage" --collect --output "$RUNNER_TEMP/$stage-reward"
           done

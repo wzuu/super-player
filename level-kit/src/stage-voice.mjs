@@ -1,5 +1,8 @@
 // 环境脉冲、警示、触发和任务终止音共享各关自己的基音与节奏。
 const voices = {
+  'rift-temple-valley': ['sine',203,461,116,694,3.3],
+  'caldera-rift-works': ['triangle',92,332,72,481,2.9],
+  'midnight-midway-backstage': ['sine',392,620,143,795,3.1],
   'underground-lab': ['triangle', 72, 510, 104, 840, 2.8],
   'shanhai-secret-realm': ['sine', 196, 430, 84, 660, 3.3],
   'rain-city': ['triangle', 1320, 520, 132, 195, 2.4],
