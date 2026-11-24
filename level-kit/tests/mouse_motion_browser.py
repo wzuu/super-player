@@ -55,6 +55,8 @@ def motion_page(browser, stage, mode, pad):
 def start(page):
     page.locator("#start").click()
     page.wait_for_function("run.game.phase==='play' && document.pointerLockElement?.tagName==='CANVAS'")
+    # 采集的是设备输入与镜头角度。即使 CI 渲染较慢，也应在同一局完成静止测量。
+    page.evaluate("run.game.player.hurtDelay=Infinity")
     page.evaluate("afterRender()")
 
 
