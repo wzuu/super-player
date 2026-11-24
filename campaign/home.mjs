@@ -8,7 +8,7 @@ import {weaponBuildPanel} from './weapon-build.mjs';
 import {reactionCatalog} from '../level-kit/src/weapon-perks.mjs';
 
 import { profiles, activeProfile, createProfile, selectProfile } from './profiles.mjs';
-import { preferences, storePreferences, defaultKeys, actionLabels, keyName, bindSoundControl } from '../level-kit/src/preferences.mjs';
+import { RED_DOT_AIM_ENABLED, preferences, storePreferences, defaultKeys, actionLabels, keyName, bindSoundControl } from '../level-kit/src/preferences.mjs';
 
 const $ = id => document.getElementById(id);
 const views = ['missions', 'history', 'collection'];
@@ -498,6 +498,7 @@ function settings() {
       ],
     ],
   ]) {
+    if (id === 'aimMode' && !RED_DOT_AIM_ENABLED) continue;
     const select = element('select');
     for (const [v, name] of choices) select.add(new Option(name, v));
     select.value = prefs[id];

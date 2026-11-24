@@ -137,19 +137,15 @@ def run(browser,url):
     page.keyboard.up("v")
     assert page.evaluate("run.game.player.thirdPerson")
     page.mouse.down(button="right")
-    page.wait_for_function("run.game.player.ads>.9 && !document.querySelector('#aim-dot').hidden && run.game.weapon.group.visible")
-    assert page.evaluate("run.camera.fov<run.game.player.baseFov")
     fov=page.evaluate("""()=>{
       const p=run.game.player; p.positionCamera(.3);
-      const aimed=run.camera.fov;p.impactLeft=run.config.feedback.impactDuration;p.impactStrength=1;
+      const normal=run.camera.fov;p.impactLeft=run.config.feedback.impactDuration;p.impactStrength=1;
       p.positionCamera(0);const hurt=run.camera.fov;p.impactLeft=0;p.positionCamera(0);
-      return {aimed,hurt,recovered:run.camera.fov};
+      return {normal,hurt,recovered:run.camera.fov,base:p.baseFov};
     }""")
-    assert fov["hurt"]+0.1<fov["aimed"] and abs(fov["recovered"]-fov["aimed"])<.001,fov
+    assert fov["normal"]==fov["base"]==fov["recovered"] and fov["hurt"]+.1<fov["normal"],fov
     page.mouse.up(button="right")
-    assert page.evaluate("run.game.player.aimRequested && run.game.player.aiming")
-    page.mouse.click(480,320,button="right")
-    page.wait_for_function("!run.game.weapon.group.visible")
+    assert page.evaluate("!run.game.player.aimRequested && run.game.ui.aimDot.hidden && !run.game.weapon.group.visible")
     page.evaluate("Object.assign(run.game.weapon,{ammo:1,reserve:4})")
     page.keyboard.press("r")
     page.wait_for_function("!document.querySelector('#reload-ring').hidden")
@@ -252,21 +248,19 @@ def run(browser,url):
     page.wait_for_function("run.game.phase==='play'")
     # 这把步枪继承旧档快换分支。空仓自动换弹，重复按 R 不延长圆环。
     page.mouse.down(button="right")
-    page.wait_for_function("run.game.player.ads>.9 && !document.querySelector('#aim-dot').hidden")
     timer=page.evaluate("""()=>{const g=run.game,w=g.weapon,ring=document.querySelector('#reload-ring');
       Object.assign(w,{ammo:0,reserve:6,cooldown:0,reloadLeft:0});g.step(.016);g.step(.2);
       const before=w.reloadLeft;
       document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyR',bubbles:true}));
       g.step(.016);document.dispatchEvent(new KeyboardEvent('keyup',{code:'KeyR',bubbles:true}));
-      return {duration:w.reloadTotal,before,after:w.reloadLeft,visible:!ring.hidden&&document.querySelector('#aim-dot').hidden&&g.player.aimRequested&&!g.player.aiming,
+      return {duration:w.reloadTotal,before,after:w.reloadLeft,visible:!ring.hidden&&g.ui.aimDot.hidden&&!g.player.aimRequested,
         ratio:parseFloat(ring.style.getPropertyValue('--remaining')),actual:w.reloadLeft/w.reloadTotal};
     }""")
     assert abs(timer["duration"]-1.8*.78)<.001 and timer["visible"],timer
     assert timer["after"]<timer["before"] and abs(timer["ratio"]-timer["actual"])<.001,timer
-    page.wait_for_function("run.game.weapon.ammo===6 && document.querySelector('#reload-ring').hidden && run.game.player.ads>.9")
+    page.wait_for_function("run.game.weapon.ammo===6 && run.game.ui.ring.hidden && run.game.ui.aimDot.hidden")
     page.mouse.up(button="right")
-    page.mouse.click(480,320,button="right")
-    page.wait_for_function("!run.game.player.aiming")
+    assert page.evaluate("!run.game.player.aiming && run.game.player.ads===0")
     rifle=sample_volley(page)
     assert len(rifle["high"]["lengths"])==1 and rifle["high"]["lengths"][0]>15,rifle
     assert set(rifle["high"]["sparks"])=={"spark"} and rifle["high"]["tint"]!=pellet["high"]["tint"],rifle
@@ -285,7 +279,7 @@ def run(browser,url):
         assert "雨巷破阵" in page.locator("#rifle-label").inner_text()
         page.evaluate("document.exitPointerLock()")
     assert not errors,errors
-    print("PASS SQLite / IndexedDB legacy purchases, free per-gun switch, ADS, reload and camera obstruction",result,flush=True)
+    print("PASS SQLite / IndexedDB legacy purchases, free per-gun switch, hip fire, reload and camera obstruction",result,flush=True)
     context.close()
 
 

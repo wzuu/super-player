@@ -1,4 +1,4 @@
-"""通过打包后的离线入口验证开镜、低顶蹲伏和战前/暂停说明。"""
+"""通过打包后的离线入口验证右键停用、低顶蹲伏和战前/暂停说明。"""
 import os
 import re
 from playwright.sync_api import sync_playwright
@@ -18,6 +18,8 @@ def stage_page(browser, stage, query="", custom=False):
         page.add_init_script("""localStorage.setItem('super-player:preferences:v1',JSON.stringify({
           aimMode:'hold',volume:47,keys:{KeyC:'KeyX',KeyG:'KeyH',KeyI:'KeyK',KeyM:'KeyY',KeyV:'KeyB'}
         }))""")
+    else:
+        page.add_init_script("localStorage.setItem('super-player:preferences:v1', JSON.stringify({aimMode:'toggle'}))")
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto((ROOT/stage/"index.html").as_uri()+query)
@@ -41,7 +43,9 @@ def menu(page, crouch, deep, custom):
     if deep: keys["KeyG"] = "H" if custom else "G"
     for action,key in keys.items():
         assert guide.locator(f'[data-keys="{action}"]').inner_text() == key
-    assert ("按住右键" if custom else "单击右键") in page.locator("#aim-help").inner_text()
+    instructions = page.locator("#menu").inner_text()
+    assert "右键" not in instructions and "开镜" not in instructions, instructions
+    assert "射击" in instructions
     assert page.locator("#sound, #sound-state").count() == 0
 
 
@@ -66,69 +70,71 @@ def crouch_checks(page, key):
     turn(475,335)
 
 
-def aim_checks(page, custom):
-    def right():
-        page.mouse.down(button="right")
-        page.mouse.up(button="right")
-    def aimed(value):
-        page.wait_for_function(("run.game.player.aiming && run.game.player.ads>.90" if value
-                                else "!run.game.player.aiming && run.game.player.ads<.10"))
-    view,inspect,mute = ("b","k","y") if custom else ("v","i","m")
+def right_button_checks(page, shoulder):
+    # 记录相机相对于玩家的位移和朝向，可检测未改变视角标志的镜头跳变。
+    offset = """() => {
+      const {game:{player:p}, camera:c} = run;
+      return [c.position.x-p.x, c.position.y-p.y-p.eye, c.position.z-p.z, ...c.quaternion.toArray()];
+    }"""
+    initial = page.evaluate(offset)
+
+    def verify():
+        state = page.evaluate("""() => {
+          const {game, camera} = run, p = game.player;
+          return [p.aimRequested, p.aiming, p.ads, camera.fov-p.baseFov, p.thirdPerson,
+                  game.weapon.group.visible, game.ui.aimDot.hidden,
+                  getComputedStyle(game.ui.nodes.cross).visibility];
+        }""")
+        assert state == [False, False, 0, 0, shoulder, not shoulder, True, "visible"], state
+        current = page.evaluate(offset)
+        assert max(abs(x-y) for x,y in zip(current, initial)) < .04, (initial, current)
+
+    page.mouse.down(button="right")
+    page.mouse.up(button="right")
+    verify()
+    page.mouse.down(button="right")
+    # 跨过完整的镜头过渡，用游戏时钟保证慢速渲染时也走过实际帧。
+    until = page.evaluate("run.game.time + .35")
+    page.wait_for_function("until => run.game.time >= until", arg=until)
+    verify()
+    page.mouse.up(button="right")
+    verify()
+
+
+def weapon_controls(page, custom):
+    view,inspect = ("b","k") if custom else ("v","i")
+    right_button_checks(page, False)
+    page.keyboard.press(view)
+    page.wait_for_function("run.game.player.thirdPerson && !run.game.weapon.group.visible")
+    right_button_checks(page, True)
+    page.keyboard.press(view)
+    page.wait_for_function("!run.game.player.thirdPerson && run.game.weapon.group.visible")
     page.keyboard.press(inspect)
     page.wait_for_function("run.game.weapon.inspectTime>0")
-    page.keyboard.press(view)
-    page.wait_for_function("run.game.player.thirdPerson")
-    page.mouse.down(button="right")
-    aimed(True)
-    # 鼠标仍按着时，重复的按下事件不能再翻转一次。
-    page.evaluate("document.dispatchEvent(new MouseEvent('mousedown',{button:2,bubbles:true}))")
-    assert page.evaluate("run.game.player.aimRequested && run.game.weapon.group.visible")
-    page.mouse.up(button="right")
-    if custom:
-        aimed(False)
-    else:
-        aimed(True)
-        before=page.evaluate("run.game.player.z")
-        page.keyboard.down("w");page.mouse.down()
-        page.wait_for_function("z=>run.game.player.z!==z && run.game.performance.shots>0",arg=before)
-        page.keyboard.up("w");page.mouse.up()
-        assert page.evaluate("run.game.player.aimRequested")
-        right();aimed(False)
-    page.wait_for_function("!run.game.weapon.group.visible")
-    page.mouse.down(button="right");aimed(True)
-    page.keyboard.press(view)
-    page.mouse.up(button="right");aimed(False)
-    assert page.evaluate("!run.game.player.thirdPerson && run.game.weapon.group.visible")
-    page.mouse.down(button="right");aimed(True)
-    if not custom: page.mouse.up(button="right")
-    # 在按 R 前记录整个转场，避免低帧率下漏过实际装填窗口。
-    page.evaluate("Object.assign(run.game.weapon,{ammo:1,reserve:20})")
+    before = page.evaluate("run.game.performance.shots")
+    page.mouse.down()
+    page.wait_for_function("before => run.game.performance.shots > before && !run.game.weapon.inspectTime", arg=before)
+    page.mouse.up()
     page.keyboard.press("r")
-    page.wait_for_function("run.game.weapon.reloadLeft>0 && !run.game.player.aiming && run.game.player.aimRequested && !document.querySelector('#reload-ring').hidden")
-    if custom: page.mouse.up(button="right")
-    else: right()
-    page.wait_for_function("!run.game.weapon.reloadLeft && !run.game.player.aimRequested")
-    aimed(False)
-    page.mouse.down(button="right");aimed(True)
-    page.evaluate("window.dispatchEvent(new Event('blur'))")
-    page.mouse.up(button="right")
-    assert page.evaluate("!run.game.player.aimRequested && run.game.player.ads===0 && run.camera.fov===run.game.player.baseFov")
+    page.wait_for_function("run.game.weapon.reloadLeft>0 && !run.game.ui.ring.hidden")
+    page.wait_for_function("!run.game.weapon.reloadLeft && run.game.ui.ring.hidden")
+
+
+def mute_checks(page, custom):
+    mute = "y" if custom else "m"
     before=page.locator("#message").text_content()
     page.keyboard.press(mute)
     page.wait_for_function("!run.game.sound.enabled && run.game.sound.main.gain.value<.002")
     assert page.locator("#message").text_content() == before
     page.keyboard.press(mute)
     page.wait_for_function("run.game.sound.enabled && Math.abs(run.game.sound.main.gain.value-run.config.audio.volume*.65)<.003")
-    page.mouse.down(button="right");aimed(True)
-    page.keyboard.press("Escape");page.mouse.up(button="right")
-    page.wait_for_function("run.game.phase==='pause' && !run.game.player.aimRequested && run.game.player.ads===0")
 
 
 def check_sight_line(page):
     result=page.evaluate("""() => {
       const {game:g,config,camera}=run,p=g.player,w=g.weapon,m=g.beasts;
       // 在场景上方加一扇窄门，去掉随机散布，以便测量光轴本身。
-      Object.assign(p,{x:-20,y:45,z:0,aimRequested:true,aiming:true,ads:1,thirdPerson:false});
+      Object.assign(p,{x:-20,y:45,z:0,thirdPerson:false});
       p.look.rotation.set(0,0,0,'YXZ');p.positionCamera(0);w.render(0,p,g);
       const rules=config.weapon,spread=[rules.baseSpread,rules.maxSpread];
       rules.baseSpread=rules.maxSpread=0;
@@ -148,7 +154,7 @@ def check_sight_line(page):
       return hits;
     }""")
     assert all(blocked and hit and eye < .0001 for _,blocked,hit,eye in result),result
-    print("PASS ADS eye ray, closed cover / open door",result,flush=True)
+    print("PASS hip-fire eye ray, closed cover / open door",result,flush=True)
 
 
 def check_sound_storage(page):
@@ -182,12 +188,15 @@ def check(browser):
             menu(page,crouch,deep,custom)
             start(page)
             if crouch: crouch_checks(page,"x" if custom else "c")
+            if stage!="neon-undercity":
+                weapon_controls(page,custom)
             if stage=="practice":
-                aim_checks(page,custom)
-            else:
-                page.keyboard.press("Escape");page.wait_for_function("run.game.phase==='pause'")
+                mute_checks(page,custom)
+            page.keyboard.press("Escape")
+            page.wait_for_function("run.game.phase==='pause'")
             menu(page,crouch,deep,custom)
             start(page)
+            right_button_checks(page, False)
             assert page.evaluate("!run.game.player.aiming && run.camera.matrixWorld.elements.every(Number.isFinite)")
             if stage=="underground-lab":
                 check_sight_line(page)
@@ -197,7 +206,7 @@ def check(browser):
             page.wait_for_function("run.game.phase==='fail'")
             assert page.locator("#sound, #sound-state").count()==0
             start(page)
-            assert page.evaluate("!run.game.player.aimRequested && run.game.player.ads===0")
+            right_button_checks(page, False)
             assert not errors,errors
             print("PASS offline",stage,query,"custom" if custom else "default",flush=True)
         finally:
