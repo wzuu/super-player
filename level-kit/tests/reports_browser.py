@@ -153,11 +153,15 @@ def verify_endless_report(page, url, level):
     page.locator("#start").click()
     page.wait_for_function("run.game.phase==='play'")
     kills = page.evaluate("""() => {
-      const g=run.game,m=g.beasts, wave=m.pool.filter(b=>b.active && b.waveMember);
-      if(wave.length!==run.config.beasts.population-1)throw Error('无尽首波数量错误');
+      const g=run.game,m=g.beasts,boss=m.boss,base=run.config.beasts.population;
+      const wave=m.pool.filter(b=>b.active && b.waveMember);
+      if(wave.length!==base-1 || !boss?.active || boss.waveMember || m.live!==base)
+        throw Error('无尽首波数量或归属错误');
       for(const b of wave)m.eject(b,g);
       g.step(.04);
-      if(g.objective.wave!==2 || !m.boss.active)throw Error('首领仍在场时应按普通敌群清空结算波次');
+      if(g.objective.wave!==2 || m.boss!==boss || !boss.active ||
+         m.pool.filter(b=>b.active && b.waveMember).length!==base+2)
+        throw Error('首领仍在场时应按普通敌群清空结算波次 '+[g.objective.wave,m.live]);
       g.finish(false,'无尽撤出');
       return g.kills;
     }""")

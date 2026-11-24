@@ -252,6 +252,46 @@ def verify_lift(page):
     }""")
 
 
+def verify_endless_deployment(page):
+    result=page.evaluate("""()=>{
+      const {game:g,config}=run, m=g.beasts, base=config.beasts.population;
+      document.querySelector('#mission-mode').value='endless';
+      const wave=()=>m.pool.filter(b=>b.active && b.waveMember);
+      const spawn=m.spawnGroup;
+      for(const blockBoss of [true,false]){
+        m.spawnGroup=function(entries,options){
+          return (entries[0]?.type===3)===blockBoss ? [] : spawn.call(this,entries,options);
+        };
+        try { g.reset(); } finally { delete m.spawnGroup; }
+        g.phase='play';
+        if(Boolean(m.boss)===blockBoss || wave().length!==(blockBoss ? base-1 : 0))
+          throw Error('首领与普通波的失败互相阻塞');
+        g.time+=.6;m.deployPopulation(g);
+        if(!m.boss?.active || wave().length!==base-1 || m.live!==base)throw Error('独立重试没有完成');
+      }
+      const boss=m.boss;
+      for(let stage=0;stage<3;stage++){g.time+=2;m.damage(boss,1e7,g,'environment');}
+      g.step(.04);
+      if(!g.bossDead || m.boss || m.live!==base-1 || g.objective.wave!==1)
+        throw Error('提前击倒首领后出现补位或提前换波');
+
+      g.reset();g.phase='play';
+      const {x,y,z}=g.field.vault.front;Object.assign(g.player,{x,y,z});
+      if(!g.field.interact(g))throw Error('未触发巴黎宝库');
+      g.time+=3;g.field.step(3,g);
+      const guards=g.field.guards.slice();
+      if(guards.length!==40)throw Error('宝库守卫未到齐');
+      for(let i=1;i<69;i++)g.objective.advanceWave(g);
+      for(const b of wave())m.eject(b,g);
+      m.deployPopulation(g);
+      if(g.objective.wave!==70 || wave().length!==116 || !m.boss?.active ||
+         !guards.every(b=>b.active && b.fieldGroup==='vault') || m.live!==157)
+        throw Error('巴黎高波与首领、宝库守卫不能共存 '+[g.objective.wave,wave().length,m.live]);
+      return [g.objective.wave,wave().length,guards.length,m.live];
+    }""")
+    print("PASS independent opening boss and wave retries, boss-first kill, Paris wave/vault coexistence",result,flush=True)
+
+
 def verify_variation(browser, name):
     page=level_page(browser,'rain-city',name)
     page.evaluate("""name=>{
@@ -301,6 +341,7 @@ def main():
                 if stage=="rain-city": verify_roles(page)
                 page.close()
             page=level_page(browser,'paris-tower')
+            verify_endless_deployment(page)
             verify_lift(page)
             page.close()
             for variant in ['fog','blackout','fury','patrol','plenty','quiet']:

@@ -235,6 +235,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
       this.journal?.start(this, { difficulty: prefs.difficulty, recordReplay: preferences().recordReplay }, packed);
       packed = null;
       story.prepare(training ? null : objective.mode);
+      // 重开时，首波按本局已复位的门体和寻路网格选址。
+      field?.resetDoors(!training);
       beasts.reset(player, this);
       projectiles.reset();
       effects.reset();

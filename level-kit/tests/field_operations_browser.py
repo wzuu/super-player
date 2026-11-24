@@ -9,6 +9,32 @@ from uuid import uuid4
 from campaign_browser import ROOT, LEVELS, sync_playwright
 
 
+def verify_restart_doors(page):
+    page.evaluate("""() => {
+      const g=run.game, m=g.beasts, f=g.field;
+      for(const target of [f.secret.front,f.lever]) {
+        Object.assign(g.player,{x:target.x,y:target.y,z:target.z});
+        if(!f.interact(g))throw Error('上一局未能通过玩家交互开门');
+      }
+      const doors=[f.secret.door.box,f.vault.shortcut.box];
+      if(doors.some(door=>door.active))throw Error('重开前应保留开门状态');
+      const plan=m.planGroup, random=Math.random;
+      let seed=7, checked=false;
+      Math.random=()=>((seed=(Math.imul(seed,1664525)+1013904223)>>>0)/4294967296);
+      m.planGroup=function(...args) {
+        if(!doors.every(door=>door.active))throw Error('无尽首波仍在使用上一局的开门状态');
+        checked=true;
+        return plan.apply(this,args);
+      };
+      try {g.reset();} finally {m.planGroup=plan;Math.random=random;}
+      if(!checked || m.live!==run.config.beasts.population)throw Error('重开未部署完整无尽首波');
+      for(const b of m.pool)if(b.active && doors.some(door=>
+        b.x0<door.x1 && b.x1>door.x0 && b.z0<door.z1 && b.z1>door.z0 &&
+        b.y0<door.y1-.025 && b.y1>door.y0+.025))throw Error('重开后新敌人与关闭门体重叠');
+      g.phase='play';
+    }""")
+
+
 def verify(browser):
     page=browser.new_page(viewport={"width":960,"height":640})
     page.add_init_script("""window.requestAnimationFrame = () => 1;
@@ -52,6 +78,9 @@ def verify(browser):
         }""")
         assert result['vault'] and result['secret'] and result['device'] and result['hazards']==3,(level['id'],result)
         print("PASS accessible sites",level['id'],flush=True)
+        if level['id'] in ('rain-city','paris-tower'):
+            verify_restart_doors(page)
+            print("PASS closed vault and secret doors before endless restart",level['id'],flush=True)
         if level['id'] in ('underground-lab','buried-tomb','shanhai-secret-realm','sakura-night-town','jungle-temple','derelict-station'):
             events=page.evaluate("""stage=>{
               const {game:g,config}=run,m=g.beasts,e=g.encounter,p=g.player;

@@ -69,14 +69,16 @@ test('处于任务、特殊动作、伤害持续期的远敌始终走原感知�
   assert.equal(manager.simulationStats.deferred,0);
 });
 
-test('正式池容纳两场百只遭遇和额外成员，实验池可独立设为 192', () => {
+test('正式池容纳两场主线、支线和首领，扩池或实验容量不改变无尽单波上限', () => {
   for (const stage of [1,8,15]) {
     const baseline = makeConfig({},stage).beasts;
     const experiment = makeConfig({beasts:{simulation:{poolCapacity:192}}},stage).beasts;
     assert.equal(experiment.capacity,192);
     assert.deepEqual({...experiment,capacity:baseline.capacity,simulation:baseline.simulation},baseline);
-    assert.ok(baseline.capacity >= 2*baseline.encounterSize+64);
+    assert.equal(baseline.endlessWaveCap,Math.max(96,baseline.population+32));
+    assert.ok(baseline.capacity >= 4*baseline.encounterSize+32);
   }
+  assert.equal(makeConfig({beasts:{capacity:120}},14).beasts.endlessWaveCap,120);
 });
 
 class Vector {

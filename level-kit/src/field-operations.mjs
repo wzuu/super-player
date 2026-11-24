@@ -328,11 +328,13 @@ export function createFieldOperations(context, campaign) {
     lever,
     deepRoom,
     deepExit,
+    resetDoors(enabled) {
+      this.enabled = enabled;
+      visual.visible = enabled;
+      for (const p of panels) open(p, enabled && p.closed);
+    },
     reset(g) {
       runNumber++;
-      this.enabled = !g.training;
-      visual.visible = this.enabled;
-      for (const p of panels) open(p, this.enabled && p.closed);
       for (const t of traps) {
         t.hp = t.data.hp;
         t.active = this.enabled;

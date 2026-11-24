@@ -104,6 +104,8 @@ function merge(base, patch) {
 // 每个关卡得到独立配置，避免场景间共享数组或对象。
 export function makeConfig(overrides = {}, campaignStage = 0) {
   const config = merge(DEFAULT_CONFIG, overrides);
+  const beasts=config.beasts;
+  beasts.endlessWaveCap=beasts.capacity;
   for (const [i, stats] of config.beasts.types.entries()) {
     const [width, height] = config.beasts.appearance.scale[i];
     stats.radius *= width;
@@ -114,10 +116,11 @@ export function makeConfig(overrides = {}, campaignStage = 0) {
   if (campaignStage > 0) {
     const rules = CAMPAIGN_DIFFICULTY;
     const steps = campaignStage - 1;
-    const beasts = config.beasts;
     beasts.population = rules.firstPopulation + steps * rules.populationStep;
-    // 坚守结束后上一战区可仍有百只在场；为下一整群、首领召唤和支线预留槽位。
-    beasts.capacity = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity, 2*beasts.encounterSize+64);
+    // 保留各关原有无尽上限。实际池另需容纳两场主线、宝库与秘室、深入敌群和首领召唤。
+    beasts.endlessWaveCap = Math.max(beasts.capacity, beasts.population + rules.reserveCapacity);
+    beasts.capacity = Math.max(2*beasts.encounterSize,beasts.endlessWaveCap) +
+      2*beasts.encounterSize + rules.reserveCapacity;
     if (beasts.simulation.poolCapacity != null)
       beasts.capacity = Math.max(beasts.population, beasts.simulation.poolCapacity);
 

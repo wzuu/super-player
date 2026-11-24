@@ -82,7 +82,7 @@ export function planBeastGroup(manager, entries, options, config, allowSite) {
         // 环站等低舱室的母体只在高厅战斗：玩家必须能亲自步行到厅内，首领只须在该厅可通行。
         bossApproach=manager.spawnPlayerRoute ??= manager.nav.playerRoute();
         // 普通开局的气闸可由玩家打开，已配置的门外集结点只用于这个开局。
-        const from=manager.openingPending && level.inSafeZone(player.x,player.z) ? target : player;
+        const from=options.bossApproachFrom ?? player;
         if (!reachableField(bossApproach,from,config.player,24)) return [];
         const i=bossApproach.index(anchor.x,anchor.z);
         if (bossApproach.dist[i]>=0)

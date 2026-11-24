@@ -511,6 +511,8 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
       this.pendingWave = null;
       this.waveRetryAt = 0;
       this.openingPending = !(game.training || game.objective.mode==='hunt' || game.story?.managed);
+      this.openingBossPending = this.openingPending;
+      this.bossRetryAt = 0;
       if (this.openingPending) this.deployPopulation(game);
       this.refreshHash(); this.render();
     }
@@ -548,24 +550,37 @@ export function createBeastClasses({ CONFIG, THREE, V3, TAU, stamp, shapes, canv
     }
     deployPopulation(game) {
       const opening=this.openingPending;
-      if (this.waveRetryAt>game.time) return;
-      if (!opening && (game.objective.mode!=='endless' || this.pool.some(b=>b.active && b.waveMember))) return;
-      if (!this.pendingWave) {
-        const target=Math.min(CONFIG.beasts.population + (opening ? 0 : game.objective.reinforcements+2),
-          this.pool.length-32);
-        this.pendingWave=Array.from({length:target},()=>this.randomType());
-        if (opening) this.pendingWave[0]={type:3,anchor:this.level.bossSpawn,angle:1};
-      }
-      const anchor=(opening || this.level.inSafeZone(game.player.x,game.player.z)) && definition.initialPopulationAnchor;
+      const attemptBoss=this.openingBossPending && game.time>=this.bossRetryAt;
+      const attemptWave=game.time>=this.waveRetryAt &&
+        (opening || (game.objective.mode==='endless' && !this.pool.some(b=>b.active && b.waveMember)));
+      if (!attemptBoss && !attemptWave) return;
+      const anchor=this.level.inSafeZone(game.player.x,game.player.z) && definition.initialPopulationAnchor;
       const target=anchor ? {x:anchor[0],y:this.level.base(...anchor),z:anchor[1]} : game.player;
-      const group=this.spawnGroup(this.pendingWave,{target,safeDistance:CONFIG.beasts.spawnDistance});
+      const options={target,safeDistance:CONFIG.beasts.spawnDistance};
+      if (attemptBoss) {
+        const [boss]=this.spawnGroup([{type:3,anchor:this.level.bossSpawn,angle:1}],
+          {...options,bossApproachFrom:anchor ? target : game.player});
+        if (boss) this.openingBossPending=false;
+        else {
+          if (!this.bossRetryAt) game.ui.notify('正在寻找首领可通行的集结区',2);
+          this.bossRetryAt=game.time+.5;
+        }
+      }
+      if (!attemptWave) return;
+      if (!this.pendingWave) {
+        const population=CONFIG.beasts.population;
+        const count=opening ? population-1 : Math.min(population+game.objective.reinforcements+2,
+          CONFIG.beasts.endlessWaveCap);
+        this.pendingWave=Array.from({length:count},()=>this.randomType());
+      }
+      const group=this.spawnGroup(this.pendingWave,options);
       if (!group.length) {
         if (!this.waveRetryAt) game.ui.notify('正为整波凶兽寻找安全集结区',2);
         this.waveRetryAt=game.time+.5;
         return;
       }
       this.waveRetryAt=0;
-      for (const b of group) b.waveMember=b.type!==3;
+      for (const b of group) b.waveMember=true;
       this.openingPending=false;
       this.pendingWave=null;
       if (!opening) game.objective.advanceWave(game);
