@@ -138,7 +138,7 @@ def run(browser,url):
     assert page.evaluate("run.game.player.thirdPerson")
     page.mouse.down(button="right")
     fov=page.evaluate("""()=>{
-      const p=run.game.player; p.positionCamera(.3);
+      const p=run.game.player; p.impactLeft=0; p.positionCamera(.3);
       const normal=run.camera.fov;p.impactLeft=run.config.feedback.impactDuration;p.impactStrength=1;
       p.positionCamera(0);const hurt=run.camera.fov;p.impactLeft=0;p.positionCamera(0);
       return {normal,hurt,recovered:run.camera.fov,base:p.baseFov};

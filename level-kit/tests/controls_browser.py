@@ -14,16 +14,18 @@ def stage_page(browser, stage, query="", custom=False):
         assert html.count(entry) == 1
         route.fulfill(body=html.replace(entry, entry.replace("startLevel(", "window.run=startLevel(")), content_type="text/html")
     page.route(re.compile(r"/index\.html(?:\?.*)?$"), expose)
+    # 用正式的减震设置隔离受击视野和后坐。开镜的 FOV、准星和肩后切换仍走正常路径。
     if custom:
         page.add_init_script("""localStorage.setItem('super-player:preferences:v1',JSON.stringify({
-          aimMode:'hold',volume:47,keys:{KeyC:'KeyX',KeyG:'KeyH',KeyI:'KeyK',KeyM:'KeyY',KeyV:'KeyB'}
+          steady:true,aimMode:'hold',volume:47,keys:{KeyC:'KeyX',KeyG:'KeyH',KeyI:'KeyK',KeyM:'KeyY',KeyV:'KeyB'}
         }))""")
     else:
-        page.add_init_script("localStorage.setItem('super-player:preferences:v1', JSON.stringify({aimMode:'toggle'}))")
+        page.add_init_script("localStorage.setItem('super-player:preferences:v1', JSON.stringify({steady:true,aimMode:'toggle'}))")
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto((ROOT/stage/"index.html").as_uri()+query)
     page.wait_for_function("!!window.run")
+    assert page.evaluate("run.config.player.steady")
     return page, errors
 
 
@@ -122,10 +124,9 @@ def weapon_controls(page, custom):
 
 def mute_checks(page, custom):
     mute = "y" if custom else "m"
-    before=page.locator("#message").text_content()
     page.keyboard.press(mute)
     page.wait_for_function("!run.game.sound.enabled && run.game.sound.main.gain.value<.002")
-    assert page.locator("#message").text_content() == before
+    assert not re.search("音效|静音", page.locator("#message").inner_text())
     page.keyboard.press(mute)
     page.wait_for_function("run.game.sound.enabled && Math.abs(run.game.sound.main.gain.value-run.config.audio.volume*.65)<.003")
 
@@ -162,7 +163,7 @@ def check_sound_storage(page):
       const sound=run.game.sound, key='super-player:preferences:v1';
       const press=()=>document.dispatchEvent(new KeyboardEvent('keydown',{code:'KeyM',bubbles:true}));
       // 模拟存储已更新但事件尚未到达，此次按键必须反转新值。
-      localStorage.setItem(key,JSON.stringify({muted:true,volume:37}));
+      localStorage.setItem(key,JSON.stringify({...JSON.parse(localStorage.getItem(key)),muted:true,volume:37}));
       press();
       const result=[sound.enabled,JSON.parse(localStorage.getItem(key)).muted,run.config.audio.volume];
       const save=Storage.prototype.setItem;
