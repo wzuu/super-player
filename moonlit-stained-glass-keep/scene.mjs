@@ -59,7 +59,7 @@ function decorateDoor({THREE,id,mesh,width,depth,height}) {
   const face=vertical?width:depth;
   for(const side of [-1,1]) {
     for(let i=0;i<9;i++) {
-      const bar=new THREE.Mesh(new THREE.BoxGeometry(vertical?.08:.14,height,vertical?.14:.08),trim);
+      const bar=new THREE.Mesh(new THREE.BoxGeometry(vertical ? .08 : .14,height,vertical ? .14 : .08),trim);
       const u=span*(i-4)/9;
       bar.position.set(vertical?side*face/2:u,0,vertical?u:side*face/2);mesh.add(bar);
     }
@@ -93,8 +93,8 @@ function perimeter({x,z,w,d,dc,span},{box,solid}) {
   if(z>=48) return false;
   const h=z<=-48?10.2:5.7;
   solid(x,z,w,d,h+.25,stone,-.25);
-  box('trim',x,.65,z,w+(dc?.15:0),.26,d+(dc?0:.15),ash);
-  box('trim',x,h-.38,z,w+(dc?.25:0),.22,d+(dc?0:.25),ash);
+  box('trim',x,.65,z,w+(dc ? .15 : 0),.26,d+(dc ? 0 : .15),ash);
+  box('trim',x,h-.38,z,w+(dc ? .25 : 0),.22,d+(dc ? 0 : .25),ash);
   if(span>2 && dc && z < -48) box('trim',x,h/2,z,.83,h,.75,ash);
   return true;
 }
@@ -127,9 +127,16 @@ function decorate({THREE,scene,shape,box,solid,floor,sign,canvasTexture,seededRa
     [13,2,3,1.4,1.55],[30,-13,2.3,3.4,1.9],[44,-29,2.5,4,1.8],
     [-11,-60,3,3,1.5],[13,-66,3,3,1.5]]) solid(x,z,w,d,h,stone);
   sign('西墓穴　←',-16,1.58,37.03,2.25,.55,0,'#ffe2ad','#453731');
-  for(const z of [12,20,31]) {
+  for(const z of [9,18,30]) {
     box('trim',-65.6,2.05,z,.7,2.8,3.5,iron);
-    box('light',-65.22,2.17,z,.07,.30,1.15,candle);
+    for(const side of [-1,1])box('trim',-65.08,1.6,z+side*1.62,.74,3.2,.28,ash);
+    box('wall',-65.04,3.16,z,.85,.32,3.6,ash);
+    solid(-64.7,z,2.0,3.05,.92,stone);
+    box('trim',-64.7,.99,z,2.1,.18,3.25,ash);
+    for(const dz of [-.7,.35,.75]){
+      shape('cylinder','trim',-64.5,1.29,z+dz,.11,.43,.11,0xdbc5a1);
+      shape('stone','light',-64.5,1.56,z+dz,.09,.18,.09,candle);
+    }
   }
   for(const z of [-3,-12,-21,-30]) {
     for(const x of [22.8,31.2]) {

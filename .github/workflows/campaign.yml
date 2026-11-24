@@ -97,6 +97,14 @@ jobs:
       - name: Verify 160 visible enemies in Chromium
         if: matrix.suites == 'visibility_browser'
         run: python -u level-kit/tests/herd_performance.py --samples open dense --sizes 160 --frames 36
+      - name: Play both gated campaigns from the mission list
+        if: matrix.suites == 'campaign_routes_browser'
+        run: |
+          for stage in orbital-brood-ring moonlit-stained-glass-keep; do
+            python -u level-kit/tests/annihilation_browser.py "$stage" --output "$RUNNER_TEMP/$stage-main"
+            python -u level-kit/tests/annihilation_browser.py "$stage" --collect --output "$RUNNER_TEMP/$stage-reward"
+          done
+          python -u level-kit/tests/annihilation_checks.py
       - name: Check open routes, door triggers and optional room rewards
         if: matrix.suites == 'campaign_routes_browser'
         run: |

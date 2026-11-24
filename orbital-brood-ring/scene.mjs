@@ -120,7 +120,7 @@ function decorate({scene,THREE,shape,box,solid,sign,seededRandom}) {
     [1,30,1.6,6,2.5],[-10,35,5,2,1.35],[33,24,4,3,2.9],[42,16,6,4,2],
     [-8,4,4,2.3,1.3],[-38,-8,2,3,1.5],[-54,-22,2,5,2.5],
     [7,-18,3,3,1.5],[25,-23,3,2.4,1.7]]) solid(x,z,w,d,h,steel);
-  for(const z of [38,26,15]) {
+  for(const z of [38,29,22]) {
     box('trim',-14.9,1.45,z,1.3,2.5,3.4,steel);
     box('light',-14.2,1.85,z,.08,1.1,2.7,0x83acba);
   }
@@ -143,6 +143,10 @@ function decorate({scene,THREE,shape,box,solid,sign,seededRandom}) {
     const r=.06+rng()*.13;
     shape('stone','light',-53-rng()*35,4+rng()*33,-43+rng()*65,r,r,r,0xc8dbe9);
   }
+  for(const breach of breaches) {
+    box('trim',breach.x+.25,1.8,breach.z,.4,1.65,2.45,steel);
+    for(let i=-3;i<=3;i++)box('light',breach.x+.47,1.8+i*.16,breach.z,.045,.045,1.65,0x98bbbd);
+  }
 }
 const plan={spots:{spawn:[16,70],gate:[16,-10],bossAnchor:[16,-16],bossSpawn:[16,-13]},
   ground,floorTexture,edge:hullWindow,decorate,wallColor:0x475b69,wallHeight:5,roughness:.69,metalness:.28};
@@ -152,9 +156,16 @@ const breaches=[
   {name:'外窗西环',x:-46,z:-2,contains:(x,z)=>x< -34 && x>=-46 && z>=-7 && z<=8},
   {name:'维修舱',x:-68,z:-12,contains:(x,z)=>x< -50 && x>=-68 && z>=-19 && z<=-6},
 ];
-function createEncounter({level,sound}) {
+function createEncounter({level,sound,THREE,scene}) {
+  // 靠近破口的冷凝粒留下短轨迹，方向与实际吸力一致。
+  const positions=new Float32Array(24*6);
+  const geometry=new THREE.BufferGeometry();
+  const trails=new THREE.BufferAttribute(positions,3);
+  geometry.setAttribute('position',trails);
+  const mist=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:0xd0eeff,transparent:true,opacity:.6}));
+  mist.visible=false;mist.frustumCulled=false;scene.add(mist);
   return {
-    reset(){this.cycle=-1;this.phase='calm';this.status=null;},
+    reset(){this.cycle=-1;this.phase='calm';this.status=null;mist.visible=false;},
     update(g,dt) {
       const elapsed=g.time-21;
       if(elapsed<0)return;
@@ -167,7 +178,16 @@ function createEncounter({level,sound}) {
         if(phase!=='calm') g.ui.notify(breach.name+(phase==='open'?'正在泄压，沿内侧通行':'即将泄压'),2);
       }
       this.status=phase==='calm'?null:{title:breach.name+(phase==='open'?'失压':'泄压预警'),detail:'沿内侧通行',remaining:(phase==='open'?16:5)-age};
-      if(phase!=='open') return;
+      mist.visible=phase==='open';
+      if(!mist.visible) return;
+      mist.position.set(breach.x+.51,level.base(breach.x,breach.z)+1.8,breach.z);
+      for(let i=0;i<24;i++){
+        const a=i*2.4, r=(1-(age*1.1+i*.618)%1), width=.2+1.4*r;
+        const y=Math.sin(a)*width,z=Math.cos(a)*width;
+        trails.setXYZ(i*2,4*r,y,z);
+        trails.setXYZ(i*2+1,Math.max(0,4*r-.35),y*.92,z*.92);
+      }
+      trails.needsUpdate=true;
       const pull=body=>{
         if(!breach.contains(body.x,body.z))return;
         const dx=breach.x-body.x,dz=breach.z-body.z,dist=Math.max(1,Math.hypot(dx,dz));

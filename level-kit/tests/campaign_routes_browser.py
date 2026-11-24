@@ -53,7 +53,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     stages = args.stages or [
         item["id"] for item in json.loads((args.root / "campaign/levels.json").read_text(encoding="utf-8"))
-        if item["id"] != "underground-lab"
+        # 开门部署的三关由 lab_live_browser 和 annihilation_browser 从首页走完整局。
+        if item["id"] not in ("underground-lab","moonlit-stained-glass-keep","orbital-brood-ring")
     ]
     with sync_playwright() as pw, pw.chromium.launch(channel=os.getenv("GAME_TEST_BROWSER", "chrome")) as browser:
         for stage in stages:

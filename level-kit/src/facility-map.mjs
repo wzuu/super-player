@@ -63,7 +63,7 @@ export function buildFacility(ctx, plan) {
         if(start>=0 && (!edge || (k-start)*size>=4)) {
           const mid=(start+k-1)/2;
           const x=GRID.x(dr?mid:line)+dc*half,z=GRID.z(dr?line:mid)+dr*half;
-          const span=(k-start)*size,w=dr?span:.36,d=dr?.36:span;
+          const span=(k-start)*size,w=dr ? span : .36,d=dr ? .36 : span;
           const wall={x,z,w,d,span,dr,dc,line,start};
           if(!plan.edge?.(wall,{shape,box,solid,level,floor,brighter})) solid(x,z,w,d,plan.wallHeight+.5,plan.wallColor,-.5);
           start=-1;

@@ -40,7 +40,9 @@ def verify(page,address,stage):
         e.setAlarm(true);e.alarmUntil=begin+4;tick(begin+1);tick(begin+4.2);
       } else if(['bloodmoon-castle','shanhai-secret-realm','ember-fortress'].includes(id)) {
         tick(116);tick(121);tick(175);
-      } else if(id==='buried-tomb') {tick(88);tick(91);tick(109);}
+      } else if(id==='moonlit-stained-glass-keep') {tick(65);tick(71);tick(85);}
+      else if(id==='orbital-brood-ring') {tick(22);tick(27);tick(38);}
+      else if(id==='buried-tomb') {tick(88);tick(91);tick(109);}
       else if(id==='polar-station') {
         e.temperature=60;tick(begin+1);e.temperature=92;tick(begin+2);
       } else if(id==='drowned-city'||id==='derelict-station') {

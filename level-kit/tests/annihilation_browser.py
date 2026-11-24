@@ -1,6 +1,7 @@
 """从带历史成绩的首页进入独立歼灭关。键鼠事件和指针锁仅作用于无头测试页面。"""
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -30,7 +31,7 @@ def play(browser,url,stage,out,collect):
       }
       localStorage.setItem('super-player:preferences:v1',JSON.stringify({muted:true,difficulty:'standard'}));
     """)
-    page.route(re.compile('/'+stage+r'/(?:index\.html)?(?:\?.*)?$'),expose_game)
+    page.route(re.compile('/'+stage+r'/(?:index\.html)?(?:\?.*)?$'),lambda route:expose_game(route,manual_steps=True))
     page.goto(url+'/')
     page.get_by_role('button',name='直接开始',exact=True).click()
     page.locator('#continue').wait_for()
@@ -54,12 +55,27 @@ def play(browser,url,stage,out,collect):
     page.add_script_tag(content=(ROOT/'level-kit/tests/annihilation_play.js').read_text(encoding='utf8'))
     page.evaluate("opts=>window.walk=playAnnihilation(opts)",{'rewardName':reward,'roomName':room,'roomAt':at,'takeReward':collect})
     def capture(name):
-        page.evaluate("""() => {
+        page.evaluate("""name => {
           const g=run.game;
+          if(name==='entry')g.step(.016);
+          if(name==='combat' || name==='boss'){
+            // 两次点射之间取景，让枪口焰退去，保留 HUD、前排怪和后方驻防。
+            document.dispatchEvent(new MouseEvent('mouseup',{button:0,bubbles:true}));
+            for(let i=0;i<5 && g.phase==='play';i++)g.step(.025);
+            document.dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true}));
+          }
           while(g.phase==='play' && g.time<g.attackPauseUntil)g.step(.008);
+          if(name==='entry' || name==='transition'){
+            g.story.marker(null,g);
+            document.querySelector('#task-panel').style.visibility='hidden';
+            document.querySelector('#map').style.visibility='hidden';
+          }
           window.drawPlayFrame(1000);
-        }""")
+        }""",name)
         page.screenshot(path=out/(stage+'-'+name+'.png'))
+        page.evaluate("""() => {
+          for(const id of ['task-panel','map'])document.getElementById(id).style.removeProperty('visibility');
+        }""")
     capture('entry')
     while True:
         result=page.evaluate('walk.advance()')
@@ -92,7 +108,7 @@ if __name__=='__main__':
         try:
             url=re.search(r'http://127\.0\.0\.1:\d+',server.stdout.readline()).group()
             with sync_playwright() as pw:
-                browser=pw.chromium.launch(channel='chrome',headless=True)
+                browser=pw.chromium.launch(channel=os.getenv('GAME_TEST_BROWSER','chrome'),headless=True)
                 try: play(browser,url,args.stage,args.output,args.collect)
                 finally: browser.close()
         finally:

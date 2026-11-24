@@ -31,6 +31,26 @@ function playAnnihilation({rewardName,roomName,roomAt,takeReward}) {
     const d=ray.length();
     return g.level.visible(eye,ray.divideScalar(Math.max(.001,d)),d);
   }
+  // 观察墙边和酸池，选择仍有侧移空间的方向，避免一直后退到来路死角。
+  function bossFootwork(enemy){
+    const home=g.level.bossAnchor, pools=g.projectiles.puddles;
+    let best=null,score=-Infinity;
+    for(let i=0;i<16;i++){
+      const a=i*Math.PI/8,dx=Math.cos(a),dz=Math.sin(a);
+      let clear=0;
+      for(let d=.5;d<=5;d+=.5){
+        const x=p.x+dx*d,z=p.z+dz*d,y=g.level.base(x,z);
+        if(g.level.blocked(x,z,y,p.radius,p.height))break;
+        clear=d;
+      }
+      if(clear<1.5)continue;
+      const dest={x:p.x+dx*clear,z:p.z+dz*clear};
+      const pressure=pools.some(o=>o.life>0 && distance(o.pos,dest)<3.5);
+      const value=-Math.abs(distance(dest,enemy)-13)+clear*.6-Math.max(0,distance(dest,home)-11)*2-(pressure?12:0);
+      if(value>score){score=value;best=dest;}
+    }
+    return best;
+  }
   function step() {
     const goal=story.guide(g,{}), enemies=g.beasts.pool.filter(b=>b.active);
     const visible=enemies.filter(see).sort((a,b)=>distance(p,a)-distance(p,b));
@@ -54,6 +74,7 @@ function playAnnihilation({rewardName,roomName,roomAt,takeReward}) {
       if(enemy.type===3 || gap<4.2)want.add(Math.sin(g.time*.57)>0?'KeyA':'KeyD');
       if(enemy.type===3 && enemy.fight?.winding)tap('Space');
       if(gap<24 && g.weapon.ammo+g.weapon.reserve>0)dest=null;
+      if(enemy.type===3){want.clear();dest=bossFootwork(enemy);}
     } else if(dest)aim(0,Math.atan2(p.x-dest.x,p.z-dest.z));
     if(story.stage==='boss' && g.weapon.ammo+g.weapon.reserve<170) {
       const supply=g.pickups.objects.filter(i=>i.active && i.permanent && i.kind==='ammo' &&
@@ -78,6 +99,7 @@ function playAnnihilation({rewardName,roomName,roomAt,takeReward}) {
     if(stage!==lastStage) {lastStage=stage;report.log.push([stage,Math.round(g.time),Math.round(p.hp)]);}
     const before=performance.now();g.step(.033);
     const cost=performance.now()-before;
+    if(enemy?.type===3 && enemy.fight?.started && gap>4 && gap<18 && !captured.has('boss'))return 'boss';
     const group=story.encounters.at(-1);
     if(group && !report.groups.includes(group.name)){
       report.groups.push(group.name);report.peaks[group.name]={count:group.spawned,deploymentMs:cost,visible:0,threats:0,melee:0};
@@ -90,8 +112,8 @@ function playAnnihilation({rewardName,roomName,roomAt,takeReward}) {
       });
       peak.visible=Math.max(peak.visible,onScreen.length);
       peak.threats=Math.max(peak.threats,visible.filter(b=>b.alert>0 && distance(b,p)<(b.type===2?16:5)).length);
-      peak.melee=Math.max(peak.melee,visible.filter(b=>b.type!==2 && distance(b,p)<b.radius+p.radius+1).length);
-      if(onScreen.length>=3 && gap>=2.2 && gap<11 && !captured.has('combat'))return 'combat';
+      peak.melee=Math.max(peak.melee,visible.filter(b=>b.type!==2 && b.mode==='windup').length);
+      if(onScreen.length>=2 && gap>=3 && gap<16 && !captured.has('combat'))return 'combat';
     }
     const turning=roomName==='月桂花园' ? p.y< -2.8 && stage<4 : p.x< -31 && p.z>-6 && stage===4;
     if(turning && !captured.has('transition'))return 'transition';

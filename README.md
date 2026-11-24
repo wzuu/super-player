@@ -74,6 +74,8 @@ python3 server.py
 | 13 | 黄铜机坊 | 管道爆裂蒸汽、传送带、锅炉车间诱敌 |
 | 14 | 永夜游园 | 失控旋转木马和过山车、气球爆炸、镜屋窄道 |
 | 15 | 巴黎铁塔：高塔救援 | 登上观景台，启动救援信标，坚守 90 秒后登机 |
+| 16 | 环轨母巢 | 从停靠舱绕过失压外环，在维修舱恢复联锁，深入反应堆歼灭母体 |
+| 17 | 月下彩窗堡 | 下墓穴取钥匙，在钟楼升起栅门，穿过教堂迎战伯爵 |
 
 成功撤离后，可以在武器库中旋转查看并佩戴该关的步枪。外观与战斗特性一同装备，可带去其他关卡。与血月、蒸汽等场景事件联动的能力在对应环境中触发。
 
@@ -112,6 +114,10 @@ python3 server.py
     <td align="center"><a href="campaign/images/brass-factory.webp"><img src="campaign/images/brass-factory.webp" width="280" alt="黄铜机坊"></a><br>黄铜机坊</td>
     <td align="center"><a href="campaign/images/haunted-midway.webp"><img src="campaign/images/haunted-midway.webp" width="280" alt="永夜游园"></a><br>永夜游园</td>
     <td align="center"><a href="campaign/images/paris-tower.webp"><img src="campaign/images/paris-tower.webp" width="280" alt="巴黎铁塔的观景台和登塔阶梯"></a><br>巴黎铁塔：高塔救援</td>
+  </tr>
+  <tr>
+    <td align="center"><a href="campaign/images/orbital-brood-ring.webp"><img src="campaign/images/orbital-brood-ring.webp" width="280" alt="停靠舱里的货臂和转运门"></a><br>环轨母巢</td>
+    <td align="center"><a href="campaign/images/moonlit-stained-glass-keep.webp"><img src="campaign/images/moonlit-stained-glass-keep.webp" width="280" alt="月下吊桥通往马厩桥门"></a><br>月下彩窗堡</td>
   </tr>
 </table>
 
