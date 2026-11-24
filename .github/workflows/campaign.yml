@@ -8,12 +8,20 @@ on:
 permissions:
   contents: read
 
+# 发布与公网实测共用锁，后续 main 部署须等前一版完成线上存档验收。
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'github-pages' || format('campaign-run-{0}', github.run_id) }}
+  cancel-in-progress: false
+
 jobs:
   test-build:
     runs-on: ubuntu-latest
+    env:
+      PAGES_ARTIFACT: ${{ github.event_name == 'pull_request' && 'dist' || vars.PAGES_DEMO_ENABLED == 'true' && 'dist' || 'ops/offline' }}
     outputs:
       home_sha256: ${{ steps.digests.outputs.home }}
       lab_sha256: ${{ steps.digests.outputs.lab }}
+      site: ${{ steps.digests.outputs.site }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -43,11 +51,12 @@ jobs:
       - name: Record game entry checksums
         id: digests
         run: |
+          echo "site=$PAGES_ARTIFACT" >> "$GITHUB_OUTPUT"
           sha256sum dist/index.html dist/underground-lab/index.html |
             awk 'NR == 1 {print "home=" $1} NR == 2 {print "lab=" $1}' >> "$GITHUB_OUTPUT"
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: ${{ github.event_name == 'pull_request' && 'dist' || vars.PAGES_DEMO_ENABLED == 'true' && 'dist' || 'ops/offline' }}
+          path: ${{ env.PAGES_ARTIFACT }}
 
   gameplay:
     runs-on: ubuntu-latest
@@ -97,9 +106,6 @@ jobs:
     permissions:
       pages: write
       id-token: write
-    concurrency:
-      group: github-pages
-      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.publish.outputs.page_url }}
@@ -109,7 +115,7 @@ jobs:
         uses: actions/deploy-pages@v5
 
   verify-public-game:
-    if: vars.PAGES_DEMO_ENABLED == 'true'
+    if: needs.test-build.outputs.site == 'dist'
     needs: [test-build, deploy]
     runs-on: ubuntu-latest
     steps:

@@ -37,7 +37,10 @@ def verify(browser, url, static=False):
         assert response.ok and html.count(entry) == html.count(fields) == 1, response.url
         html = html.replace(entry, "    window.run=startLevel(definition,campaign,campaignStage);")
         html = html.replace(fields, "return { game,input,scene,camera,renderer,config:")
-        route.fulfill(response=response, body=html)
+        # Playwright 返回解压后的正文。诊断页改写了 HTML，原传输编码和长度随之失效。
+        headers = {name:value for name,value in response.headers.items()
+                   if name not in {"content-encoding", "content-length", "transfer-encoding"}}
+        route.fulfill(status=response.status, headers=headers, body=html)
 
     page.route(re.compile(r"/underground-lab/(?:index\.html)?(?:\?.*)?$"), expose)
     errors = []

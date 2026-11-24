@@ -11,7 +11,9 @@ from lab_live_browser import verify as play_campaign, watch_page
 
 
 def wait_for_release(request, documents):
-    deadline = time.monotonic() + 120
+    # Pages 普通地址可被边缘节点缓存十分钟，核对玩家访问的 URL 并留出传播时间。
+    deadline = time.monotonic() + 15 * 60
+    interval = 3
     observed = {}
     while time.monotonic() < deadline:
         for url, digest in documents.items():
@@ -27,8 +29,9 @@ def wait_for_release(request, documents):
                 observed[url] = str(exc)
         if observed == documents:
             return
-        time.sleep(min(5, max(0, deadline - time.monotonic())))
-    raise RuntimeError(f"120 秒内公开文档未匹配预期 main 构建：{observed}")
+        time.sleep(min(interval, max(0, deadline - time.monotonic())))
+        interval = min(30, interval * 2)
+    raise RuntimeError(f"15 分钟内公开文档未匹配预期 main 构建：{observed}")
 
 
 def check_document(response, url, digest):
