@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="734" viewBox="0 0 900 734" role="img" aria-labelledby="title desc">
+<title id="title">雨城高架接应平面与高程</title><desc id="desc">钟楼的四面表盘指向东折匝道。西侧铺廊与后巷会合；可回到地下站棚。</desc>
+<rect width="900" height="734" fill="#172632"/><g fill="#e4eff4" font-family="system-ui,sans-serif">
+<text x="28" y="39" font-size="23">雨城高架接应　｜　突围路线</text>
+<text x="470" y="39" font-size="15">北 ↑</text>
+<text x="530" y="83" font-size="20">驻防与接敌方向</text>
+<rect x="225" y="509" width="80" height="88" fill="#455b65"/>
+<rect x="225" y="421" width="80" height="96" fill="#455b65"/>
+<rect x="241" y="325" width="56" height="104" fill="#455b65"/>
+<rect x="137" y="437" width="96" height="32" fill="#455b65"/>
+<rect x="113" y="325" width="56" height="144" fill="#455b65"/>
+<rect x="113" y="309" width="200" height="48" fill="#455b65"/>
+<rect x="289" y="309" width="160" height="48" fill="#455b65"/>
+<rect x="385" y="165" width="64" height="152" fill="#455b65"/>
+<rect x="337" y="93" width="128" height="88" fill="#455b65"/>
+<polyline points="265,533 265,453 269,377 265,333 417,333 417,217 401,129" fill="none" stroke="#7de1cc" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="none"/>
+<polyline points="265,453 137,453 137,333 265,333" fill="none" stroke="#e9ca7c" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="269" cy="477" r="9.3" fill="#973f39"/>
+<text x="269" y="481" text-anchor="middle" font-size="12">1</text>
+<text x="534" y="119" font-size="15">1. 排水街前排　4 只</text>
+<circle cx="269" cy="381" r="9.3" fill="#973f39"/>
+<text x="269" y="385" text-anchor="middle" font-size="12">2</text>
+<text x="534" y="147" font-size="15">2. 沿街封锁队　8 只</text>
+<circle cx="141" cy="421" r="9.3" fill="#973f39"/>
+<text x="141" y="425" text-anchor="middle" font-size="12">3</text>
+<text x="534" y="175" font-size="15">3. 穿堂散敌　5 只</text>
+<circle cx="197" cy="333" r="9.3" fill="#973f39"/>
+<text x="197" y="337" text-anchor="middle" font-size="12">4</text>
+<text x="534" y="203" font-size="15">4. 后巷追击队　6 只</text>
+<circle cx="353" cy="333" r="9.3" fill="#973f39"/>
+<text x="353" y="337" text-anchor="middle" font-size="12">5</text>
+<text x="534" y="231" font-size="15">5. 钟楼外街　9 只</text>
+<circle cx="417" cy="233" r="9.3" fill="#973f39"/>
+<text x="417" y="237" text-anchor="middle" font-size="12">6</text>
+<text x="534" y="259" font-size="15">6. 匝道拦截队　6 只</text>
+<rect x="278" y="538" width="6" height="6" fill="#95c0ff"/>
+<rect x="234" y="462" width="6" height="6" fill="#95c0ff"/>
+<rect x="142" y="398" width="6" height="6" fill="#95c0ff"/>
+<rect x="278" y="374" width="6" height="6" fill="#95c0ff"/>
+<rect x="310" y="326" width="6" height="6" fill="#95c0ff"/>
+<rect x="406" y="278" width="6" height="6" fill="#95c0ff"/>
+<rect x="374" y="146" width="6" height="6" fill="#95c0ff"/>
+<rect x="285" y="458" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="121" y="382" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="333" y="314" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<path d="M129 371l6 6 -6 6 -6 -6z" fill="#f7d26e"/>
+<circle cx="265" cy="533" r="6" fill="#a4e4f4"/>
+<text x="274" y="526" font-size="15">起点</text>
+<circle cx="401" cy="129" r="6" fill="#8ce4b6"/>
+<text x="410" y="122" font-size="15">撤离</text>
+<text x="530" y="337" font-size="20">路线与物资</text>
+<text x="530" y="370" font-size="15">青线　主路　　 金虚线　可选通路</text>
+<text x="530" y="401" font-size="15">蓝方块　弹药　　深色块　实体掩体</text>
+<text x="530" y="432" font-size="15">金菱形　修表匠的怀表</text>
+<text x="530" y="480" font-size="15">存活进入撤离区即胜。</text>
+<text x="530" y="506" font-size="15">战利品可跳过，沿途可原路退回。</text>
+<text x="532" y="536" font-size="15">侧视　地面相对高度（米）</text>
+<path d="M535 581H852" stroke="#6f8592" stroke-dasharray="3 4"/>
+<polyline points="544,586.6 639,584.9 734,581.0 829,569.1" stroke="#7de1cc" stroke-width="3" fill="none"/>
+<circle cx="544" cy="586.6" r="3" fill="#b0edda"/><text x="532" y="624" font-size="13">地铁</text>
+<circle cx="639" cy="584.9" r="3" fill="#b0edda"/><text x="627" y="624" font-size="13">排水街</text>
+<circle cx="734" cy="581.0" r="3" fill="#b0edda"/><text x="722" y="624" font-size="13">钟楼</text>
+<circle cx="829" cy="569.1" r="3" fill="#b0edda"/><text x="817" y="624" font-size="13">桥下</text>
+<text x="28" y="647" font-size="19">沿主路的地面高程</text>
+<text x="28" y="678" font-size="15">地铁坡 −0.8 m → 排水沟 −0.55 m → 钟楼外街 0 m → 桥下 +1.7 m</text>
+<text x="28" y="707" font-size="15">西侧铺廊与后巷会合；可回到地下站棚。</text>
+</g></svg>

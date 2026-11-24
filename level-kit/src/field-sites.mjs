@@ -112,6 +112,15 @@ const sites = {
   'moonlit-stained-glass-keep': [
     [3,35],[6,-27],'封蜡鞍箱','拉动藤架铜环','彩玻工匠戒指','戒面留下的灼痕与大厅玫瑰窗中心的玻璃同色。',
   ],
+  'storm-city-overpass': [
+    [-31,12],[26,-5],'雨棚储物间','按下排水控制钮','夜班车钥匙','钥匙上刻着撤离前最后一班车的发车时刻。',
+  ],
+  'lantern-shrine-escape': [
+    [-15,25],[26,9],'织坊染料库','拨动药柜木扣','染坊铜印','铜印的纹样与低街门帘上的印花一致。',
+  ],
+  'neon-northline-escape': [
+    [-23,23],[28,10],'诊所器材库','闭合夜市电闸','首班电车票','纸票保留着北线开通当日的检票孔。',
+  ],
 };
 export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, encounterSize = 100) {
   const data = sites[id];
@@ -135,6 +144,9 @@ export function fieldConfig(id, stage = Object.keys(sites).indexOf(id) + 1, enco
     ['发电机油箱', '高压蒸汽管', '塔架吊篮'],
     ['航天燃料瓶','失压冷凝管','悬挂电池箱'],
     ['蜡油坛','药圃熏炉','钟楼配重'],
+    ['路灯维修瓶','排水压力管','废弃货架'],
+    ['灯油陶罐','染坊蒸汽壶','松木料架'],
+    ['备用燃料瓶','冷却管线','吊装电池'],
   ];
   const value = 450 + stage * 25;
   const treasure = [{ name: '宝库·' + name, value }];

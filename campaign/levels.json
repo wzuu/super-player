@@ -15,5 +15,8 @@
   {"id":"haunted-midway","title":"永夜游园","brief":"躲开飞驰的过山车，在摩天轮下解开团长怀表的封印。"},
   {"id":"paris-tower","title":"巴黎铁塔：高塔救援","brief":"从战神广场登上铁塔，守住观景台信标，等待直升机撤离。"},
   {"id":"orbital-brood-ring","title":"环轨母巢","brief":"在指挥舱领取身份凭证，穿过外窗西环恢复压差联锁，深入反应堆歼灭母体。"},
-  {"id":"moonlit-stained-glass-keep","title":"月下彩窗堡","brief":"从吊桥下到墓穴寻找钥匙，在钟楼转动绞盘，进入彩窗下的大厅歼灭伯爵。"}
+  {"id":"moonlit-stained-glass-keep","title":"月下彩窗堡","brief":"从吊桥下到墓穴寻找钥匙，在钟楼转动绞盘，进入彩窗下的大厅歼灭伯爵。"},
+  {"id":"storm-city-overpass","title":"雨城高架接应","brief":"从封锁地铁口穿过积水街或连排商铺，沿钟楼匝道抵达桥下救援车。"},
+  {"id":"lantern-shrine-escape","title":"灯巷神社撤离","brief":"绕过低街巡游队，穿过织坊或药铺，沿石阶登上山腰神社。"},
+  {"id":"neon-northline-escape","title":"霓城北线撤离","brief":"穿过地下诊所或夜市后街，循应急地灯上检修梯，到高架接应车撤离。"}
 ]

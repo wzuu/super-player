@@ -170,7 +170,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const sound = new Sound(),
     effects = new Effects();
   const environment = definition.createEnvironment?.({ ...context, level, mapData, sound });
-  const rift = definition.createPortal?.({ ...context, level, mapData, sound }) ?? new Rift(level.gate);
+  const rift = definition.createPortal?.({ ...context, level, mapData, sound }) ?? (gate.visible===false ? null : new Rift(level.gate));
   const player = new Player(level, look),
     beasts = new BeastManager(level, nav);
   const projectiles = new Projectiles(level, effects),
@@ -715,7 +715,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     }
     pickups.render(game.phase === 'ready' ? worldTime : game.time);
     environment?.update(worldTime, game.phase === 'play', game);
-    rift.update(worldTime, game.ready(), game.blast);
+    rift?.update(worldTime, game.ready(), game.blast);
     renderer.info.reset();
     weaponPass.enabled = weapon.group.visible;
     const drawn = game.phase!=='play' || game.time>=game.attackPauseUntil;

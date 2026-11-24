@@ -6,6 +6,7 @@ import { createGroundDirections } from '@level-kit/ground-directions.mjs';
 export function createStory({ THREE, scene, level, nav, CONFIG, definition, colors }, rules) {
   const spec = definition.story;
   const annihilation = spec?.type === 'annihilation';
+  const escape = spec?.type === 'escape';
   let route;
   const groundDirections=createGroundDirections(THREE,scene,level);
   const point = ([x, z]) => new THREE.Vector3(x, level.surface(x, z, level.base(x, z) + 0.5), z);
@@ -146,6 +147,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (item.kind === 'boss') startBoss(g);
     if (openFight(item) && !item.escort) startGroup(g);
     if (item.kind === 'countdown' || item.kind === 'defend') startGroup(g);
+    if (escape && item.kind === 'breakout') startGroup(g);
     if (item.alarm && g.encounter) {
       g.encounter.setAlarm(true);
       g.encounter.alarmUntil = g.time + 14;
@@ -261,12 +263,12 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
     if (!spec.watchRooms) {
       for (const b of members(g)) if (b.sectionRoom===item.parts?.[0].name) b.roomAlert = true;
     }
-    if (item.kind === 'fight') {
+    if (item.kind === 'fight' || (escape && item.kind === 'breakout')) {
       director.droneDocked = Boolean(item.escort);
       group.record = {name:item.name, deployedAt:group.deployedAt, enteredAt:g.time, spawned:item.count};
       director.encounters.push(group.record);
     }
-    if (!annihilation) {
+    if (!annihilation && !escape) {
       const t = item.target;
       const site = level.pickupSite(t.x, t.z, t.y, g.player, nav);
       if (site) g.pickups.add('ammo', site.x, site.z, site.y, '战区入口弹药',
@@ -295,7 +297,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
   function build(g) {
     const mode = g.objective.mode,
       type = spec.type;
-    if (annihilation && mode === 'classic') return spec.route;
+    if ((annihilation || escape) && mode === 'classic') return spec.route;
     if (type === 'rain' && mode === 'hold') return spec.route;
     if (type === 'tower' && mode === 'rescue') {
       const p = spec.platform,
@@ -364,7 +366,7 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
       g.stageKillTarget = stages.reduce((sum, s) => sum + (s.kind === 'fight'
         ? (s.passage ? 0 : s.parts?.find(part => part.name === s.requiredRoom)?.count ?? s.count)
         : Number(s.kind === 'boss')), 0)
-        || CONFIG.beasts.encounterSize;
+        || (escape && stages[0]?.count) || CONFIG.beasts.encounterSize;
       blastAge = Infinity;
       if (demolition) demolition.visible = false;
       this.roomTreasureCount = stages.reduce((count, stage) => count + (stage.parts?.filter(part => part.reward).length ?? 0), 0);
@@ -487,9 +489,11 @@ export function createStory({ THREE, scene, level, nav, CONFIG, definition, colo
           break;
         }
         case 'breakout':
+          if (escape) startGroup(g);
           if (near(p, t, 2.8)) {
+            if (group?.record) group.record.clearedAt = g.time;
             g.journal?.complete(g, item.label);
-            g.finish(true, '你穿过封锁线，带着物资抵达高架接应点。');
+            g.finish(true, item.victory ?? '你穿过封锁线，带着物资抵达高架接应点。');
           }
           break;
         case 'defend':

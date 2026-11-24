@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="734" viewBox="0 0 900 734" role="img" aria-labelledby="title desc">
+<title id="title">霓城北线撤离平面与高程</title><desc id="desc">地下诊所与地表夜市在检修梯前汇合。沿琥珀灯上梯。接应车下方是独立的地面车场。</desc>
+<rect width="900" height="734" fill="#172632"/><g fill="#e4eff4" font-family="system-ui,sans-serif">
+<text x="28" y="39" font-size="23">霓城北线撤离　｜　突围路线</text>
+<text x="470" y="39" font-size="15">北 ↑</text>
+<text x="530" y="83" font-size="20">驻防与接敌方向</text>
+<rect x="217" y="453" width="96" height="160" fill="#455b65"/>
+<rect x="297" y="461" width="96" height="56" fill="#455b65"/>
+<rect x="353" y="357" width="56" height="152" fill="#455b65"/>
+<rect x="145" y="325" width="264" height="56" fill="#455b65"/>
+<rect x="145" y="461" width="80" height="40" fill="#455b65"/>
+<rect x="137" y="357" width="56" height="120" fill="#455b65"/>
+<rect x="145" y="277" width="72" height="72" fill="#455b65"/>
+<rect x="153" y="181" width="48" height="104" fill="#455b65"/>
+<rect x="145" y="149" width="64" height="56" fill="#455b65"/>
+<rect x="193" y="149" width="224" height="64" fill="#455b65"/>
+<rect x="305" y="205" width="80" height="144" fill="#455b65"/>
+<rect x="177" y="167.0" width="216" height="28" fill="#668591"/>
+<polyline points="265,561 265,485 369,485 373,357 177,357 177,277 177,181 365,181" fill="none" stroke="#7de1cc" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="none"/>
+<polyline points="265,485 169,485 169,361 181,357" fill="none" stroke="#e9ca7c" stroke-width="3.4" stroke-linejoin="round" stroke-dasharray="6 4"/>
+<circle cx="269" cy="497" r="9.3" fill="#973f39"/>
+<text x="269" y="501" text-anchor="middle" font-size="12">1</text>
+<text x="534" y="119" font-size="15">1. 市场机器犬　4 只</text>
+<circle cx="165" cy="429" r="9.3" fill="#973f39"/>
+<text x="165" y="433" text-anchor="middle" font-size="12">2</text>
+<text x="534" y="147" font-size="15">2. 诊所外廊守卫　5 只</text>
+<circle cx="381" cy="417" r="9.3" fill="#973f39"/>
+<text x="381" y="421" text-anchor="middle" font-size="12">3</text>
+<text x="534" y="175" font-size="15">3. 夜市后街炮组　8 只</text>
+<circle cx="281" cy="345" r="9.3" fill="#973f39"/>
+<text x="281" y="349" text-anchor="middle" font-size="12">4</text>
+<text x="534" y="203" font-size="15">4. 牌楼追堵队　8 只</text>
+<circle cx="177" cy="309" r="9.3" fill="#973f39"/>
+<text x="177" y="313" text-anchor="middle" font-size="12">5</text>
+<text x="534" y="231" font-size="15">5. 检修梯前哨　5 只</text>
+<circle cx="345" cy="261" r="9.3" fill="#973f39"/>
+<text x="345" y="265" text-anchor="middle" font-size="12">6</text>
+<text x="534" y="259" font-size="15">6. 高架下巡逻　7 只</text>
+<rect x="242" y="534" width="6" height="6" fill="#95c0ff"/>
+<rect x="294" y="486" width="6" height="6" fill="#95c0ff"/>
+<rect x="162" y="426" width="6" height="6" fill="#95c0ff"/>
+<rect x="374" y="442" width="6" height="6" fill="#95c0ff"/>
+<rect x="306" y="358" width="6" height="6" fill="#95c0ff"/>
+<rect x="174" y="306" width="6" height="6" fill="#95c0ff"/>
+<rect x="174" y="226" width="6" height="6" fill="#95c0ff"/>
+<rect x="229" y="538" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="157" y="426" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<rect x="389" y="410" width="8" height="6" fill="#242b35" stroke="#a9b2b4"/>
+<path d="M169 403l6 6 -6 6 -6 -6z" fill="#f7d26e"/>
+<circle cx="265" cy="561" r="6" fill="#a4e4f4"/>
+<text x="274" y="554" font-size="15">起点</text>
+<circle cx="365" cy="181" r="6" fill="#8ce4b6"/>
+<text x="374" y="174" font-size="15">撤离</text>
+<text x="530" y="337" font-size="20">路线与物资</text>
+<text x="530" y="370" font-size="15">青线　主路　　 金虚线　可选通路</text>
+<text x="530" y="401" font-size="15">蓝方块　弹药　　深色块　实体掩体</text>
+<text x="530" y="432" font-size="15">金菱形　义肢校准盒</text>
+<text x="530" y="480" font-size="15">存活进入撤离区即胜。</text>
+<text x="530" y="506" font-size="15">战利品可跳过，沿途可原路退回。</text>
+<text x="532" y="536" font-size="15">侧视　地面相对高度（米）</text>
+<path d="M535 581H852" stroke="#6f8592" stroke-dasharray="3 4"/>
+<polyline points="544,603.4 639,581.0 734,539.0 829,539.0" stroke="#7de1cc" stroke-width="3" fill="none"/>
+<circle cx="544" cy="603.4" r="3" fill="#b0edda"/><text x="532" y="624" font-size="13">市场</text>
+<circle cx="639" cy="581.0" r="3" fill="#b0edda"/><text x="627" y="624" font-size="13">牌楼</text>
+<circle cx="734" cy="539.0" r="3" fill="#b0edda"/><text x="722" y="624" font-size="13">梯顶</text>
+<circle cx="829" cy="539.0" r="3" fill="#b0edda"/><text x="817" y="624" font-size="13">接应车</text>
+<text x="28" y="647" font-size="19">沿主路的地面高程</text>
+<text x="28" y="678" font-size="15">管道市场 −3.2 m → 地表 0 m → 检修梯 +6 m → 上层接应车 +6 m</text>
+<text x="28" y="707" font-size="15">沿琥珀灯上梯。接应车下方是独立的地面车场。</text>
+</g></svg>

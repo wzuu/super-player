@@ -30,7 +30,7 @@ def verify(page,address,stage):
         n.setPosition=(x,y,z)=>{points.push([x,y,z]);set(x,y,z);};return n;};
       s.resetStage();s.stopVoices();
       // 开放战区在开局已经驻防。监听器装好后重开整局，连同对象池一起复位并接收开局预警。
-      if(id==='rain-city'||id==='paris-tower')g.reset();
+      if(['rain-city','paris-tower','storm-city-overpass'].includes(id))g.reset();
       const tick=(t)=>{g.time=t;e?.update?.(g,.02);s.updateThreats(g);};
       const begin=g.time+.25;
       tick(begin);
@@ -42,6 +42,9 @@ def verify(page,address,stage):
         tick(116);tick(121);tick(175);
       } else if(id==='moonlit-stained-glass-keep') {tick(65);tick(71);tick(85);}
       else if(id==='orbital-brood-ring') {tick(22);tick(27);tick(38);}
+      else if(id==='lantern-shrine-escape') {tick(2);tick(5);tick(18);}
+      else if(id==='neon-northline-escape') {tick(8);tick(11);tick(17);}
+      else if(id==='storm-city-overpass') {tick(begin+3);}
       else if(id==='buried-tomb') {tick(88);tick(91);tick(109);}
       else if(id==='polar-station') {
         e.temperature=60;tick(begin+1);e.temperature=92;tick(begin+2);
@@ -74,9 +77,9 @@ def verify(page,address,stage):
     }""",stage)
     assert data["danger"] and data["key"] and data["bed"] and data["cleared"] and data["shot"] and data["voices"]>=4,data
     assert data["direction"]==[3,-3],data
-    if stage not in ("rain-city","paris-tower","polar-station"):
+    if stage not in ("rain-city","paris-tower","polar-station","storm-city-overpass"):
         assert {"warning","danger"}<=set(data["transitions"]),data
-    if stage not in ("rain-city","paris-tower","brass-factory","haunted-midway"):
+    if stage not in ("rain-city","paris-tower","brass-factory","haunted-midway","storm-city-overpass"):
         assert "clear" in data["transitions"],data
     print("PASS",stage,data,flush=True)
 
