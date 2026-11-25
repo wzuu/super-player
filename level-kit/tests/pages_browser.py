@@ -61,8 +61,8 @@ def smoke(browser, root, home_digest, level_digest):
     try:
         check_document(page.goto(root), root, home_digest)
         page.locator("#continue").wait_for()
+        page.click("#training-open")
         for mode, name, objective in (("tutorial", "新手教程", "转向"), ("range", "火力试验场", "第 1 波")):
-            page.click("#training-open")
             page.get_by_role("link", name=name, exact=True).click()
             page.wait_for_url(root + "practice/index.html?mode=" + mode)
             page.locator("#start").click()
@@ -88,8 +88,10 @@ def smoke(browser, root, home_digest, level_digest):
             page.evaluate("document.exitPointerLock()")
             page.once("dialog", lambda dialog: dialog.accept())
             page.locator("#campaign-home").click()
-            page.locator("#continue").wait_for()
-            print("PASS", name, "进入游戏并返回战役首页", flush=True)
+            page.get_by_role("heading",name="训练",exact=True).wait_for()
+            assert page.url.endswith("#training")
+            print("PASS", name, "进入游戏并返回训练", flush=True)
+        page.get_by_role("link",name="返回主菜单").click()
 
         level_url = root + "underground-lab/"
         with page.expect_navigation(wait_until="load") as navigation:

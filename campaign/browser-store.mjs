@@ -98,6 +98,7 @@ export async function openBrowserStore(levels, path, onUpgradeBlocked) {
 
   return {
     levels,
+    close: () => db.close(),
     pendingPrefix: 'super-player-static:' + path + ':pending:',
     canEnter: id => transaction('battles', 'readonly', tx => unlocked(tx.objectStore('battles'), id)),
     async save(battle) {

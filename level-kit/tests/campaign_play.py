@@ -30,7 +30,7 @@ def open_campaign(browser,url,stage):
         r=page.request.post(url+'/api/battles',headers={'Origin':url},data=entry)
         assert r.ok,r.text()
     page.reload()
-    page.get_by_role('link',name='选择关卡').click()
+    page.get_by_role('link',name='战役大厅').click()
     page.locator('.mission-option[data-level="'+stage+'"]').click()
     page.locator('#prepare-mission').click()
     page.wait_for_function('!!window.run',polling=100)

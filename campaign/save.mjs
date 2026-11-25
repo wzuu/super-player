@@ -102,7 +102,34 @@ export async function connectCampaign(level, onUpgradeBlocked) {
   const items = catalog(store.levels);
   const gearPanel = document.getElementById('preparation');
   const selectBox = document.getElementById('kit-slots');
+  // 军械库往返保留本次携带草稿，仍在正式部署时结算装备。
+  const draftKey = store.pendingPrefix + 'briefing-' + level;
+  const params = new URLSearchParams(location.search);
   let draft = null;
+  if (params.has('briefMode')) {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(draftKey));
+      if (Array.isArray(saved) && saved.length === 4) draft = saved;
+    } catch {}
+  }
+  const armory = document.getElementById('brief-armory');
+  armory.hidden = false;
+  const mode = document.getElementById('mission-mode');
+  const updateArmoryLink = () => {
+    armory.href = '../index.html#collection?' + new URLSearchParams({briefing:level, mode:mode.value});
+  };
+  mode.addEventListener('change', updateArmoryLink);
+  armory.addEventListener('click', () => {
+    updateArmoryLink();
+    try { sessionStorage.setItem(draftKey, JSON.stringify(draft)); } catch {}
+    const here = new URL(location.href);
+    here.searchParams.set('briefMode',mode.value);
+    history.replaceState(history.state,'',here);
+  });
+  updateArmoryLink();
+  window.addEventListener('pageshow', event => {
+    if (event.persisted && new URLSearchParams(location.search).has('briefMode')) location.reload();
+  });
   let gearSnapshot, showLoadout;
   let refreshVersion = 0;
   let departure = { token: crypto.randomUUID() };
@@ -244,7 +271,10 @@ export async function connectCampaign(level, onUpgradeBlocked) {
         operation.selection = values;
         return packKit(state, items,equippedSkin ?? level);
       }, operation);
-      if (draft === operation.selection) draft = null;
+      if (draft === operation.selection) {
+        draft = null;
+        try { sessionStorage.removeItem(draftKey); } catch {}
+      }
       departure = { token: crypto.randomUUID() };
       // 装备已领到，后台回收这次出发的收据，避免因回收网络超时而卡在开场。
       void acknowledge(operation);

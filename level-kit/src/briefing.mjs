@@ -10,6 +10,9 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
     mode.add(new Option(label + (id === defaultMode ? ' · 本关默认' : ''), id));
   }
   if (config.supportsHunt) mode.add(new Option('追踪猎杀', 'hunt'));
+  const requested = new URLSearchParams(location.search).get('briefMode');
+  if ([...mode.options].some(option => option.value === requested)) mode.value = requested;
+  mode.dispatchEvent(new Event('change'));
   const baseWeapon = {...config.weapon}, weapon = {...baseWeapon};
   let supplyScale = 1;
   function describe() {

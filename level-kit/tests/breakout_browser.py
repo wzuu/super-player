@@ -136,7 +136,7 @@ def play(browser,url,stage,out,collect):
         if stage=='tower-observation-defense':assert scores['boarded']
     if not escort and not defense and not rifts:original={'storm-city-overpass':('rain-city','hold'),'lantern-shrine-escape':('sakura-night-town','classic'),
               'neon-northline-escape':('neon-undercity','timed')}[stage]
-    page.get_by_role('link',name='选择关卡').click()
+    page.get_by_role('link',name='战役大厅').click()
     page.locator('.mission-option[data-level="'+original[0]+'"]').click()
     page.locator('#prepare-mission').click()
     page.wait_for_function("mode=>document.querySelector('#mission-mode')?.value===mode",arg=original[1],polling=100)

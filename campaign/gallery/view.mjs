@@ -69,8 +69,8 @@ function button(text, fn) {
   return b;
 }
 
-export function createGallery(dialog) {
-  const el = (id) => dialog.querySelector('#gallery-' + id);
+export function createGallery(section) {
+  const el = (id) => section.querySelector('#gallery-' + id);
   const canvas = el('canvas'),
     stage = canvas.parentElement;
   const renderer = new T.WebGLRenderer({ canvas, antialias: true });
@@ -152,7 +152,7 @@ export function createGallery(dialog) {
     orbit.update();
   }
   function resize() {
-    if (!dialog.open || !entry || !canvas.clientWidth || !canvas.clientHeight) return;
+    if (section.hidden || !entry || !canvas.clientWidth || !canvas.clientHeight) return;
     renderer.setPixelRatio(Math.min(devicePixelRatio, budget.dpr));
     renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     camera.aspect = canvas.clientWidth / canvas.clientHeight;
@@ -297,7 +297,7 @@ export function createGallery(dialog) {
     if (hit) selectPart(partOf(hit.object));
   });
   function schedule() {
-    if (model && dialog.open && !document.hidden) {
+    if (model && !section.hidden && !document.hidden) {
       if (!frame) frame = requestAnimationFrame(draw);
     } else {
       cancelAnimationFrame(frame);
@@ -306,7 +306,7 @@ export function createGallery(dialog) {
   }
   function draw(now) {
     frame = 0;
-    if (!dialog.open || document.hidden || !model) return;
+    if (section.hidden || document.hidden || !model) return;
     const dt = last ? Math.min(0.075, (now - last) / 1000) : 0;
     last = now;
     if (!paused) time += dt;

@@ -33,9 +33,10 @@ def legacy_sqlite(browser, url, database):
     context.add_cookies([{"name":"super_player_profile","value":slot,"url":url}])
     page = context.new_page()
     page.goto(url + "/#history")
-    page.get_by_role("button", name="查看战报").first.click()
+    page.get_by_role("link", name="查看战报").first.click()
     page.get_by_text("旧档宝物（35）",exact=False).wait_for()
-    assert not page.get_by_role("button", name="观看回放").count()
+    page.get_by_text("本局没有录制回放。",exact=True).wait_for()
+    assert not page.get_by_role("link", name="观看回放").count()
     state = page.evaluate("""async () => {
       const store=await (await import('./campaign/store.mjs')).campaignStore();
       const {defaultGear,selectedBranches}=await import('./level-kit/src/gear.mjs');
@@ -68,9 +69,9 @@ def blocked_legacy_upgrade(browser, url):
     page.goto(url + "/#history",wait_until="domcontentloaded")
     page.get_by_text("请关闭其他打开旧版游戏的标签页",exact=False).wait_for(timeout=3500)
     legacy.close()
-    page.get_by_role("button",name="查看战报").click()
+    page.get_by_role("link",name="查看战报").click()
     page.get_by_text("旧档宝物（6）",exact=False).wait_for()
-    assert not page.get_by_role("button",name="观看回放").count()
+    assert not page.get_by_role("link",name="观看回放").count()
     context.close()
 
 
@@ -275,10 +276,10 @@ def run(browser, url, static, database):
     page.wait_for_function("Math.abs(run.game.sound.main.gain.value-.47*.65)<.003")
     print("PASS settings, audio, first battle and next stage",backend,flush=True)
     page.goto(url + "/#history")
-    page.get_by_role("button", name="查看战报").first.click()
-    page.get_by_role("button", name="观看回放").click()
+    page.get_by_role("link", name="查看战报").first.click()
+    page.locator("#function-body").get_by_text("演练宝物",exact=False).wait_for()
+    page.get_by_role("link", name="观看回放").click()
     page.locator(".replay-viewer canvas").wait_for()
-    assert "演练宝物" in page.locator("#panel-body").inner_text()
     page.get_by_role("button", name="播放", exact=True).click()
     page.get_by_role("button", name="暂停", exact=True).click()
     page.get_by_label("回放进度").fill("2000")
@@ -288,6 +289,8 @@ def run(browser, url, static, database):
     assert "击败首领" in page.locator(".replay-viewer output").inner_text()
     page.get_by_label("回放进度").fill("0")
     assert "最近节点 出发" in page.locator(".replay-viewer output").inner_text()
+    page.get_by_role("link",name="返回单局战报").click()
+    page.get_by_role("link",name="观看回放").wait_for()
     page.keyboard.press("Escape")
     page.get_by_role("link",name="返回主菜单").click()
     page.click("#settings-open")
@@ -383,12 +386,12 @@ def run(browser, url, static, database):
     page.evaluate("run.game.finish(false,'主动退出')")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
     page.goto(url + "/#history")
-    page.get_by_role("button", name="查看战报").first.click()
+    page.get_by_role("link", name="查看战报").first.click()
     page.get_by_text("主动退出", exact=False).first.wait_for()
-    assert page.get_by_role("button", name="观看回放").count() == 0
+    assert page.get_by_role("link", name="观看回放").count() == 0
     page.keyboard.press("Escape")
-    page.get_by_role("button", name="查看战报").nth(1).click()
-    page.get_by_role("button", name="观看回放").wait_for()
+    page.get_by_role("link", name="查看战报").nth(1).click()
+    page.get_by_role("link", name="观看回放").wait_for()
     page.keyboard.press("Escape")
     page.get_by_role("link",name="返回主菜单").click()
     # 回放写入拒绝后，战报、解锁和常规待存队列仍按正常路径完成。
@@ -424,8 +427,8 @@ def run(browser, url, static, database):
     assert detail["count"] == 4 and detail["total"] == 10, detail
     assert detail["elite"] == 1, detail
     assert (detail["stockGain"],detail["creditGain"]) == (2,3), detail
-    page.get_by_role("button",name="成就与统计").click()
-    assert "精英击杀 1" in page.locator("#panel-body").inner_text()
+    page.get_by_role("link",name="成就与统计").click()
+    page.locator("#function-body").get_by_text("精英击杀 1",exact=False).wait_for()
     page.keyboard.press("Escape")
     if static:
         migrated=page.evaluate("""async () => {
@@ -462,8 +465,8 @@ def run(browser, url, static, database):
         page.reload()
         page.locator("#continue").wait_for()
         assert page.locator(".mission-card").count()==len(LEVELS)
-        page.get_by_role("button",name="成就与统计").click()
-        assert "未能读取战斗统计" in page.locator("#panel-body").inner_text()
+        page.get_by_role("link",name="成就与统计").click()
+        page.locator("#function-body").get_by_text("未能读取战斗统计",exact=False).wait_for()
     assert not errors, errors
     context.close()
 

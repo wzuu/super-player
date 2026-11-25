@@ -331,3 +331,21 @@ main { flex:1; min-height:0; display:flex; flex-direction:column; }
   .mission-option small { grid-column:2; }
   .footer #control-tip { display:none; }
 }
+
+.function-content { display:grid; align-content:start; justify-items:start; gap:14px; max-width:920px; padding:16px 3px 24px; }
+.function-content:empty { display:none; }
+.function-content section,.function-content fieldset { display:grid; gap:10px; }
+.function-content fieldset { width:min(100%,610px); min-width:0; margin:0; padding:16px; border:1px solid var(--line); }
+.function-content legend { padding-inline:6px; font-weight:700; }
+.function-content label { display:flex; align-items:center; gap:12px; justify-content:space-between; }
+.function-content label span { display:flex; align-items:center; gap:8px; }
+.function-content input[type=range] { width:min(29vw,180px); }
+.function-content p,.save-list { line-height:1.6; }
+.save-list { display:grid; gap:12px; padding-left:20px; }
+.function-content :is(select,button) { font:inherit; padding:6px; }
+.function-content canvas { max-width:100%; height:auto; }
+#weapon-mod-slots a { color:var(--accent); text-decoration:underline; }
+#legendary-count { margin-block:10px; color:var(--muted); }
+
+#gallery { scroll-padding-top:65px; }
+@media(max-width:720px) { #gallery header.client-heading { position:static; } }

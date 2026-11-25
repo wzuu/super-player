@@ -7,7 +7,7 @@ import {
   updateGear,
 } from '../level-kit/src/gear.mjs';
 
-export function weaponBuildPanel(panel, campaignStore) {
+export function weaponBuildPanel(panel, campaignStore, collectedLoot) {
   let generation = 0;
   return async function render(weapon) {
     const version = ++generation;
@@ -37,7 +37,18 @@ export function weaponBuildPanel(panel, campaignStore) {
           button.disabled = chosen;
           button.textContent =
             branch.name + ' · ' + (chosen ? '已选' : gear.mods[id] ? '免费切换' : branch.price + ' 点');
-          detail.textContent = branch.detail;
+          detail.textContent = branch.detail + (gear.mods[id] ? ' · 已解锁' :
+            ' · 可用 ' + (snapshot.earned - gear.spent) + ' / 所需 ' + branch.price + ' 军需点');
+          if (id === 'pierce') {
+            const count = collectedLoot().filter(item => item.name === '精英改装材料·穿透弹芯')
+              .reduce((sum, item) => sum + item.count, 0);
+            const source = document.createElement('a');
+            const back = new URLSearchParams(location.hash.split('?')[1]);
+            back.set('weapon', weapon);
+            source.href = '#codex/loot?' + new URLSearchParams({item:'pierce', armory:'?' + back});
+            source.textContent = '穿透弹芯来源';
+            detail.append(document.createElement('br'), '花 ' + branch.price + ' 军需点购买，或带回 1 枚穿透弹芯解锁。累计带回 ' + count + ' 枚。 ', source);
+          }
           button.onclick = async () => {
             for (const b of content.querySelectorAll('button')) b.disabled = true;
             try {

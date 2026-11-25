@@ -18,7 +18,7 @@ def dashboard(browser, url):
     page.on("request", lambda req: vendor.append(req.url) if req.url.endswith("three-r160.js") else None)
     page.goto(url)
     page.locator("#continue").wait_for()
-    page.get_by_role("link",name="选择关卡").click()
+    page.get_by_role("link",name="战役大厅").click()
     cards = page.locator(".mission-option")
     listing = page.locator("#mission-list")
     assert cards.locator("strong").all_text_contents() == [level["title"] for level in LEVELS]
@@ -61,10 +61,11 @@ def dashboard(browser, url):
     page.locator('nav a[href="#history"]').click()
     page.locator("#history-empty").wait_for()
     page.get_by_role("link",name="返回主菜单").click()
-    for name, content in (("战场图鉴", "带回的宝物"), ("成就与统计", "累计对战")):
-        page.get_by_role("button", name=name, exact=True).click()
-        assert content in page.get_by_role("dialog", name=name).inner_text()
-        page.get_by_role("button", name="返回", exact=True).click()
+    for name, content in (("战场图鉴", "战利品图鉴"), ("成就与统计", "累计对战")):
+        page.get_by_role("link", name=name, exact=True).click()
+        page.get_by_role("heading", name=name).wait_for()
+        page.locator("#function-body").get_by_text(content,exact=False).first.wait_for()
+        page.get_by_role("link", name="返回主菜单", exact=True).click()
     assert page.locator('nav a[href="#history"]').is_visible()
     assert not vendor, vendor
     page.goto(url + "/#collection")
@@ -91,7 +92,7 @@ def dashboard(browser, url):
     returning.goto(url)
     returning.get_by_role("link",name="继续战役").wait_for()
     assert returning.locator("#continue").get_attribute("href") == "./" + LEVELS[-1]["id"] + "/"
-    returning.get_by_role("link",name="选择关卡").click()
+    returning.get_by_role("link",name="战役大厅").click()
     assert returning.locator(".mission-card").last.evaluate("card=>card.parentNode.scrollTop>0 && card.getBoundingClientRect().bottom<=card.parentNode.getBoundingClientRect().bottom+1")
     returning.locator(".mission-option").first.click()
     assert returning.locator("#prepare-mission").is_enabled() and "再次挑战" in returning.locator("#current-mission").inner_text()
