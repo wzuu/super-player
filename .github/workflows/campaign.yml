@@ -48,6 +48,9 @@ jobs:
       - run: python level-kit/tests/static_campaign.py dist
         env:
           GAME_TEST_BROWSER: chromium
+      - run: python level-kit/tests/gallery_browser.py dist
+        env:
+          GAME_TEST_BROWSER: chromium
       - name: Record game entry checksums
         id: digests
         run: |

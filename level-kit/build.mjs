@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildHome } from './standalone.mjs';
+import { buildHome, galleryFiles } from './standalone.mjs';
 import { pack } from './pack.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -19,7 +19,7 @@ if (process.argv[2]) {
   const files = ['index.html', 'practice/index.html', 'campaign/onboarding.mjs', 'LICENSE', 'level-kit/vendor/three-r160.js', 'level-kit/vendor/THREE-LICENSE.txt',
     'campaign/levels.json', 'campaign/home.css', 'campaign/home.mjs', 'campaign/save.mjs',
     'campaign/profiles.mjs', 'campaign/store.mjs', 'campaign/browser-store.mjs', 'campaign/weapon-preview.mjs', 'campaign/reports.mjs',
-    'campaign/weapon-build.mjs',
+    'campaign/weapon-build.mjs', ...galleryFiles,
     'level-kit/src/field-sites.mjs',
     ...['gear','preferences', 'rifle-skins', 'rifle-model', 'rifle-textures','shotgun-model','weapon-perks'].map(name => 'level-kit/src/' + name + '.mjs')];
   for (const { id } of levels) files.push(id + '/index.html', 'campaign/images/' + id + '.webp');
