@@ -53,7 +53,6 @@ def verify(browser, url, mode, out=None):
     page.on('console', lambda msg: errors.append(msg.text) if 'Shader Error' in msg.text else None)
     page.on('request', lambda req: requests.append(req.url))
     page.goto(url)
-    page.get_by_role('button', name='直接开始', exact=True).click()
     assert not any('three-r160' in req or '/gallery/' in req for req in requests)
     open_gallery(page)
     page.evaluate(OBSERVE)
@@ -193,7 +192,6 @@ def run(site, out):
                 page.add_init_script("""const get=HTMLCanvasElement.prototype.getContext;
                   HTMLCanvasElement.prototype.getContext=function(id,...args){return id.includes('webgl')?null:get.call(this,id,...args);};""")
                 page.goto('http://'+local)
-                page.get_by_role('button',name='直接开始',exact=True).click()
                 page.locator('#gallery-open').click()
                 page.get_by_text('无法显示三维展品',exact=False).wait_for()
                 page.keyboard.press('Escape')

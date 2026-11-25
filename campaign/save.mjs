@@ -1,6 +1,5 @@
 import { catalog, defaultGear, isUnlocked, packKit, requisition, updateGear, modifications } from '../level-kit/src/gear.mjs';
 import { campaignStore } from './store.mjs';
-import { chooseFirstEntry, hasEntryChoice } from './onboarding.mjs';
 
 async function sendBattle(battle, store) {
   const result = await store.save(battle);
@@ -51,7 +50,6 @@ export async function connectCampaign(level, onUpgradeBlocked) {
     return null;
   }
   let pending;
-  if (!hasEntryChoice()) await chooseFirstEntry((await store.progress()).battleCount, '../practice/index.html?mode=tutorial', store.pendingPrefix);
   let pendingReplay;
   let equippedSkin = null;
   try {
@@ -60,7 +58,8 @@ export async function connectCampaign(level, onUpgradeBlocked) {
     // 本机存档暂不可读时仍可用关卡默认外观进入。
   }
 
-  if (location.protocol === 'file:') home.href = '../index.html';
+  home.href = (location.protocol === 'file:' ? '../index.html' : '../') + '?mission=' + encodeURIComponent(level) + '#missions';
+  home.textContent = '返回大厅';
   home.hidden = false;
   retry.addEventListener('click', () => {
     if (pending) save(pending);
@@ -80,11 +79,12 @@ export async function connectCampaign(level, onUpgradeBlocked) {
       pending = null;
       pendingReplay = null;
       renderGear().catch(() => {});
-      if (result.nextLevel) {
+      if (battle.won && result.nextLevel) {
         next.href =
           '../' + result.nextLevel.id + (location.protocol === 'file:' ? '/index.html?campaign' : '/');
         next.textContent = '进入下一关 ' + result.nextLevel.title;
         next.hidden = false;
+        if (document.activeElement.id === 'start') next.focus();
         status.textContent = '对战已保存，下一关已解锁。本关武器外观可在武器库佩戴。';
       } else {
         status.textContent = result.campaignCleared
@@ -95,6 +95,7 @@ export async function connectCampaign(level, onUpgradeBlocked) {
       if (pending !== battle) return;
       status.textContent = '对战保存失败，请重试';
       retry.hidden = false;
+      if (document.activeElement.id === 'start') retry.focus();
     }
   }
 

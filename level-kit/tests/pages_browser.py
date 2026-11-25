@@ -60,9 +60,9 @@ def smoke(browser, root, home_digest, level_digest):
             if req.resource_type in {"document", "script", "stylesheet"} and req.failure != "net::ERR_ABORTED" else None)
     try:
         check_document(page.goto(root), root, home_digest)
-        page.get_by_role("button", name="直接开始", exact=True).click()
         page.locator("#continue").wait_for()
         for mode, name, objective in (("tutorial", "新手教程", "转向"), ("range", "火力试验场", "第 1 波")):
+            page.click("#training-open")
             page.get_by_role("link", name=name, exact=True).click()
             page.wait_for_url(root + "practice/index.html?mode=" + mode)
             page.locator("#start").click()
@@ -86,6 +86,7 @@ def smoke(browser, root, home_digest, level_digest):
                 finally:
                     page.mouse.up()
             page.evaluate("document.exitPointerLock()")
+            page.once("dialog", lambda dialog: dialog.accept())
             page.locator("#campaign-home").click()
             page.locator("#continue").wait_for()
             print("PASS", name, "进入游戏并返回战役首页", flush=True)

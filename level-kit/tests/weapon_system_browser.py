@@ -95,8 +95,7 @@ def run(browser,url):
     errors=[]
     page.on("pageerror",lambda error:errors.append(str(error)))
     page.goto(url+"/")
-    page.wait_for_selector(".mission-card")
-    page.get_by_role("button",name="直接开始").click()
+    page.locator("#continue").wait_for()
     req=page.request
     def post(api,data):
         return req.post(url+"/api/"+api,headers={"Origin":url},data=data)

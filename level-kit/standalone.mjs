@@ -7,7 +7,6 @@ const storeFiles = [
   'campaign/store.mjs',
   'campaign/browser-store.mjs',
   'campaign/save.mjs',
-  'campaign/onboarding.mjs',
   'level-kit/src/gear.mjs',
 ];
 export const galleryFiles = ['config','sculpt','mythic','constructs','view'].map(name => 'campaign/gallery/' + name + '.mjs');

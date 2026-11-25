@@ -1,4 +1,4 @@
-import { defaultGear, packKit, supplies, modifications } from '@level-kit/gear.mjs';
+import { applyBranches, defaultGear, packKit, supplies, modifications } from '@level-kit/gear.mjs';
 import { campaignMission, missionNames, missionRules } from '@level-kit/objectives.mjs';
 
 export function initBriefing(stage, config, text, keys, campaign, story) {
@@ -10,6 +10,8 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
     mode.add(new Option(label + (id === defaultMode ? ' · 本关默认' : ''), id));
   }
   if (config.supportsHunt) mode.add(new Option('追踪猎杀', 'hunt'));
+  const baseWeapon = {...config.weapon}, weapon = {...baseWeapon};
+  let supplyScale = 1;
   function describe() {
     const finish = '，在撤离点按 ' + config.interactLabel + ' 引爆。';
     const rules = {
@@ -43,11 +45,15 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
         ' 秒，再布设装置。撤开等待 ' +
         missionRules.demolitionSeconds +
         ' 秒起爆，穿过闸门撤离。';
+    document.getElementById('ration').textContent = '弹匣 ' + weapon.magazine + ' · 备弹 ' + weapon.reserve +
+      (mode.value === 'endless' ? ' · 无尽弹箱 ' : ' · 固定弹箱 ') + Math.round(supplyScale * 100) + '%';
     document.getElementById('mission-rule').textContent = rules[mode.value];
   }
   mode.addEventListener('change', describe);
   describe();
   function showKit(kit, catalog, changed) {
+    applyBranches(weapon, baseWeapon, kit.mods ?? {});
+    describe();
     const slots = [...kit.skills, ...kit.items].map((id, index) => {
       const row = document.createElement('div'),
         key = document.createElement('kbd');
@@ -79,4 +85,5 @@ export function initBriefing(stage, config, text, keys, campaign, story) {
   }
   if (campaign) campaign.onLoadout(showKit);
   else showKit(packKit(defaultGear(), supplies), supplies, false);
+  return scale => { supplyScale = scale; describe(); };
 }

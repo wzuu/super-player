@@ -16,7 +16,7 @@ if (process.argv[2]) {
   const site = resolve(process.argv[2]);
   // 发布目录由公开资源清单生成，数据库、开发笔记与测试文件均留在源码目录。
   await mkdir(site);
-  const files = ['index.html', 'practice/index.html', 'campaign/onboarding.mjs', 'LICENSE', 'level-kit/vendor/three-r160.js', 'level-kit/vendor/THREE-LICENSE.txt',
+  const files = ['index.html', 'practice/index.html', 'LICENSE', 'level-kit/vendor/three-r160.js', 'level-kit/vendor/THREE-LICENSE.txt',
     'campaign/levels.json', 'campaign/home.css', 'campaign/home.mjs', 'campaign/save.mjs',
     'campaign/profiles.mjs', 'campaign/store.mjs', 'campaign/browser-store.mjs', 'campaign/weapon-preview.mjs', 'campaign/reports.mjs',
     'campaign/weapon-build.mjs', ...galleryFiles,

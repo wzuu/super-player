@@ -32,7 +32,6 @@ def verify(browser, root, site):
     for level in LEVELS:
         page.route(root + level["id"] + "/", expose_game)
     page.goto(root)
-    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
     page.evaluate("""async first => {
         const store = await (await import('./campaign/store.mjs')).campaignStore();
@@ -52,6 +51,7 @@ def verify(browser, root, site):
     assert stored_count == 0
     page.goto(root + LEVELS[-1]["id"] + "/")
     page.wait_for_url("**/?locked=*")
+    page.get_by_role("link",name="返回主菜单").click()
     page.locator("#continue").click()
     collected = Counter()
     for i, level in enumerate(LEVELS):
@@ -78,12 +78,13 @@ def verify(browser, root, site):
         collected.update((level["id"], name) for name in loot)
         if i == 0:
             page.locator("#campaign-home").click()
+            page.get_by_role("link",name="返回主菜单").click()
             page.locator('nav a[href="#collection"]').click()
             page.locator("#rifle-equip").click()
             page.wait_for_function("document.querySelector('#rifle-equip').textContent === '已佩戴'")
             page.reload()
             page.wait_for_function("document.querySelector('#rifle-equip').textContent === '已佩戴'")
-            page.locator('nav a[href="#missions"]').click()
+            page.get_by_role("link",name="返回主菜单").click()
             page.locator("#continue").click()
         elif i + 1 < len(LEVELS):
             page.locator("#next-level").click()

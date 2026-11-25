@@ -46,13 +46,13 @@ def check(browser, url, static=False):
         page.route("**/campaign/levels.json",manifest)
     page.route("**/practice/index.html*",expose_game)
     page.goto(url)
-    choice=page.get_by_role("dialog",name="首次进入战役")
+    page.locator("#training-open").click()
+    choice=page.get_by_role("dialog",name="训练")
     choice.wait_for()
     page.keyboard.press("Escape")
-    assert choice.is_visible()
-    page.mouse.click(2,2)
-    assert choice.is_visible()
-    page.get_by_role("button",name="开始新手教程").click()
+    assert choice.is_hidden() and page.locator("#training-open").evaluate("el=>el===document.activeElement")
+    page.locator("#training-open").click()
+    page.get_by_role("link",name="新手教程").click()
     page.wait_for_function("!!window.run")
     assert page.evaluate("run.game.training.kind")=="tutorial"
     assert page.locator("#unstuck").is_hidden()
@@ -120,8 +120,9 @@ def check(browser, url, static=False):
     assert page.get_by_role("link",name="开始战役").is_visible()
     page.click("#campaign-home")
     page.locator("#continue").wait_for()
-    assert not choice.count()
+    assert choice.is_hidden()
     assert page.locator("#progress-count").inner_text().startswith("0 /")
+    page.click("#training-open")
     page.get_by_role("link",name="火力试验场").click()
     page.wait_for_function("!!window.run")
     page.click("#start");page.wait_for_function("run.game.phase==='play'")
@@ -147,9 +148,13 @@ def check(browser, url, static=False):
       return result;
     }""")
     assert waves==[10,12,14,16,18],waves
-    page.evaluate("document.exitPointerLock()"); page.click("#practice-restart")
+    page.evaluate("document.exitPointerLock()")
+    page.once("dialog",lambda dialog:dialog.accept())
+    page.click("#practice-restart")
     page.wait_for_function("run.game.phase==='play' && run.game.time<5")
-    page.evaluate("document.exitPointerLock()"); page.click("#campaign-home")
+    page.evaluate("document.exitPointerLock()")
+    page.once("dialog",lambda dialog:dialog.accept())
+    page.click("#campaign-home")
     page.locator("#continue").wait_for()
     assert "0 局" in page.locator("#battle-count").text_content()
     assert not errors, errors
@@ -167,7 +172,7 @@ if __name__ == "__main__":
                 try:
                     for static in (False,True):
                         check(browser,url,static)
-                        print("PASS first choice, tutorial, range, isolated progress","IndexedDB" if static else "SQLite",flush=True)
+                        print("PASS training menu, tutorial, range, isolated progress","IndexedDB" if static else "SQLite",flush=True)
                 finally:
                     browser.close()
         finally:

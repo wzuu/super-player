@@ -20,7 +20,6 @@ def open_campaign(browser,url,stage):
     """)
     page.route(re.compile('/'+stage+r'/(?:index\.html)?(?:\?.*)?$'),lambda route:expose_game(route,manual_steps=True))
     page.goto(url+'/')
-    page.get_by_role('button',name='直接开始',exact=True).click()
     page.locator('#continue').wait_for()
     # 只预置前置关卡通关记录。本关通过正常首页、战斗和战报写入。
     before=[]
@@ -31,7 +30,9 @@ def open_campaign(browser,url,stage):
         r=page.request.post(url+'/api/battles',headers={'Origin':url},data=entry)
         assert r.ok,r.text()
     page.reload()
-    page.locator('a.mission-action[href$="/'+stage+'/"]').click(force=True)
+    page.get_by_role('link',name='选择关卡').click()
+    page.locator('.mission-option[data-level="'+stage+'"]').click()
+    page.locator('#prepare-mission').click()
     page.wait_for_function('!!window.run',polling=100)
     page.locator('#start').click()
     page.wait_for_function("run.game.phase==='play'",polling=100)

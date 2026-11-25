@@ -17,48 +17,36 @@ def dashboard(browser, url):
     vendor = []
     page.on("request", lambda req: vendor.append(req.url) if req.url.endswith("three-r160.js") else None)
     page.goto(url)
-    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
-    cards = page.locator(".mission-card")
+    page.get_by_role("link",name="选择关卡").click()
+    cards = page.locator(".mission-option")
     listing = page.locator("#mission-list")
-    assert cards.locator("h3").all_text_contents() == [level["title"] for level in LEVELS]
-    assert page.locator("#continue").get_attribute("href") == "./" + LEVELS[0]["id"] + "/"
-    for width, height in [(1280, 720), (1920, 1080)]:
-        page.set_viewport_size({"width": width, "height": height})
-        assert page.evaluate("document.documentElement.scrollHeight <= innerHeight"), (width, height)
-        preview = page.locator(".hero").bounding_box()
-        heading = page.locator(".mission-section .section-heading").bounding_box()
-        assert preview["x"] + preview["width"] <= heading["x"]
+    assert cards.locator("strong").all_text_contents() == [level["title"] for level in LEVELS]
+    for width, height in [(1280,720),(1920,1080),(2560,1080),(960,540),(320,720),(390,720),(768,720)]:
+        page.set_viewport_size({"width":width,"height":height})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight"), (width,height)
+        preview = page.locator(".lobby .mission-art").bounding_box()
         listing.hover()
         page.mouse.wheel(0, 6000)
-        page.wait_for_function("el => el.scrollTop + el.clientHeight >= el.scrollHeight - 1", arg=listing.element_handle())
-        assert page.locator(".hero").bounding_box() == preview
-        assert page.locator(".mission-section .section-heading").bounding_box() == heading
+        page.wait_for_function("el=>el.scrollTop+el.clientHeight >= el.scrollHeight-1",arg=listing.element_handle())
+        assert page.locator(".lobby .mission-art").bounding_box() == preview
         assert page.locator("#game-title").inner_text() == LEVELS[0]["title"]
-        page.mouse.wheel(0, -6000)
-        page.wait_for_function("el => el.scrollTop === 0", arg=listing.element_handle())
+        page.mouse.wheel(0,-6000)
+        page.wait_for_function("el=>el.scrollTop===0",arg=listing.element_handle())
         if path := os.environ.get("GAME_TEST_SCREENSHOTS"):
-            page.screenshot(path=str(Path(path) / f"dashboard-{width}.png"))
+            page.screenshot(path=str(Path(path)/f"dashboard-{width}.png"))
     cards.first.focus()
-    page.keyboard.press("ArrowRight")
+    page.keyboard.press("ArrowDown")
     assert page.locator("#game-title").inner_text() == LEVELS[1]["title"]
-    assert page.locator("#continue").is_hidden() and page.locator("#continue").get_attribute("href") is None
+    page.keyboard.press("Enter")
+    assert page.locator("#prepare-mission").is_disabled()
     for _ in LEVELS[2:]:
         page.keyboard.press("ArrowDown")
-    assert cards.last.evaluate("el => el === document.activeElement && el.getBoundingClientRect().bottom <= el.parentNode.getBoundingClientRect().bottom + 1")
-    assert page.locator("#game-title").inner_text() == LEVELS[-1]["title"]
+    assert cards.last.evaluate("el=>el===document.activeElement && el.getBoundingClientRect().bottom<=document.querySelector('#mission-list').getBoundingClientRect().bottom+1")
     page.keyboard.press("ArrowDown")
-    assert page.locator("#continue").get_attribute("href") == "./" + LEVELS[0]["id"] + "/"
-    for width in (320, 390, 768):
-        page.set_viewport_size({"width": width, "height": 720})
-        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-        assert listing.evaluate("el => el.clientHeight >= el.scrollHeight")
-        hero = page.locator(".hero").bounding_box()
-        assert listing.bounding_box()["y"] >= hero["y"] + hero["height"]
-        cards.last.scroll_into_view_if_needed()
-        assert page.evaluate("scrollY > 0")
-        assert page.locator("nav").evaluate("nav => [...nav.children].every(n => n.getBoundingClientRect().left >= 0 && n.getBoundingClientRect().right <= innerWidth)")
-    page.set_viewport_size({"width": 1280, "height": 720})
+    assert page.locator("#prepare-mission").is_enabled()
+    page.set_viewport_size({"width":1280,"height":720})
+    page.get_by_role("link",name="返回主菜单").click()
     page.locator("#settings-open").click()
     page.get_by_label("减弱镜头震动").check()
     page.get_by_label("受击震动强度").fill("0.4")
@@ -72,15 +60,16 @@ def dashboard(browser, url):
     page.keyboard.press("Escape")
     page.locator('nav a[href="#history"]').click()
     page.locator("#history-empty").wait_for()
+    page.get_by_role("link",name="返回主菜单").click()
     for name, content in (("战场图鉴", "带回的宝物"), ("成就与统计", "累计对战")):
         page.get_by_role("button", name=name, exact=True).click()
         assert content in page.get_by_role("dialog", name=name).inner_text()
         page.get_by_role("button", name="返回", exact=True).click()
-    assert page.locator("#history-empty").is_visible()
+    assert page.locator('nav a[href="#history"]').is_visible()
     assert not vendor, vendor
     page.goto(url + "/#collection")
     page.wait_for_function("document.querySelector('#rifle-canvas').width>300 && !document.querySelector('#rifle-canvas').hidden")
-    page.locator('nav a[href="#missions"]').click()
+    page.get_by_role("link",name="返回主菜单").click()
     page.locator('nav a[href="#collection"]').click()
     page.locator(".rifle-option").nth(1).click()
     assert len(vendor) == 1, vendor
@@ -102,9 +91,10 @@ def dashboard(browser, url):
     returning.goto(url)
     returning.get_by_role("link",name="继续战役").wait_for()
     assert returning.locator("#continue").get_attribute("href") == "./" + LEVELS[-1]["id"] + "/"
+    returning.get_by_role("link",name="选择关卡").click()
     assert returning.locator(".mission-card").last.evaluate("card=>card.parentNode.scrollTop>0 && card.getBoundingClientRect().bottom<=card.parentNode.getBoundingClientRect().bottom+1")
-    returning.locator(".mission-card").first.focus()
-    assert returning.get_by_role("link",name="再次挑战",exact=True).get_attribute("href") == "./" + LEVELS[0]["id"] + "/"
+    returning.locator(".mission-option").first.click()
+    assert returning.locator("#prepare-mission").is_enabled() and "再次挑战" in returning.locator("#current-mission").inner_text()
     returning.close()
     print("PASS 1280/1920 independent wheel, keyboard preview, 320/390/768 navigation and first-use Three.js", flush=True)
     return page
@@ -192,6 +182,7 @@ def field(page, url):
     page.route("**/api/gear", lambda route: refresh.append(route))
     page.evaluate("run.game.finish(true)")
     page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')")
+    page.locator("#rematch-options").click()
     page.locator("#kit-slots select").nth(0).select_option("")
     assert len(refresh) == 1
     refresh[0].fulfill(response=refresh[0].fetch())
@@ -219,6 +210,7 @@ def field(page, url):
     previous = page.context.new_page()
     previous.goto(url)
     previous.wait_for_function("document.querySelector('#battle-count').textContent.includes('4 局')")
+    page.click("#save-open")
     page.click("#new-campaign")
     page.get_by_role("button", name="创建存档并开始").click()
     page.wait_for_function("!!window.run")
@@ -270,7 +262,6 @@ def performance_probe(page, url):
 def offline(browser):
     page=browser.new_page()
     page.goto((ROOT/"index.html").as_uri())
-    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
     assert page.locator(".mission-card").count()==len(LEVELS)
     page.click("#continue")

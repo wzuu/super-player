@@ -60,6 +60,7 @@ export async function pack(sceneArgument, outputArgument) {
   const offline = registered || output === join(root,'practice/index.html') ? await offlineScripts(false,levels) : '';
   const html = shell
     .replace('<!doctype html>', '<!doctype html>\n<!-- 由 level-kit/pack.mjs 从场景和公共模块生成 -->')
+    .replace('<h1 id="menu-title">地图关卡</h1>', () => '<h1 id="menu-title">' + (levels[campaignStage - 1]?.title ?? '地图关卡').replaceAll('&', '&amp;').replaceAll('<', '&lt;') + '</h1>')
     .replace('src="./vendor/three-r160.js"', `src="${vendor}"`)
     .replace(", '@level-kit/': './src/'", '')
     .replace('<body>', registered ? `<body data-campaign-level="${campaignId}">` :

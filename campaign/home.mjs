@@ -2,7 +2,6 @@ import { campaignStore } from './store.mjs';
 import { fieldConfig } from '../level-kit/src/field-sites.mjs';
 import { flushPendingBattles } from './save.mjs';
 import { summarize, renderReport, renderStats } from './reports.mjs';
-import { chooseFirstEntry } from './onboarding.mjs';
 import { rifleSkins, resolveRifleSkin } from '../level-kit/src/rifle-skins.mjs';
 import {weaponBuildPanel} from './weapon-build.mjs';
 import {reactionCatalog} from '../level-kit/src/weapon-perks.mjs';
@@ -11,7 +10,7 @@ import { profiles, activeProfile, createProfile, selectProfile } from './profile
 import { RED_DOT_AIM_ENABLED, preferences, storePreferences, defaultKeys, actionLabels, keyName, bindSoundControl } from '../level-kit/src/preferences.mjs';
 
 const $ = id => document.getElementById(id);
-const views = ['missions', 'history', 'collection'];
+const views = ['menu', 'missions', 'history', 'collection'];
 const number = new Intl.NumberFormat('zh-CN');
 const date = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -43,20 +42,17 @@ function element(tag, className, content) {
   return node;
 }
 
+let previousView = null;
 function showView(moveFocus = false) {
   const hash = location.hash.slice(1);
-  const view = views.includes(hash) ? hash : 'missions';
-  for (const name of views) {
-    $('view-' + name).hidden = name !== view;
-    const nav = document.querySelector(`nav a[href="#${name}"]`);
-    if (name === view) nav.setAttribute('aria-current', 'page');
-    else nav.removeAttribute('aria-current');
-  }
+  const view = views.includes(hash) ? hash : 'menu';
+  for (const name of views) $('view-' + name).hidden = name !== view;
   if (moveFocus) {
-    window.scrollTo(0, 0);
-    $('view-' + view).querySelector('h1').focus({ preventScroll: true });
+    const opener = view === 'menu' && document.querySelector('nav a[href="#' + previousView + '"]');
+    (opener || $('view-' + view).querySelector('h1')).focus({preventScroll: true});
   }
   if (view === 'missions' && progress) revealMission();
+  previousView = view;
   updateWeaponPreview();
 }
 
@@ -71,42 +67,19 @@ function missionCard(level, index, active) {
   if (!level.unlocked) row.dataset.state = 'locked';
   if (active) row.dataset.state = 'current';
 
-  const cover = element('div', 'mission-cover');
-  const img = element('img');
-  img.src = coverUrl(level.id);
-  img.alt = '';
-  img.loading = index < 3 ? 'eager' : 'lazy';
-  img.width = 960;
-  img.height = 540;
-  const label = element('span', 'mission-number', '关卡 ' + order(index));
-  cover.append(img, label);
-
-  const content = element('div', 'mission-content');
-  const title = element('h3', '', level.title);
-  const status = element('span', 'mission-status', level.cleared ? '已通关' : active ? '可进入' : '未解锁');
-  const heading = element('div', 'mission-heading');
-  heading.append(title, status);
-  content.append(heading, element('p', '', level.brief));
-  if (level.unlocked) {
-    const action = element('a', 'mission-action', level.cleared ? '再次挑战' : '进入关卡');
-    action.href = levelUrl(level.id);
-    action.setAttribute('aria-label', action.textContent + ' ' + level.title);
-    content.append(action);
-  } else {
-    content.append(element('span', 'mission-prerequisite', '通关 ' + progress.levels[index - 1].title + ' 后开放'));
-  }
-  const best = progress.best?.[level.id];
-  const record = element('p', 'record', best ? best.kills + ' 击杀 · ' + (best.time == null ? '未撤离' : playTime(best.time)) + ' · ' + best.loot + ' 件' : '暂无成绩');
-  if (best) record.append(' · ' + (totals.levels.get(level.id) ?? '未评级'));
-  content.append(record);
-  row.tabIndex = 0;
-  row.addEventListener('click', () => renderHero(index));
-  row.addEventListener('focusin', () => renderHero(index));
-  row.append(cover, content);
+  const button = element('button', 'mission-option');
+  button.type = 'button';
+  button.dataset.level = level.id;
+  const label = element('span', 'slot-number', order(index));
+  const title = element('strong', '', level.title);
+  const status = element('small', '', level.cleared ? '已通关' : level.unlocked ? '可挑战' : '未解锁');
+  button.append(label, title, status);
+  button.addEventListener('click', () => renderHero(index));
+  row.append(button);
   return row;
 }
 
-let selectedIndex = 0;
+let selectedIndex = -1;
 function revealMission() {
   const list = $('mission-list'), card = list.children[selectedIndex];
   // 仅移动桌面列表，读到中后段存档时也能直接看见当前关卡。
@@ -115,40 +88,45 @@ function revealMission() {
   if (item.top < bound.top) list.scrollTop += item.top - bound.top;
   else if (item.bottom > bound.bottom) list.scrollTop += item.bottom - bound.bottom;
 }
-const accents = ['#82dfcb','#d9bd86','#9ed7ff','#e3c275','#aceaff','#78d4ed','#ffa88b','#bab7ff','#ffa1d8','#93ddb0','#f3a7b5','#f3b9e0','#e1c48e','#b8aff7'];
 function renderHero(index) {
-  const level = progress.levels[index];
   selectedIndex = index;
-  const art = $('hero-art');
-  if (art.getAttribute('src') !== coverUrl(level.id)) art.src = coverUrl(level.id);
-  $('hero-chapter').textContent = '战役  /  ' + order(index) + '  /  ' + (level.cleared ? '已通关' : level.unlocked ? '可挑战' : '未解锁');
+  const level = progress.levels[index];
+  $('hero-art').src = coverUrl(level.id);
+  $('hero-chapter').textContent = '战役 / ' + order(index);
   $('game-title').textContent = level.title;
   document.querySelector('.hero-description').textContent = level.brief;
-  const primary = $('continue');
-  primary.hidden = !level.unlocked;
-  if (level.unlocked) {
-    primary.href = levelUrl(level.id);
-    primary.textContent = level.cleared ? '再次挑战' : index === 0 ? '开始战役' : '继续战役';
-  } else {
-    primary.removeAttribute('href');
+  $('current-mission').textContent = level.cleared ? '已通关，可再次挑战' : level.unlocked ? '已开放，可挑战' : '通关「' + progress.levels[index - 1].title + '」后开放';
+  const best = progress.best?.[level.id];
+  $('mission-record').textContent = best ? best.kills + ' 击杀 · ' + (best.time == null ? '未撤离' : playTime(best.time)) + ' · ' + best.loot + ' 件 · ' + (totals.levels.get(level.id) ?? '未评级') : '暂无成绩';
+  $('prepare-mission').disabled = !level.unlocked;
+  for (const [i, row] of [...$('mission-list').children].entries()) {
+    row.toggleAttribute('data-selected', i === index);
+    const button = row.firstElementChild;
+    button.setAttribute('aria-pressed', String(i === index));
+    button.tabIndex = i === index ? 0 : -1;
   }
-  $('current-mission').textContent = level.unlocked ? '' : '通关 ' + progress.levels[index - 1].title + ' 后开放';
-  document.documentElement.style.setProperty('--accent', accents[index % accents.length]);
-  for (const [i, card] of [...$('mission-list').children].entries()) card.toggleAttribute('data-selected', i === index);
 }
 
 function renderMissions() {
-  for (const control of document.querySelectorAll('#new-campaign,#save-open,[data-panel]')) control.disabled=false;
+  for (const control of document.querySelectorAll('#save-open,[data-panel]')) control.disabled = false;
   const levels = progress.levels;
-  const current = levels.find(level => level.unlocked && !level.cleared);
+  const current = levels.find(level => level.unlocked && !level.cleared) || levels.filter(level => level.unlocked).at(-1);
   const cleared = levels.filter(level => level.cleared).length;
-  const featured = current || levels.at(-1);
   $('progress-count').textContent = cleared + ' / ' + levels.length;
   $('campaign-progress').max = levels.length;
   $('campaign-progress').value = cleared;
   $('mission-list').replaceChildren(...levels.map((level, index) => missionCard(level, index, level === current)));
-  renderHero(levels.indexOf(featured));
+  const params = new URLSearchParams(location.search);
+  const requested = levels.findIndex(level => level.id === (params.get('mission') || params.get('locked')));
+  renderHero(selectedIndex >= 0 ? selectedIndex : requested >= 0 ? requested : levels.indexOf(current));
   revealMission();
+  $('continue').href = levelUrl(current.id);
+  $('continue').hidden = false;
+  $('continue').textContent = cleared || progress.battleCount ? '继续战役' : '开始战役';
+  $('menu-art').src = coverUrl(current.id);
+  $('current-title').textContent = current.title;
+  const profile = profiles().find(entry => entry.id === pageProfile);
+  $('save-open').textContent = profile ? '存档 · ' + date.format(profile.created) : '存档 · 初始战役';
   $('last-played').textContent = progress.battles.length ? '最近游玩 ' + date.format(progress.battles[0].endedAt) : '本机新存档';
 }
 
@@ -388,7 +366,6 @@ async function loadProgress() {
   loading = true;
   try {
     await refreshProgress();
-    await chooseFirstEntry(progress.battleCount, './practice/index.html?mode=tutorial', (await campaignStore()).pendingPrefix);
     let complete = true, refreshHistory = false;
     for await (const battle of flushPendingBattles()) {
       if (!battle) {
@@ -623,7 +600,10 @@ $('save-open').onclick = () => {
     panel.close();
     loadProgress();
   };
-  body.append(refresh);
+  const create = element('button', 'secondary-action', '新的战役');
+  create.id = 'new-campaign';
+  create.onclick = newCampaign;
+  body.append(refresh, create);
 };
 function showArchive(kind) {
   if (!progress) return;
@@ -660,18 +640,62 @@ function showArchive(kind) {
 }
 for (const button of document.querySelectorAll('[data-panel]'))
   button.onclick = () => showArchive(button.dataset.panel);
-function deploy(href, title) {
+$('training-open').onclick = () => {
+  openPanel('训练');
+  for (const [mode, name] of [['tutorial', '新手教程'], ['range', '火力试验场']]) {
+    const link = element('a', 'secondary-action', name);
+    link.href = './practice/index.html?mode=' + mode;
+    body.append(link);
+  }
+};
+const fullscreen = $('fullscreen');
+fullscreen.hidden = !document.fullscreenEnabled;
+fullscreen.onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch { feedback('浏览器未能切换全屏。'); }
+};
+document.addEventListener('fullscreenchange', () => {
+  fullscreen.textContent = document.fullscreenElement ? '退出全屏' : '全屏';
+});
+
+let loadRequest;
+async function deploy(href, title) {
+  const dialog = $('deploy');
+  const request = new AbortController();
+  loadRequest?.abort();
+  loadRequest = request;
   $('deploy-title').textContent = title;
-  $('deploy').showModal();
-  const hints = ['确认装备后进入战场', '撤离成功可带回宝物', '沿掩体移动，留意备用弹药'];
-  let tip = 0;
-  const timer = setInterval(() => {
-    $('deploy-tip').textContent = hints[++tip % hints.length];
-  }, 700);
-  window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
-  requestAnimationFrame(() => requestAnimationFrame(() => location.assign(href)));
+  $('deploy-tip').textContent = '正在打开行动资源';
+  $('retry-load').hidden = true;
+  dialog.querySelector('progress').hidden = false;
+  if (!dialog.open) dialog.showModal();
+  try {
+    if (location.protocol !== 'file:') {
+      const response = await fetch(href, {method: 'HEAD', signal: request.signal});
+      if (!response.ok) throw Error();
+    }
+    if (dialog.open && !request.signal.aborted) location.assign(href);
+  } catch {
+    if (request.signal.aborted) return;
+    $('deploy-tip').textContent = '行动资源读取失败，请检查连接后重试。';
+    dialog.querySelector('progress').hidden = true;
+    $('retry-load').hidden = false;
+    $('retry-load').onclick = () => deploy(href, title);
+  }
 }
-$('new-campaign').onclick = () => {
+$('cancel-load').onclick = () => {
+  loadRequest?.abort();
+  $('deploy').close();
+};
+$('deploy').addEventListener('cancel', () => loadRequest?.abort());
+$('deploy').addEventListener('close', reloadIfProfileChanged);
+$('prepare-mission').onclick = () => {
+  const level = progress?.levels[selectedIndex];
+  if (level?.unlocked) deploy(levelUrl(level.id), level.title);
+};
+function newCampaign() {
   if (!progress) return;
   openPanel('新的战役');
   body.append(element('p', '', '新建独立存档，从第一关开始。此前的战役可在「存档」中切换回来。'));
@@ -682,9 +706,9 @@ $('new-campaign').onclick = () => {
     deploy(levelUrl(progress.levels[0].id), progress.levels[0].title);
   };
   body.append(start);
-};
+}
 document.addEventListener('click', (event) => {
-  const link = event.target.closest('a.mission-action,#continue');
+  const link = event.target.closest('#continue[href]');
   if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button) return;
   event.preventDefault();
   deploy(
@@ -694,22 +718,23 @@ document.addEventListener('click', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (document.querySelector('dialog[open]')) return;
-  if (event.key === 'Escape' && location.hash !== '#missions') {
-    location.hash = 'missions';
+  if (event.key === 'Escape') {
+    if ($('view-menu').hidden) location.hash = 'menu';
     return;
   }
-  const card = event.target.closest('.mission-card');
-  if (!progress || !card || $('view-missions').hidden) return;
-  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-    event.preventDefault();
-    const step = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 1;
-    const i = (selectedIndex + step + progress.levels.length) % progress.levels.length;
-    $('mission-list').children[i].focus();
-  } else if (event.key === 'Enter' && event.target === card) {
-    event.preventDefault();
-    event.target.querySelector('a')?.click();
-  }
+  if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  const group = event.target.closest('.vertical-menu, #mission-list');
+  if (!group) return;
+  const items = [...group.querySelectorAll('button:not(:disabled), a[href]')].filter(item => !item.hidden);
+  const index = items.indexOf(event.target);
+  if (index < 0) return;
+  event.preventDefault();
+  const next = (index + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+  items[next].focus();
+  if (group.id === 'mission-list') renderHero(next);
 });
 window.addEventListener('pageshow', () => {
   if ($('deploy').open) $('deploy').close();
 });
+
+for (const id of ['training-open', 'gallery-open', 'settings-open', 'mute']) $(id).disabled = false;
