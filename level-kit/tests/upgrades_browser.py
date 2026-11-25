@@ -66,7 +66,7 @@ def dashboard(browser, url):
         page.get_by_role("heading", name=name).wait_for()
         page.locator("#function-body").get_by_text(content,exact=False).first.wait_for()
         page.get_by_role("link", name="返回主菜单", exact=True).click()
-    assert page.locator('nav a[href="#history"]').is_visible()
+    page.locator('nav a[href="#history"]').wait_for()
     assert not vendor, vendor
     page.goto(url + "/#collection")
     page.wait_for_function("document.querySelector('#rifle-canvas').width>300 && !document.querySelector('#rifle-canvas').hidden")
