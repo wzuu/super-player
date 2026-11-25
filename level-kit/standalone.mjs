@@ -10,8 +10,10 @@ const storeFiles = [
   'campaign/onboarding.mjs',
   'level-kit/src/gear.mjs',
 ];
+export const galleryFiles = ['config','sculpt','mythic','constructs','view'].map(name => 'campaign/gallery/' + name + '.mjs');
 const homeFiles = [
   ...storeFiles,
+  ...galleryFiles,
   'campaign/home.mjs',
   'campaign/reports.mjs',
   'campaign/weapon-preview.mjs',

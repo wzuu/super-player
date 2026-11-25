@@ -384,6 +384,9 @@ class Handler(SimpleHTTPRequestHandler):
                       "/level-kit/starter/scene.mjs"}:
             file = ROOT.joinpath(*segment)
         elif (
+            len(segment) == 3 and segment[:2] == ["campaign", "gallery"]
+            and segment[2] in {"view.mjs", "config.mjs", "sculpt.mjs", "mythic.mjs", "constructs.mjs"}
+        ) or (
             len(segment) == 3 and segment[:2] == ["campaign", "images"]
             and segment[2] in {f"{level_id}.webp" for level_id in LEVEL_IDS}
         ) or (

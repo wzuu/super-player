@@ -16,6 +16,7 @@
       <nav aria-label="游戏首页">
         <a href="#missions" aria-current="page">战役关卡</a>
         <button type="button" disabled data-panel="codex" aria-haspopup="dialog">战场图鉴</button>
+        <button id="gallery-open" type="button" aria-haspopup="dialog">凶兽展示厅</button>
         <a href="#collection">武器库</a>
         <button type="button" disabled data-panel="stats" aria-haspopup="dialog">成就与统计</button>
         <a href="#history">对战记录</a>
@@ -149,6 +150,24 @@
   <footer class="shell footer">战役版 2.0 <span id="control-tip">WASD 移动 · 鼠标瞄准 · Shift 冲刺 · R 换弹</span><span id="last-played"></span></footer>
   <dialog id="panel" aria-labelledby="panel-title"><form method="dialog"><button class="secondary-action">返回</button></form><h2 id="panel-title"></h2><div id="panel-body"></div></dialog>
   <dialog id="deploy"><h2 id="deploy-title"></h2><p id="deploy-tip">确认装备后进入战场</p><progress aria-label="正在加载关卡"></progress></dialog>
+  <dialog id="gallery" aria-labelledby="gallery-title">
+    <header><h2 id="gallery-title">凶兽展示厅</h2><form method="dialog"><button class="secondary-action" autofocus>返回首页</button></form></header>
+    <p id="gallery-status" role="status"></p>
+    <div id="gallery-layout" hidden>
+      <section class="gallery-catalog"><h3>展品目录</h3><div id="gallery-catalog"></div></section>
+      <section class="gallery-stage" aria-labelledby="gallery-name">
+        <canvas id="gallery-canvas" aria-label="凶兽三维预览"></canvas>
+        <h3 id="gallery-name"></h3><span class="gallery-hint">拖动旋转 · 双指或滚轮缩放 · 点选部位</span>
+      </section>
+      <section class="gallery-anatomy"><h3>部位观察</h3><div id="gallery-parts"></div><p id="gallery-note" aria-live="polite"></p></section>
+      <div class="gallery-toolbar">
+        <button id="gallery-replay"></button><button id="gallery-pause">暂停动作</button><button id="gallery-reset">重置镜头</button>
+        <label id="gallery-shake-label"><input type="checkbox" id="gallery-shake" checked>重踏震动</label>
+      </div>
+      <section id="gallery-boss" hidden><h3>首领演示</h3><label>演示生命 <progress id="gallery-hp"></progress> <output id="gallery-health"></output></label>
+        <div id="gallery-states"></div></section>
+    </div>
+  </dialog>
   <!-- OFFLINE_HOME -->
 
 

@@ -213,7 +213,8 @@ function renderCollection() {
   $('collection-count').textContent = '已收集 ' + progress.loot.filter(mainLoot).length + ' / ' + (progress.levels.length * progress.lootPerLevel);
 }
 
-async function loadPreview() {
+let threeLoading;
+async function loadThree() {
   await new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = './level-kit/vendor/three-r160.js';
@@ -225,21 +226,53 @@ async function loadPreview() {
   map.type = 'importmap';
   map.textContent = JSON.stringify({imports: {...globalThis.levelThreeModules(), '@level-kit/': './level-kit/src/'}});
   document.head.append(map);
-  return import('./weapon-preview.mjs');
 }
+
+function ensureThree() {
+  threeLoading ??= loadThree().catch(error => { threeLoading = null; throw error; });
+  return threeLoading;
+}
+
+const galleryDialog = $('gallery');
+let galleryView;
+$('gallery-open').onclick = async () => {
+  galleryDialog.showModal();
+  updateWeaponPreview();
+  $('gallery-status').textContent = '正在加载展品…';
+  try {
+    await ensureThree();
+    const { createGallery } = await import('./gallery/view.mjs');
+    if (!galleryDialog.open) return;
+    galleryView ??= createGallery(galleryDialog);
+    $('gallery-layout').hidden = false;
+    galleryView.open(preferences().quality);
+    $('gallery-status').textContent = '';
+  } catch (error) {
+    console.warn('凶兽展示厅无法启动', error);
+    $('gallery-layout').hidden = true;
+    $('gallery-status').textContent = '无法显示三维展品，请使用支持 WebGL 的浏览器并启用硬件加速。';
+  }
+};
+galleryDialog.addEventListener('close', () => {
+  if (galleryDialog.open) return;
+  galleryView?.close();
+  $('gallery-layout').hidden = true;
+  $('gallery-open').focus();
+  updateWeaponPreview();
+});
 
 function updateWeaponPreview() {
   if (!selectedRifle) return;
-  const visible = !$('view-collection').hidden;
+  const visible = !$('view-collection').hidden && !galleryDialog.open;
   if (!visible && !previewPromise) return;
-  previewPromise ??= loadPreview().then(({ createWeaponPreview }) =>
+  previewPromise ??= ensureThree().then(() => import('./weapon-preview.mjs')).then(({ createWeaponPreview }) =>
     createWeaponPreview($('rifle-canvas'), $('rifle-reset-view'))).catch(error => {
     console.warn('武器预览无法启动', error);
     $('rifle-canvas').hidden = true;
     $('rifle-reset-view').hidden = true;
     $('rifle-preview-tip').textContent = '此浏览器暂时无法显示三维预览。';
   });
-  previewPromise.then(preview => preview?.show(selectedRifle, !$('view-collection').hidden, totals.weapons.get(selectedRifle)?.kills ?? 0));
+  previewPromise.then(preview => preview?.show(selectedRifle, !$('view-collection').hidden && !galleryDialog.open, totals.weapons.get(selectedRifle)?.kills ?? 0));
 }
 
 function renderRifles() {
