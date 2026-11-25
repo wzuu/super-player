@@ -490,7 +490,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   });
   if (training) {
     $('campaign-home').hidden = false;
-    $('campaign-home').href = '../index.html';
+    $('campaign-home').href = '../index.html#training';
+    $('campaign-home').textContent = '返回训练';
     $('practice-controls').hidden = false;
     $('practice-bindings').textContent = training.controls;
     $('practice-restart').onclick = () => {

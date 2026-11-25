@@ -12,6 +12,7 @@ from playwright.sync_api import sync_playwright
 from campaign_browser import ROOT, capture_frames, expose_game
 from lab_pressure_browser import LOCK
 from hit_feedback import check_emp_feedback
+from function_pages_browser import verify_function_pages
 
 
 def check_frame(page, selectors):
@@ -42,7 +43,7 @@ def check(browser, url, output, offline):
             page.screenshot(path=output/(name+".jpg"),quality=92)
 
     lab=url+"/underground-lab/"
-    page.route(lab,lambda route:expose_game(route,manual_steps=True,with_input=True,manual_paint=True))
+    page.route(lab+"*",lambda route:expose_game(route,manual_steps=True,with_input=True,manual_paint=True))
     page.goto(url)
     page.locator("#continue").wait_for()
     check_frame(page,["#continue","#save-open"])
@@ -72,9 +73,11 @@ def check(browser, url, output, offline):
     page.keyboard.press("ArrowUp")
     page.keyboard.press("ArrowUp")
     page.keyboard.press("ArrowUp")
+    page.keyboard.press("ArrowUp")
     page.keyboard.press("Enter")
-    page.get_by_role("dialog",name="游戏设置").wait_for()
+    page.get_by_role("heading",name="游戏设置").wait_for()
     page.keyboard.press("Escape")
+    page.wait_for_function("document.activeElement.id==='settings-open'")
     assert page.locator("#settings-open").evaluate("el=>el===document.activeElement")
     if page.locator("#fullscreen").is_visible():
         page.click("#fullscreen")
@@ -97,7 +100,18 @@ def check(browser, url, output, offline):
     check_frame(page,["#campaign-home","#start","#mission-difficulty","#kit-title"])
     capture("briefing")
     page.select_option("#mission-mode","endless")
+    page.click("#preparation summary")
+    slot = page.locator("#kit-slots select").last
+    previous_item = slot.input_value()
+    slot.select_option("ammo")
+    page.click("#brief-armory")
+    page.get_by_role("link",name="返回战前准备").click()
+    page.wait_for_function("window.run && document.querySelector('#mission-mode').value === 'endless'")
     assert "无尽" in page.locator("#ration").inner_text()
+    assert slot.input_value() == "ammo"
+    page.click("#preparation summary")
+    slot.select_option(previous_item)
+    page.click("#preparation summary")
     page.select_option("#mission-mode","classic")
     page.select_option("#mission-difficulty","hard")
     assert page.evaluate("run.config.player.incoming")==1.35
@@ -147,6 +161,8 @@ def check(browser, url, output, offline):
     page.get_by_role("button",name="创建存档并开始").click()
     page.locator("#retry-load").wait_for()
     page.click("#cancel-load")
+    page.get_by_text("尚未游玩",exact=False).first.wait_for()
+    page.get_by_role("link",name="返回主菜单").click()
     page.get_by_role("link",name="开始战役",exact=True).wait_for()
     assert page.locator("#current-title").inner_text()=="地下实验室"
     assert "初始战役" not in page.locator("#save-open").inner_text()
@@ -199,7 +215,10 @@ if __name__=="__main__":
                 vendor=Path(tmp)/"level-kit/vendor"
                 vendor.mkdir(parents=True)
                 copyfile(ROOT/"level-kit/vendor/three-r160.js",vendor/"three-r160.js")
-                try: check(browser,url,output,Path(tmp))
+                try:
+                    check(browser,url,output,Path(tmp))
+                    for static in (False, True):
+                        verify_function_pages(browser,url,static)
                 finally: browser.close()
         finally:
             service.terminate()

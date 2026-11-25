@@ -181,7 +181,7 @@ export function createTraining(config, prefs) {
             g.kills +
             ' 击杀',
           detail: (g.beasts.live ? '清空本波敌群' : '下一波倒计时 ' + Math.max(0, Math.ceil(nextWave - g.time)) + ' 秒') +
-            ' · 无限备弹 · Esc 暂停、重开或返回首页',
+            ' · 无限备弹 · Esc 暂停、重开或返回训练',
         };
       const [id, title] = tasks[stage];
       return {

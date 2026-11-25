@@ -13,7 +13,7 @@
   <header class="topbar">
     <div class="shell topbar-inner">
       <a class="brand" href="#menu"><span class="brand-mark" aria-hidden="true"></span>超级玩家</a>
-      <div class="quick"><button id="save-open" disabled>存档</button><button id="mute" disabled>音量</button><button id="fullscreen" hidden>全屏</button></div>
+      <div class="quick"><a class="back" id="save-open" href="#saves">当前存档</a><button id="mute" disabled>音量</button><button id="fullscreen" hidden>全屏</button></div>
     </div>
   </header>
   <main>
@@ -26,14 +26,14 @@
         <h1 id="main-title" tabindex="-1">主菜单</h1>
         <nav aria-label="主菜单" class="vertical-menu">
           <a id="continue" class="primary-action" hidden>开始战役</a>
-          <a href="#missions">选择关卡</a>
-          <button id="training-open" disabled>训练</button>
+          <a href="#missions">战役大厅</a>
+          <a id="training-open" href="#training">训练</a>
           <a href="#collection">军械库</a>
-          <button disabled data-panel="codex">战场图鉴</button>
-          <button id="gallery-open" disabled>凶兽展示厅</button>
-          <a href="#history">战报</a>
-          <button disabled data-panel="stats">成就与统计</button>
-          <button id="settings-open" disabled>设置</button>
+          <a href="#codex">战场图鉴</a>
+          <a href="#history">对战记录</a>
+          <a href="#stats">成就与统计</a>
+          <a id="settings-open" href="#settings">设置</a>
+          <a id="manage-saves" href="#saves">存档管理</a>
         </nav>
       </div>
       <figure class="mission-art menu-art"><img id="menu-art" src="./campaign/images/underground-lab.webp" alt="" width="960" height="540" fetchpriority="high">
@@ -87,8 +87,8 @@
     <section id="view-collection" class="shell archive-section" aria-labelledby="collection-title" hidden>
       <div class="section-heading client-heading"><a class="back" href="#menu">返回主菜单</a>
         <div>
-          <h1 id="collection-title" tabindex="-1">武器库</h1>
-          <p>通关解锁武器外观，成功撤离带回的宝物会登记在图鉴里。</p>
+          <h1 id="collection-title" tabindex="-1">军械库</h1>
+          <p>通关解锁武器外观，可为每把枪单独选择改装。</p>
         </div>
       </div>
       <section id="armory" class="armory" aria-labelledby="armory-title" hidden>
@@ -124,7 +124,12 @@
           <ol id="rifle-list" class="rifle-list" aria-label="所有武器外观" role="list"></ol>
         </div>
       </section>
-      <section class="loot-section" aria-labelledby="loot-title">
+    </section>
+
+    <section id="view-function" class="shell archive-section" aria-labelledby="function-title" hidden>
+      <header class="client-heading"><a class="back" href="#menu">返回主菜单</a><h1 id="function-title" tabindex="-1"></h1></header>
+      <div id="function-body" class="function-content"></div>
+      <section id="loot-catalog" hidden class="loot-section" aria-labelledby="loot-title">
         <div class="armory-heading">
           <h2 id="loot-title">战利品图鉴</h2>
           <p id="collection-count" class="section-count"></p>
@@ -134,17 +139,13 @@
           <select id="collection-level"></select>
           <strong id="selected-loot-count"></strong>
         </div>
+        <p id="legendary-count"></p>
         <ul id="collection-list" class="collection-list" role="list"></ul>
       </section>
     </section>
 
-    <noscript><p class="shell feedback">请启用 JavaScript 后进入游戏。</p></noscript>
-  </main>
-  <footer class="shell footer">战役版 2.0 <span id="control-tip">WASD 移动 · 鼠标瞄准 · Shift 冲刺 · R 换弹</span></footer>
-  <dialog id="panel" aria-labelledby="panel-title"><header class="client-heading"><form method="dialog"><button class="back">返回</button></form><h2 id="panel-title"></h2></header><div id="panel-body"></div></dialog>
-  <dialog id="deploy"><h2 id="deploy-title"></h2><p id="deploy-tip" role="status"></p><progress aria-label="正在加载关卡"></progress><div class="load-actions"><button id="cancel-load" class="back">返回</button><button id="retry-load" class="primary-action" hidden>重试加载</button></div></dialog>
-  <dialog id="gallery" aria-labelledby="gallery-title">
-    <header class="client-heading"><form method="dialog"><button class="back" autofocus>返回</button></form><h2 id="gallery-title">凶兽展示厅</h2></header>
+  <section id="gallery" class="shell archive-section" hidden aria-labelledby="gallery-title">
+    <header class="client-heading"><a class="back" href="#codex/beasts">返回凶兽图鉴</a><h1 id="gallery-title" tabindex="-1">凶兽展示厅</h1></header>
     <p id="gallery-status" role="status"></p>
     <div id="gallery-layout" hidden>
       <section class="gallery-catalog"><h3>展品目录</h3><div id="gallery-catalog"></div></section>
@@ -160,7 +161,13 @@
       <section id="gallery-boss" hidden><h3>首领演示</h3><label>演示生命 <progress id="gallery-hp"></progress> <output id="gallery-health"></output></label>
         <div id="gallery-states"></div></section>
     </div>
-  </dialog>
+  </section>
+    <noscript><p class="shell feedback">请启用 JavaScript 后进入游戏。</p></noscript>
+  </main>
+  <footer class="shell footer">战役版 2.0 <span id="control-tip">WASD 移动 · 鼠标瞄准 · Shift 冲刺 · R 换弹</span></footer>
+  <dialog id="panel" aria-labelledby="panel-title"><header class="client-heading"><form method="dialog"><button class="back">返回</button></form><h2 id="panel-title"></h2></header><div id="panel-body"></div></dialog>
+  <dialog id="deploy"><h2 id="deploy-title"></h2><p id="deploy-tip" role="status"></p><progress aria-label="正在加载关卡"></progress><div class="load-actions"><button id="cancel-load" class="back">返回</button><button id="retry-load" class="primary-action" hidden>重试加载</button></div></dialog>
+
   <!-- OFFLINE_HOME -->
 
 

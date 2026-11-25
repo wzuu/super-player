@@ -157,7 +157,7 @@ export function renderStats(body, rows) {
   refresh();
 }
 
-export function renderReport(body, battle, levels, store) {
+export function renderReport(body, battle, levels, origin) {
   const r = battle.report ?? {},
     items = { ...catalog(levels), ...modifications };
   const line = (name, value) => body.append(node('p', name + '　' + (value ?? '未记录')));
@@ -209,25 +209,17 @@ export function renderReport(body, battle, levels, store) {
   );
   if (r.vaultValue != null) line('主路 / 宝库收益', (r.mainValue ?? 0) + ' / ' + r.vaultValue);
   if (r.events?.length) line('关键节点', r.events.map((e) => seconds(e.time) + ' ' + e.label).join(' / '));
-  if (!battle.hasReplay) return;
-  const watch = node('button', '观看回放');
+  if (!battle.hasReplay) {
+    body.append(node('p', '本局没有录制回放。'));
+    return;
+  }
+  const watch = node('a', '观看回放');
   watch.className = 'secondary-action';
+  watch.href = '#history/' + encodeURIComponent(battle.id) + '/replay' + (['saves','stats'].includes(origin) ? '?from=' + origin : '');
   body.append(watch);
-  watch.onclick = async () => {
-    watch.disabled = true;
-    try {
-      const data = await store.replay(battle.id);
-      if (!watch.isConnected) return;
-      if (!data?.samples?.length) throw Error();
-      watch.replaceWith(replayViewer(data));
-    } catch {
-      watch.textContent = '重试加载回放';
-      watch.disabled = false;
-    }
-  };
 }
 
-function replayViewer({ samples, events = [] }) {
+export function replayViewer({ samples, events = [] }) {
   const section = node('section');
   section.className = 'replay-viewer';
   const canvas = node('canvas');
@@ -313,7 +305,7 @@ function replayViewer({ samples, events = [] }) {
     play.textContent = '播放';
   }
   function tick(timestamp) {
-    if (!section.isConnected || !section.closest('dialog')?.open) return stop();
+    if (!section.isConnected) return stop();
     slider.value = Number(slider.value) + timestamp - last;
     last = timestamp;
     render();

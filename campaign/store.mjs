@@ -20,8 +20,7 @@ async function request(profile, path, data, timeout = 8000) {
   return response.json();
 }
 
-async function openCampaign(onUpgradeBlocked) {
-  const profile = activeProfile();
+async function openCampaign(onUpgradeBlocked, profile = activeProfile()) {
   const api = (...args) => request(profile, ...args);
   const namespace = root.pathname + (profile ? '@' + profile : '');
   if (globalThis.offlineCampaignLevels) {
@@ -63,4 +62,11 @@ export function campaignStore(onUpgradeBlocked) {
     throw error;
   });
   return loading;
+}
+
+export async function profileProgress(id) {
+  if (id === activeProfile()) return (await campaignStore()).progress();
+  const store = await openCampaign(undefined, id);
+  try { return await store.progress(); }
+  finally { store.close?.(); }
 }

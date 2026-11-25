@@ -54,6 +54,8 @@ def verify(browser, url, mode, out=None):
     page.on('request', lambda req: requests.append(req.url))
     page.goto(url)
     assert not any('three-r160' in req or '/gallery/' in req for req in requests)
+    page.get_by_role('link',name='战场图鉴',exact=True).click()
+    page.get_by_role('link',name='凶兽图鉴',exact=True).click()
     open_gallery(page)
     page.evaluate(OBSERVE)
     page.wait_for_function('window.probe')
@@ -163,11 +165,10 @@ def verify(browser, url, mode, out=None):
     page.wait_for_function('v=>Math.abs('+distance+'-v)>.001',arg=before)
     page.locator('#gallery-reset').click()
     assert page.evaluate(POSE)==initial
-    page.locator('#gallery form button').click()
+    page.locator('#gallery .back').click()
     page.wait_for_function("document.activeElement.id==='gallery-open'")
-    page.locator('[data-panel=codex]').click()
-    assert page.locator('#panel').is_visible()
-    page.keyboard.press('Escape')
+    page.get_by_role('link',name='返回战场图鉴').click()
+    page.get_by_role('link',name='返回主菜单').click()
     page.locator('nav a[href="#collection"]').click()
     page.wait_for_function("window.weaponSeen")
     assert not errors, errors
@@ -192,6 +193,8 @@ def run(site, out):
                 page.add_init_script("""const get=HTMLCanvasElement.prototype.getContext;
                   HTMLCanvasElement.prototype.getContext=function(id,...args){return id.includes('webgl')?null:get.call(this,id,...args);};""")
                 page.goto('http://'+local)
+                page.get_by_role('link',name='战场图鉴',exact=True).click()
+                page.get_by_role('link',name='凶兽图鉴',exact=True).click()
                 page.locator('#gallery-open').click()
                 page.get_by_text('无法显示三维展品',exact=False).wait_for()
                 page.keyboard.press('Escape')

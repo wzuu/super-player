@@ -477,8 +477,9 @@ def verify_claims(browser,url,static):
     assert second.evaluate("()=>store.gear()")==gear
     # 重新打开首页显示本存档已发现的秘闻，另一存档仍未发现。
     first.reload()
-    first.get_by_role("button",name="战场图鉴").click()
-    assert "罐底的手写编号" in first.locator("#panel-body").inner_text()
+    first.get_by_role("link",name="战场图鉴").click()
+    first.get_by_role("link",name="关卡秘闻").click()
+    first.locator("#function-body").get_by_text("罐底的手写编号",exact=False).wait_for()
     first.evaluate("async()=>{(await import('./campaign/profiles.mjs')).createProfile()}")
     first.reload()
     new=first.evaluate("async()=> (await (await import('./campaign/store.mjs')).campaignStore()).progress()")
