@@ -21,13 +21,22 @@ LEVELS = json.loads((ROOT / "campaign/levels.json").read_text(encoding="utf-8"))
 NEW_STAGES = ["sakura-night-town", "brass-factory", "haunted-midway"]
 
 
-def expose_game(route, *, render=True, manual_steps=False, with_input=False):
+def capture_frames(html):
+    # 仅接管游戏绘制。浏览器和测试工具保留原生动画帧。
+    schedule = "requested = requestAnimationFrame(animate);"
+    assert html.count(schedule) >= 1
+    return html.replace(schedule, "requested = 1; window.clientFrame = animate;")
+
+
+def expose_game(route, *, render=True, manual_steps=False, with_input=False, manual_paint=False):
     if route.request.method == "HEAD":
         return route.continue_()
     # startLevel 已返回运行状态，只在测试浏览器中保留引用以布置边界局面。
     response = route.fetch()
     entry = "    startLevel(definition, campaign, campaignStage);"
     html = response.text()
+    if manual_paint:
+        html = capture_frames(html)
     if with_input:
         fields = 'return { game, scene, camera, renderer, config:'
         assert html.count(fields) == 1

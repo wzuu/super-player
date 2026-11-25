@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from playwright.sync_api import sync_playwright
-from campaign_browser import ROOT, expose_game
+from campaign_browser import ROOT, capture_frames, expose_game
 from lab_pressure_browser import LOCK
 from hit_feedback import check_emp_feedback
 
@@ -18,14 +18,14 @@ def check_frame(page, selectors):
     for width, height in [(1280,720),(1920,1080),(2560,1080),(960,540),(1440,900)]:
         page.set_viewport_size({"width":width,"height":height})
         page.evaluate("new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)))")
-        for selector in selectors:
-            control = page.locator(selector)
-            assert control.is_visible(), (width, selector)
-            assert control.evaluate("""el=>{
-              const r=el.getBoundingClientRect();
-              return r.left>=0 && r.top>=0 && r.right<=innerWidth+1 && r.bottom<=innerHeight+1 &&
-                document.documentElement.scrollWidth<=innerWidth;
-            }"""), (width, height, selector, control.bounding_box(), page.evaluate("document.documentElement.scrollWidth"))
+        outside = page.evaluate("""selectors=>selectors.filter(selector=>{
+          const el=document.querySelector(selector);
+          if(!el || getComputedStyle(el).visibility==='hidden')return true;
+          const r=el.getBoundingClientRect();
+          return !r.width || !r.height || r.left<0 || r.top<0 || r.right>innerWidth+1 ||
+            r.bottom>innerHeight+1 || document.documentElement.scrollWidth>innerWidth;
+        })""",selectors)
+        assert not outside,(width,height,outside)
 
 
 def check(browser, url, output, offline):
@@ -36,11 +36,13 @@ def check(browser, url, output, offline):
       localStorage.setItem('super-player:variation:1',JSON.stringify({pending:'quiet'}));
     """)
     def capture(name):
+        page.evaluate("window.clientFrame?.(performance.now())")
+        print("PASS",name,flush=True)
         if output:
             page.screenshot(path=output/(name+".jpg"),quality=92)
 
     lab=url+"/underground-lab/"
-    page.route(lab,lambda route:expose_game(route,manual_steps=True,with_input=True))
+    page.route(lab,lambda route:expose_game(route,manual_steps=True,with_input=True,manual_paint=True))
     page.goto(url)
     page.locator("#continue").wait_for()
     check_frame(page,["#continue","#save-open"])
@@ -154,7 +156,7 @@ def check(browser, url, output, offline):
         directory=offline/stage
         directory.mkdir()
         entry="    startLevel(definition, campaign, campaignStage);"
-        original=(ROOT/stage/"index.html").read_text(encoding="utf8")
+        original=capture_frames((ROOT/stage/"index.html").read_text(encoding="utf8"))
         assert original.count(entry)==1
         path=directory/"index.html"
         path.write_text(original.replace(entry,entry.replace("startLevel(","window.run=startLevel(")),encoding="utf8")
