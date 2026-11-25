@@ -138,6 +138,17 @@ def check(browser, url, output, offline):
     page.click("#continue")
     page.locator("#start").wait_for()
     assert "/shanhai-secret-realm/" in page.url
+    page.goto(url)
+    page.click("#save-open")
+    page.click("#new-campaign")
+    page.route(lab,unavailable)
+    page.get_by_role("button",name="创建存档并开始").click()
+    page.locator("#retry-load").wait_for()
+    page.click("#cancel-load")
+    page.get_by_role("link",name="开始战役",exact=True).wait_for()
+    assert page.locator("#current-title").inner_text()=="地下实验室"
+    assert "初始战役" not in page.locator("#save-open").inner_text()
+    page.unroute(lab,unavailable)
     # 无存档服务的直接文件也使用同一 HUD。第三关用武器状态和首领同时读取上栏。
     for stage in ("rain-city","neon-undercity"):
         directory=offline/stage

@@ -690,6 +690,7 @@ $('cancel-load').onclick = () => {
   $('deploy').close();
 };
 $('deploy').addEventListener('cancel', () => loadRequest?.abort());
+$('deploy').addEventListener('close', reloadIfProfileChanged);
 $('prepare-mission').onclick = () => {
   const level = progress?.levels[selectedIndex];
   if (level?.unlocked) deploy(levelUrl(level.id), level.title);
