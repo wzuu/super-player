@@ -65,6 +65,9 @@ def verify_function_pages(browser, url, static):
             expect(page.locator("#legendary-count")).to_contain_text("传奇·试验藏品")
             expect(page.locator(".loot-card").filter(has_text="传奇·试验藏品")).to_contain_text("已带回 1 次")
             expect(page.locator(".loot-card").filter(has_text="传奇·试验藏品")).to_contain_text("1,550")
+            page.select_option("#collection-level", "*")
+            expect(page.locator(".loot-card.discovered")).to_have_count(6)
+            expect(page.locator("#legendary-count")).to_contain_text("雨夜废城")
             page.select_option("#collection-level", "rain-city")
             expect(page.locator(".loot-card.discovered")).to_have_count(2)
         elif slot == second:

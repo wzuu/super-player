@@ -283,30 +283,35 @@ function appendBattles(page) {
 }
 
 function renderCollection() {
-  const items = progress.loot.filter(item => item.level === option.value);
+  const all = option.value === '*';
+  const items = all ? progress.loot : progress.loot.filter(item => item.level === option.value);
+  const titlesById = new Map(progress.levels.map(level => [level.id, level.title]));
+  const capacity = progress.lootPerLevel * (all ? progress.levels.length : 1);
   const mainLoot = item=>!(/^(宝库·|传奇·|秘藏·|精英徽记|精英改装材料|猎场徽印)/).test(item.name);
   const main=items.filter(mainLoot).length;
-  const slots = Math.max(0, progress.lootPerLevel - main);
+  const slots = Math.max(0, capacity - main);
   const cards = items.map(item => {
     const card = element('li', 'loot-card discovered');
     const mark = element('span', 'loot-mark');
     mark.setAttribute('aria-hidden', 'true');
+    if (all) card.append(element('small', '', titlesById.get(item.level)));
     card.append(mark, element('h2', '', item.name),
       element('p', '', '价值 ' + number.format(item.value)),
       element('p', 'loot-count', '已带回 ' + number.format(item.count) + ' 次'));
     return card;
   });
-  for (let index = 0; index < slots; index++) {
+  const placeholders = all ? Math.min(1, slots) : slots;
+  for (let index = 0; index < placeholders; index++) {
     const card = element('li', 'loot-card undiscovered');
     const mark = element('span', 'loot-mark');
     mark.setAttribute('aria-hidden', 'true');
-    card.append(mark, element('p', '', '未发现'));
+    card.append(mark, element('p', '', all ? '尚有 ' + slots + ' 件未发现' : '未发现'));
     cards.push(card);
   }
   const legendary = items.filter(item => item.name.startsWith('传奇·'));
-  $('legendary-count').textContent = '传奇收藏 · ' + (legendary.length ? legendary.map(item=>item.name).join('、') : '本关尚未发现');
+  $('legendary-count').textContent = '传奇收藏 · ' + (legendary.length ? legendary.map(item=>all ? titlesById.get(item.level) + ' · ' + item.name : item.name).join('、') : '尚未发现');
   $('collection-list').replaceChildren(...cards);
-  $('selected-loot-count').textContent = main + ' / ' + progress.lootPerLevel + (items.length>main?' · 额外藏品 '+(items.length-main):'');
+  $('selected-loot-count').textContent = main + ' / ' + capacity + (items.length>main?' · 额外藏品 '+(items.length-main):'');
   $('collection-count').textContent = '已收集 ' + progress.loot.filter(mainLoot).length + ' / ' + (progress.levels.length * progress.lootPerLevel);
 }
 
@@ -470,9 +475,9 @@ async function refreshProgress() {
   $('battle-list').replaceChildren();
   appendBattles(progress);
   const selection = option.value;
-  option.replaceChildren(...progress.levels.map((level, index) =>
+  option.replaceChildren(new Option('全部关卡','*'), ...progress.levels.map((level, index) =>
     new Option(order(index) + ' / ' + level.title, level.id)));
-  option.value = progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
+  option.value = selection === '*' || progress.levels.some(level => level.id === selection) ? selection : progress.levels[0].id;
   option.closest('.collection-toolbar').hidden = false;
   renderCollection();
   renderRifles();
