@@ -59,10 +59,18 @@ def verify(browser, url, mode, out=None):
     page.evaluate(OBSERVE)
     page.wait_for_function('window.probe')
     memories, timings = {}, {}
+    closed_memory = None
     for cycle in range(3):
         for exhibit in IDS:
             page.locator(f'[data-id="{exhibit}"]').click()
-            page.wait_for_timeout(80)
+            # 只比较待机绘制后的同一状态。喷吐中每个首次可见的头会再上传六个几何体。
+            frame = page.evaluate('framesSeen')
+            page.wait_for_function('previous => framesSeen > previous', arg=frame)
+            memory = page.evaluate(MEMORY)
+            if cycle == 2:
+                assert memory == memories[exhibit], (exhibit, memory, memories[exhibit])
+            elif cycle == 1:
+                memories[exhibit] = memory
             assert not page.locator('[data-part][aria-pressed=true]').count()
             if not cycle and out and mode=='local':
                 page.locator('.gallery-stage').screenshot(path=out / (exhibit+'.png'))
@@ -73,14 +81,16 @@ def verify(browser, url, mode, out=None):
                 assert page.locator('#gallery-pause').inner_text() == '继续动作'
             selection(page, page.locator('[data-part]').last.get_attribute('data-part'))
             page.locator('#gallery-replay').click()
+            if exhibit == 'hydra' and cycle == 1:
+                # 故意让第二个头也完成上传，再切换和关闭，检查已用过的特效确实释放。
+                page.wait_for_function("""() => {
+                  let heads;
+                  probe.scene.traverse(node => { if (node.userData.part === 'heads') heads = node; });
+                  return heads.children.slice(1).some(head => head.userData.breath.visible);
+                }""")
             page.locator('#gallery-pause').click()
             assert page.locator('#gallery-pause').inner_text() == '继续动作'
             page.locator('#gallery-reset').click()
-            memory = page.evaluate(MEMORY)
-            if cycle==2:
-                assert memory == memories[exhibit], (exhibit, memory, memories[exhibit])
-            elif cycle==1:
-                memories[exhibit] = memory
             if mode=='local' and not cycle and exhibit in ('hydra','chaos','taowu','lava','shadow'):
                 page.locator('#gallery-pause').click()
                 timings[exhibit]=page.evaluate("""async () => {
@@ -103,6 +113,10 @@ def verify(browser, url, mode, out=None):
             frame=page.evaluate('framesSeen')
             page.wait_for_timeout(100)
             assert page.evaluate('framesSeen')==frame
+            released = page.evaluate(MEMORY)
+            if closed_memory is not None:
+                assert released == closed_memory, (released, closed_memory)
+            closed_memory = released
             open_gallery(page)
     page.locator('[data-id=lava]').click()
     for name in ['冲锋','咆哮','召唤','受击','狂暴','受击']:
@@ -160,7 +174,7 @@ def verify(browser, url, mode, out=None):
     assert not errors, errors
     if mobile:
         assert not [r for r in requests if r.startswith(('http:', 'https:'))]
-    print(mode, json.dumps({'memory':memories,'frame_ms_p50_p95':timings}),flush=True)
+    print(mode, json.dumps({'memory':memories,'closed_memory':closed_memory,'frame_ms_p50_p95':timings}),flush=True)
     ctx.close()
 
 
