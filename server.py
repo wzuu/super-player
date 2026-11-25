@@ -361,8 +361,8 @@ class Handler(SimpleHTTPRequestHandler):
         level = segment[0]
         if path in {"/", "/index.html"}:
             file = ROOT / "index.html"
-        elif path in {"/practice/", "/practice/index.html", "/campaign/onboarding.mjs"}:
-            file = ROOT / ("practice/index.html" if level == "practice" else "campaign/onboarding.mjs")
+        elif path in {"/practice/", "/practice/index.html"}:
+            file = ROOT / "practice/index.html"
         elif level in LEVEL_IDS and path in {f"/{level}", f"/{level}/", f"/{level}/index.html"}:
             try:
                 with closing(self.profile_db()) as db:

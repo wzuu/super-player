@@ -39,6 +39,9 @@ jobs:
       - run: python level-kit/tests/campaign_browser.py
         env:
           GAME_TEST_BROWSER: chromium
+      - run: python level-kit/tests/client_browser.py
+        env:
+          GAME_TEST_BROWSER: chromium
       - run: python level-kit/tests/upgrades_browser.py
         env:
           GAME_TEST_BROWSER: chromium

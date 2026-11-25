@@ -11,7 +11,7 @@ import { createWeaponClass } from '@level-kit/weapon.mjs';
 import { shotgunRules } from '@level-kit/weapon-classes.mjs';
 import { rifleSkins, resolveRifleSkin } from '@level-kit/rifle-skins.mjs';
 import { createUIClass } from '@level-kit/ui.mjs';
-import { RED_DOT_AIM_ENABLED, preferences, aimInstructions, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
+import { RED_DOT_AIM_ENABLED, preferences, storePreferences, aimInstructions, bindSoundControl, keyName } from '@level-kit/preferences.mjs';
 import { createFieldKit } from '@level-kit/field-kit.mjs';
 import { createObjective, missionRules } from '@level-kit/objectives.mjs';
 import { createStory } from '@level-kit/story.mjs';
@@ -36,7 +36,15 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   const prefs = preferences();
   const training = createTraining(CONFIG,prefs);
   CONFIG.player.mouseSpeed *= prefs.sensitivity;
-  CONFIG.player.incoming = { assist: 0.7, standard: 1, hard: 1.35 }[prefs.difficulty];
+  const incoming = {assist: 0.7, standard: 1, hard: 1.35};
+  CONFIG.player.incoming = incoming[prefs.difficulty];
+  const difficulty = $('mission-difficulty');
+  difficulty.value = prefs.difficulty;
+  difficulty.onchange = () => {
+    prefs.difficulty = difficulty.value;
+    CONFIG.player.incoming = incoming[prefs.difficulty];
+    storePreferences({...preferences(), difficulty: prefs.difficulty});
+  };
   CONFIG.player.steady = prefs.steady;
   CONFIG.feedback.hitShake = prefs.hitShake;
   CONFIG.feedback.attackShake = prefs.attackShake;
@@ -183,7 +191,7 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   }
   const weapon = new WeaponSystem(skinId),
     ui = new UI(level);
-  $('rifle-label').textContent = rifleSkins[skinId].name;
+  $('brief-weapon').textContent = $('rifle-label').textContent = rifleSkins[skinId].name;
   const burstPoint = new V3();
   const blastTint = brighter(palette.blast ?? 0xb78cff, 2.8);
   const encounter = definition.createEncounter?.({ ...context, level, mapData, sound });
@@ -196,8 +204,8 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
   CONFIG.crouchLabel = keyName(prefs.keys.KeyC);
   CONFIG.deepKey = keyName(prefs.keys.KeyG);
   CONFIG.supportsHunt=Boolean(field?.cfg.hunt);
-  initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign, definition.story);
-  const deck=variationDeck(campaignStage,CONFIG,visual,modeSelect,$('run-variation'));
+  const showSupply = initBriefing(campaignStage, CONFIG, TEXT, slotKeys, campaign, definition.story);
+  const deck=variationDeck(campaignStage,CONFIG,visual,modeSelect,$('run-variation'),showSupply);
   let packed = null,
     preparing = false;
   const game = {
@@ -485,15 +493,37 @@ export function startLevel(definition, campaign = null, campaignStage = 0) {
     $('campaign-home').href = '../index.html';
     $('practice-controls').hidden = false;
     $('practice-bindings').textContent = training.controls;
-    $('practice-restart').onclick = () => {game.phase='ready'; startGame();};
+    $('practice-restart').onclick = () => {
+      if (!window.confirm('结束当前练习并重新开始？')) return;
+      game.phase='ready';
+      startGame();
+    };
     $('next-level').href = '../underground-lab/index.html?campaign';
     $('next-level').textContent = '开始战役';
   }
+  window.addEventListener('beforeunload', event => {
+    if (game.phase !== 'play' && game.phase !== 'pause') return;
+    event.preventDefault();
+    event.returnValue = true;
+  });
+  menus.addEventListener('keydown', event => {
+    if (game.phase !== 'pause' || !['ArrowUp','ArrowDown'].includes(event.key)) return;
+    const actions = event.target.closest('.actions');
+    if (!actions) return;
+    const buttons = [...actions.querySelectorAll('button:not([hidden]):not(:disabled),a[href]:not([hidden])')];
+    // 返回放在暂停菜单底部，与 Tab 和方向键的顺序一致。
+    event.preventDefault();
+    const delta = event.key === 'ArrowUp' ? -1 : 1;
+    buttons[(buttons.indexOf(event.target) + delta + buttons.length) % buttons.length].focus();
+  });
   $('campaign-home').addEventListener('click', event => {
-    if (campaign && game.phase === 'pause' && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
-      game.phase = 'play';
-      game.finish(false, '主动退出');
+    if (game.phase !== 'pause' || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (!window.confirm('结束本局并返回？本局携带的战利品将丢失。')) {
+      event.preventDefault();
+      return;
     }
+    game.phase = 'play';
+    game.finish(false, '主动退出');
   });
   bindSoundControl({
     shortcut: prefs.keys.KeyM,

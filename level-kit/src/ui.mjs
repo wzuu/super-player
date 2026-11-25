@@ -311,6 +311,7 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
     }
     menu(mode, game) {
       const overlay = this.nodes.menu;
+      overlay.dataset.phase = mode;
       document.getElementById('unstuck').hidden = mode !== 'pause' || Boolean(game.blast);
       if (game.training) {
         document.getElementById('loadout-pane').hidden = true;
@@ -320,17 +321,27 @@ export function createUIClass({ CONFIG, GRID, TEXT, $, V3, TAU, definition }) {
       const action = game.story?.actionName ?? '撤离';
       this.text('menu-title', mode === 'pause' ? '行动暂停' : mode === 'win' ? action+'成功' : mode === 'fail' ? action+'失败' : TEXT.title);
       this.text('menu-text', mode === 'pause' ? TEXT.pauseBrief : mode === 'win' ? game.endReason || TEXT.winBrief : mode === 'fail' ? game.endReason || TEXT.failBrief : TEXT.brief);
-      this.text('start', mode === 'pause' ? '继续游戏' : mode === 'ready' ? TEXT.enter : '再来一局');
+      this.text('start', mode === 'pause' ? '继续游戏' : mode === 'ready' ? (game.training ? TEXT.enter : '部署') : '再来一局');
       this.text('menu-status', '');
       const ended = mode === 'win' || mode === 'fail';
+      const home = document.getElementById('campaign-home');
+      const actions = home.parentElement;
+      if (mode === 'pause') { actions.prepend(this.nodes.start); actions.append(home); }
+      else actions.prepend(home);
+      overlay.removeAttribute('data-rematch');
+      const options = document.getElementById('rematch-options');
+      options.hidden = !ended || Boolean(game.training);
+      options.setAttribute('aria-expanded', 'false');
       if (mode!=='ready') game.story?.marker(null,game);
       if (ended) this.clearTask();
       if (ended) this.ring.hidden = this.aimDot.hidden = true;
-      this.nodes.guide.closest('details').hidden = ended;
+      const keyGuide = this.nodes.guide.closest('details');
+      keyGuide.hidden = ended;
+      if (mode === 'pause') keyGuide.open = false;
       this.nodes.guide.hidden = ended;
       this.nodes.summary.hidden = !ended;
       if (ended) this.text('summary', '评级 ' + game.performance.result(game, mode === 'win').grade +
-        ' · 最高 ' + game.performance.maxCombo + ' 连杀 · 累计击杀 ' + game.kills + ' 只 / 带回 ' + game.loot.length + ' 件' + TEXT.loot + ' / 结算价值 ' + game.value);
+        ' · 用时 ' + Math.floor(game.time / 60) + '分' + Math.floor(game.time % 60) + '秒 · 最高 ' + game.performance.maxCombo + ' 连杀 · 累计击杀 ' + game.kills + ' 只 / 带回 ' + game.loot.length + ' 件' + TEXT.loot + ' / 结算价值 ' + game.value);
       if (!overlay.open) overlay.showModal();
       this.nodes.start.focus({ preventScroll: true });
     }

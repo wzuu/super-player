@@ -17,7 +17,7 @@
     --border: #9fc4da3d;
     --panel: #09131de8;
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-    font-family: system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
     background: #080d17;
     color: var(--ink);
   }
@@ -231,6 +231,26 @@
 #menu-status:empty, #shop-status:empty {display:none}
 @media(max-width:730px){.brief-body{grid-template-columns:minmax(0,1fr);gap:12px}.brief footer .actions{gap:6px}.brief footer :is(button,a){min-height:36px;padding:6px 8px}.brief #start{min-width:100px}}
 #equipment-hud {position:absolute;left:0;bottom:calc(100% + 8px);width:max-content;max-width:64vw;background:#142734d9;color:#e5f5ff;padding:.4em .7em;font:14px/1.35 system-ui}
+
+[data-practice] .mission-choice { display:none; }
+#menu[data-phase=loading] :is(.mission-choice,#key-guide,#loadout-pane,#start,#menu-text) { display:none; }
+#menu[data-phase=pause] .screen { background:linear-gradient(90deg,#05121ce0,transparent 72%); justify-content:start; grid-template-columns:minmax(0,410px); }
+#menu[data-phase=pause] .brief { height:auto; max-height:100%; background:#09131deb; }
+#menu[data-phase=pause] .brief-body,#menu:is([data-phase=win],[data-phase=fail]) .brief-body { grid-template-columns:minmax(0,1fr); }
+#menu[data-phase=pause] :is(.mission-choice,#run-variation),#menu:is([data-phase=win],[data-phase=fail]):not([data-rematch]) :is(.mission-choice,#loadout-pane,#run-variation) { display:none; }
+#menu[data-phase=pause] .actions { flex-direction:column; align-items:stretch; }
+#menu[data-phase=pause] #start { order:-1; }
+#menu[data-phase=pause] #campaign-home { order:2; }
+#menu:not([data-phase=pause]) .actions { justify-content:flex-end; align-items:center; }
+#menu:not([data-phase=pause]) #campaign-home { margin-right:auto; }
+#menu:is([data-phase=win],[data-phase=fail]) .brief { max-width:720px; height:auto; max-height:100%; }
+#menu:is([data-phase=win],[data-phase=fail]) :is(#next-level,#retry-save) { order:2; background:var(--cyan); color:#09131d; }
+#menu:has(:is(#next-level,#retry-save):not([hidden])) #start { background:transparent; color:var(--ink); border-color:var(--border); }
+#menu-status { color:var(--cyan); line-height:1.5; }
+#menu[data-phase=fail] #menu-title { color:var(--red); }
+#brief-weapon { margin:8px 0; font-weight:bold; }
+#ration { margin:0 0 12px; color:var(--muted); font:13px var(--mono); }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important; } }
 </style>
 </head>
 <body>
@@ -285,15 +305,16 @@
   </section>
 </div>
 <output id="performance" hidden style="position:fixed;right:1em;bottom:7em;background:#162633;color:white;padding:.45em;pointer-events:none"></output>
-<dialog id="menu" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
+<dialog id="menu" data-phase="loading" closedby="none" aria-labelledby="menu-title" aria-describedby="menu-text">
   <div class="screen">
     <section class="brief">
       <div class="brief-body"><div>
       <div id="menu-tag" class="brief-tag">地图关卡</div><p id="run-variation"></p>
-      <h1 id="menu-title">走位射击</h1>
+      <h1 id="menu-title">地图关卡</h1>
+      <p id="menu-status" role="status">正在读取场景与本地引擎</p>
       <p id="menu-text">沿开阔路线边打边退，击杀凶兽，夺取关键道具并引爆传送门。</p>
       <div class="mission-choice"><label for="mission-mode">行动目标</label><select id="mission-mode" aria-describedby="mission-rule"></select>
-        <p id="mission-rule"></p></div>
+        <p id="mission-rule"></p><label for="mission-difficulty">难度</label><select id="mission-difficulty"><option value="assist">辅助</option><option value="standard">标准</option><option value="hard">困难</option></select></div>
       <details id="key-guide"><summary>按键说明</summary><dl class="controls" id="guide">
         <div><dt data-keys="KeyW KeyA KeyS KeyD"></dt><dd>移动</dd></div>
         <div><dt>鼠标左键</dt><dd>持续射击</dd></div>
@@ -311,7 +332,7 @@
       </dl></details>
       <div id="summary" hidden></div>
       </div><section id="loadout-pane" aria-labelledby="kit-title">
-        <h2 id="kit-title">本次携带</h2><div id="kit-preview"></div><p id="loadout-state"></p><p id="weapon-build"></p>
+        <h2 id="kit-title">本次携带</h2><p id="brief-weapon"></p><p id="ration"></p><div id="kit-preview"></div><p id="loadout-state"></p><p id="weapon-build"></p>
         <details id="preparation" hidden><summary>调整装备与补给</summary>
           <div id="kit-slots"></div>
           <h3>补给站 · <span id="credits"></span></h3>
@@ -323,21 +344,28 @@
       <details id="practice-controls" hidden><summary>完整操作说明</summary><p id="practice-bindings"></p></details>
       <label id="practice-armory" hidden>练习武器 <select id="practice-weapon"><option value="">默认训练步枪</option></select></label>
       <div class="actions">
+        <a id="campaign-home" class="action-link" href="../index.html">返回首页</a>
+        <button id="rematch-options" type="button" aria-expanded="false" hidden>再战准备</button>
+        <button id="retry-boot" type="button" hidden>重试加载</button>
         <a id="next-level" class="action-link" hidden>进入下一关</a>
         <button id="start" type="button" disabled autofocus>进入关卡</button>
         <button id="unstuck" type="button" hidden>卡住脱离</button>
         <button id="practice-restart" type="button" hidden>重开练习</button>
-        <a id="campaign-home" class="action-link" href="../" hidden>返回首页</a>
         <button id="retry-save" type="button" hidden>重试保存</button>
         <button id="look-trace-download" type="button" hidden>下载最近镜头记录</button>
       </div>
-      <p id="menu-status" role="status">正在加载关卡</p>
+
       </footer>
     </section>
   </div>
 </dialog>
 <script>
   document.getElementById('menu').showModal();
+  document.getElementById('rematch-options').onclick = event => {
+    const open = document.getElementById('menu').toggleAttribute('data-rematch');
+    event.currentTarget.setAttribute('aria-expanded', String(open));
+  };
+  document.getElementById('retry-boot').onclick = () => location.reload();
 </script>
 <script src="./vendor/three-r160.js"></script>
 <!-- LEVEL_SOURCES -->
@@ -373,6 +401,8 @@
     ]);
     const campaignId = document.body.dataset.campaignLevel;
     const storageStatus = message => { document.getElementById('menu-status').textContent = message; };
+    document.getElementById('menu-title').textContent = definition.text?.title || definition.pageTitle || '战前准备';
+    storageStatus('正在读取装备与关卡状态');
     let campaign = null;
     if (document.body.hasAttribute('data-practice')) {
       const select=document.getElementById('practice-weapon');
@@ -393,11 +423,13 @@
       campaign = await import(location.protocol==='file:'?'offline/campaign/save.mjs':'../campaign/save.mjs').then(module => module.connectCampaign(campaignId, storageStatus));
       if (!campaign) return;
     }
+    storageStatus('正在准备战场');
     startLevel(definition, campaign, campaignStage);
   }
 
   boot().catch(error => {
     console.error(error);
+    document.getElementById('retry-boot').hidden = false;
     document.getElementById('menu-status').textContent = '关卡加载失败。请检查本地游戏文件和浏览器的 WebGL 支持。';
   });
 </script>

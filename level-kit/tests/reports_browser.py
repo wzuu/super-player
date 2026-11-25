@@ -82,6 +82,7 @@ def storage_menu(route):
     assert html.count(entry)==1
     route.fulfill(response=response,body=html.replace(entry,"""
         window.departure=campaign;
+        document.getElementById('menu').dataset.phase='ready';
         document.getElementById('start').disabled=false;
         document.getElementById('menu').showModal();
     """))
@@ -192,7 +193,6 @@ def run(browser, url, static, database):
     level = LEVELS[0]["id"]
     page.route(url + "/" + level + "/", expose_game)
     page.goto(url)
-    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
     # 兼容旧键位，包括默认新快捷键已经被使用的情况。
     migrated = page.evaluate("""async () => {
@@ -289,6 +289,7 @@ def run(browser, url, static, database):
     page.get_by_label("回放进度").fill("0")
     assert "最近节点 出发" in page.locator(".replay-viewer output").inner_text()
     page.keyboard.press("Escape")
+    page.get_by_role("link",name="返回主菜单").click()
     page.click("#settings-open")
     page.get_by_label("录制战术回放").uncheck()
     page.keyboard.press("Escape")
@@ -389,6 +390,7 @@ def run(browser, url, static, database):
     page.get_by_role("button", name="查看战报").nth(1).click()
     page.get_by_role("button", name="观看回放").wait_for()
     page.keyboard.press("Escape")
+    page.get_by_role("link",name="返回主菜单").click()
     # 回放写入拒绝后，战报、解锁和常规待存队列仍按正常路径完成。
     page.click("#settings-open")
     page.get_by_label("录制战术回放").check()

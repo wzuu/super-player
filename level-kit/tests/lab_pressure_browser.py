@@ -128,7 +128,6 @@ def verify(root,output,validate,path,frames=None):
             errors=[]
             watch_page(page,errors,True)
             page.goto(home)
-            page.get_by_role('button',name='直接开始',exact=True).click(force=True)
             page.locator('#continue').click()
             page.wait_for_function('!!window.run',polling=100)
             page.locator('#start').click(force=True)

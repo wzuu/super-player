@@ -21,11 +21,17 @@ LEVELS = json.loads((ROOT / "campaign/levels.json").read_text(encoding="utf-8"))
 NEW_STAGES = ["sakura-night-town", "brass-factory", "haunted-midway"]
 
 
-def expose_game(route, *, render=True, manual_steps=False):
+def expose_game(route, *, render=True, manual_steps=False, with_input=False):
+    if route.request.method == "HEAD":
+        return route.continue_()
     # startLevel 已返回运行状态，只在测试浏览器中保留引用以布置边界局面。
     response = route.fetch()
     entry = "    startLevel(definition, campaign, campaignStage);"
     html = response.text()
+    if with_input:
+        fields = 'return { game, scene, camera, renderer, config:'
+        assert html.count(fields) == 1
+        html = html.replace(fields, 'return { game, input, scene, camera, renderer, config:')
     if manual_steps:
         # 此类用例从键鼠驱动器按固定步长调用 game.step；截图只画当前画面。
         advance = "pendingTime += dt;\n      advanceSimulation();"
@@ -211,7 +217,6 @@ def check_pending_saves(browser, url):
     battles = [dict(id=str(uuid4()), level=first["id"], won=True, kills=0,
                     endedAt=1000 + i, durationMs=100, loot=[]) for i in range(3)]
     page.goto(url + "/")
-    page.get_by_role("button",name="直接开始",exact=True).click()
     page.locator("#continue").wait_for()
     page.evaluate("""rows => {
         rows.forEach(b => localStorage.setItem('super-player:pending:' + b.id, JSON.stringify(b)));

@@ -1,6 +1,6 @@
-function playLaboratoryCampaign(browserControls) {
+function playLaboratoryCampaign(browserControls, capture) {
   const flow = fight();
-  if (browserControls) return flow;
+  if (browserControls || capture) return flow;
   let result;
   do { result = flow.next(); } while (!result.done);
   return result.value;
@@ -278,6 +278,7 @@ function playLaboratoryCampaign(browserControls) {
       cooldown = g.field.deviceAt;
     const lastX=p.x, lastZ=p.z;
     g.step(0.04);
+    if (capture?.(g)) yield;
     browserControls?.observe();
     if(g.core)report.exitMetres=(report.exitMetres??0)+Math.hypot(p.x-lastX,p.z-lastZ);
     if (b && b.fight.breaks > beforeBreaks) {

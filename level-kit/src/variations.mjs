@@ -27,7 +27,7 @@ export function drawVariation(stage, previous, random = Math.random) {
   let cursor = random() * pool.reduce((sum, v) => sum + v.weight, 0);
   return pool.find((v) => (cursor -= v.weight) < 0) ?? pool.at(-1);
 }
-export function variationDeck(stage, config, visual, mode, node) {
+export function variationDeck(stage, config, visual, mode, node, showSupply) {
   const key = 'super-player:variation:' + stage;
   let previous,
     pending,
@@ -46,6 +46,7 @@ export function variationDeck(stage, config, visual, mode, node) {
       try {
         localStorage.setItem(key, JSON.stringify({ previous, pending: pending.id }));
       } catch {}
+    showSupply(enabled() ? pending.ammo ?? 1 : 1);
     node.hidden = !enabled();
     node.textContent = enabled() ? '本局变奏 · ' + pending.name + ' / ' + pending.detail : '';
   }

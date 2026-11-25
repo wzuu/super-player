@@ -52,6 +52,7 @@ def verify(browser, url, static=False, rooms=False):
         localStorage.setItem('super-player:variation:1',JSON.stringify({pending:'quiet'}));""")
 
     def expose(route):
+        if route.request.method == "HEAD": return route.continue_()
         response = route.fetch()
         entry = "    startLevel(definition, campaign, campaignStage);"
         fields = "return { game, scene, camera, renderer, config:"
@@ -71,8 +72,6 @@ def verify(browser, url, static=False, rooms=False):
         if rooms:
             before=page.request.get(root+'api/progress').json()['battleCount']
         page.goto(root if static else root + "underground-lab/?campaign")
-        if not rooms or before == 0:
-            page.get_by_role("button", name="直接开始", exact=True).click(force=True)
         if static:
             page.locator("#continue").click()
             page.wait_for_url(root + "underground-lab/")
@@ -102,7 +101,7 @@ def verify(browser, url, static=False, rooms=False):
         if static:
             page.wait_for_function("document.querySelector('#menu-status').textContent.includes('已保存')", polling=100)
             page.locator("#campaign-home").click(force=True)
-            page.locator("#continue").wait_for()
+            page.locator("#prepare-mission").wait_for()
             page.reload()
             page.wait_for_function("document.querySelector('#continue')?.href.endsWith('/shanhai-secret-realm/')", polling=100)
             saved = page.evaluate("""async () => {
